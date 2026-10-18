@@ -44,22 +44,24 @@ struct BundledPackSmokeTests {
     #expect(code?.source.isEmpty == false)
   }
 
-  @Test func itemsWithoutBodyAreRegistryOnly() throws {
+  @Test func everyRegistryItemHasContent() throws {
     let library = try Self.loadLibrary()
     let keys = Set(library.allItemKeys())
-    #expect(keys.contains(ItemKey(topic: "design-patterns", item: "strategy")))
-    #expect(!keys.contains(ItemKey(topic: "design-patterns", item: "observer")))
-    #expect(library.meta(ItemKey(topic: "design-patterns", item: "observer")) != nil)
+    let registry = try #require(library.topic("design-patterns")).items
+    #expect(registry.count == 70)
+    for meta in registry {
+      #expect(keys.contains(ItemKey(topic: "design-patterns", item: meta.id)), "\(meta.id)")
+    }
   }
 
   @MainActor
-  @Test func appModelExcludesUnwrittenItemsFromPractice() throws {
+  @Test func practiceStartsWithStudiedItemsOnly() throws {
     let model = AppModel.make(
       container: AppModel.inMemoryContainer(),
       settings: AppSettings(defaults: UserDefaults(suiteName: "kata.tests.smoke")!))
     #expect(model.libraryError == nil)
     #expect(model.hasContent(ItemKey(topic: "design-patterns", item: "strategy")))
-    #expect(!model.hasContent(ItemKey(topic: "design-patterns", item: "observer")))
+    #expect(model.hasContent(ItemKey(topic: "design-patterns", item: "observer")))
     // Nothing studied yet: no reviews and no new candidates.
     #expect(model.reviewQueue().isEmpty)
     // Studying Strategy makes its exercises new candidates for review.

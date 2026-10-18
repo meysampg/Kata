@@ -66,7 +66,7 @@ The first topic is **Design Patterns** in modern Java: 8 foundations and 62 patt
 | Enterprise & Architecture | 15 |
 | Resilience & Cloud | 14 |
 
-**Status:** the content is still being authored. All 70 items are in the registry, the path and the search index, but so far only **Strategy** is complete; the others show as "Coming soon". Every Java 21 sample is compiled and run by the tests, and its printed output is checked against what the card shows.
+**Status:** all 70 items are complete, each with every card of its template and five practice exercises (350 in total). Every item was reviewed for technical accuracy, and the tests compile and run all 279 Java 21 units, checking each sample's printed output against what its card shows.
 
 ## Architecture
 
