@@ -17,7 +17,7 @@
      "items": [
       "**Token bucket:** bursts up to capacity, steady average rate.",
       "**Fixed or sliding window:** count requests per interval; simpler, with boundary spikes in the fixed form.",
-      "**Leaky bucket:** smooths output to a constant rate."
+      "**Leaky bucket:** a queue drained at a constant rate; it smooths bursts instead of admitting them."
      ]
     },
     {
@@ -278,7 +278,7 @@
     {
      "where": "Resilience4j",
      "name": "RateLimiter",
-     "detail": "Configured with `limitForPeriod`, `limitRefreshPeriod` and `timeoutDuration` for how long a caller may wait."
+     "detail": "`limitForPeriod` permits are reset every `limitRefreshPeriod` (fixed-window style); `timeoutDuration` is how long a caller may wait."
     },
     {
      "where": "Bucket4j",

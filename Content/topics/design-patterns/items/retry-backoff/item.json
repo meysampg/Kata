@@ -24,7 +24,7 @@
     {
      "type": "callout",
      "tone": "warning",
-     "text": "Retries multiply load: three layers each retrying three times turn one request into twenty-seven. Retry at one layer."
+     "text": "Retries multiply load: three layers each making three attempts turn one request into twenty-seven. Retry at one layer, and cap retries to a small share of traffic with a retry budget."
     }
    ]
   },
@@ -39,7 +39,7 @@
     },
     {
      "region": "policy",
-     "note": "The ceiling is `min(cap, base * 2^(attempt-1))`. Jitter chooses a delay at or below it (full jitter). The shift is clamped to avoid overflow."
+     "note": "The ceiling is `min(cap, base * 2^(attempt-1))`, shift clamped. Full jitter waits `random(0, ceiling)`; equal jitter fixes half of it; decorrelated jitter grows from the previous sleep."
     },
     {
      "region": "wiring",
@@ -62,8 +62,10 @@
      "type": "code",
      "language": "java",
      "lines": [
-      "var retry = new Retry(5, 200, 10_000, ThreadLocalRandom.current()::nextLong, Thread::sleep);",
-      "retry.call(() -> bucket.put(key, bytes));  // key makes put idempotent"
+      "LongUnaryOperator fullJitter =",
+      "    c -> ThreadLocalRandom.current().nextLong(c + 1);",
+      "var retry = new Retry(5, 200, 10_000, fullJitter, realSleeper);",
+      "retry.call(() -> bucket.put(key, bytes));  // keyed: idempotent"
      ]
     },
     {
@@ -278,7 +280,7 @@
     },
     {
      "ref": "strategy",
-     "relation": "specializes",
+     "relation": "combines",
      "difference": "The backoff schedule is a strategy: fixed, exponential, decorrelated jitter. The policy swaps it without touching the calling code."
     }
    ]
@@ -304,7 +306,7 @@
     {
      "where": "Envoy",
      "name": "retry_policy",
-     "detail": "Route-level retries with `retry_on`, `num_retries` and a configurable exponential back-off base interval."
+     "detail": "Route-level `retry_on`, `num_retries` and `retry_back_off`; a cluster's `retry_budget` caps retries as a share of active requests."
     }
    ]
   }
@@ -393,7 +395,7 @@
     "            return op.get();",
     "        } catch (RuntimeException e) {",
     "            if (attempt == 5) throw e;",
-    "            Thread.sleep(100L << attempt);",
+    "            Thread.sleep(rnd.nextLong(100L << attempt));",
     "        }",
     "    }",
     "}"
@@ -405,7 +407,9 @@
    "compile": {
     "template": [
      "import java.util.function.Supplier;",
+     "import java.util.concurrent.ThreadLocalRandom;",
      "class Snippet {",
+     "ThreadLocalRandom rnd = ThreadLocalRandom.current();",
      "{{code}}",
      "}"
     ]
@@ -421,9 +425,7 @@
      "    return op.get();"
     ],
     [
-     "} catch (TransientException e) {"
-    ],
-    [
+     "} catch (TransientException e) {",
      "    if (attempt == maxAttempts) throw e;"
     ],
     [
@@ -434,7 +436,7 @@
      "}"
     ]
    ],
-   "explanation": "Attempt first. Only on a transient failure check the attempt budget, then compute the ceiling, then wait a jittered time before the loop tries again.",
+   "explanation": "Attempt first; the catch can only follow the try. On a transient failure past the budget check, compute the ceiling, which the jittered sleep then needs.",
    "compile": {
     "template": [
      "import java.time.Duration;",

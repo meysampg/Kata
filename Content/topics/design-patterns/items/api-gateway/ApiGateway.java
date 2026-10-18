@@ -1,7 +1,9 @@
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 record Request(String path, String token) {}
 record Response(int status, String body) {}
@@ -10,7 +12,7 @@ interface Service { Response handle(Request request); }
 
 // [[gateway
 final class Gateway {
-    private final Map<String, Service> routes = new TreeMap<>();
+    private final Map<String, Service> routes = new HashMap<>();
     private final Set<String> tokens;
 
     Gateway(Set<String> tokens) { this.tokens = tokens; }
@@ -27,7 +29,7 @@ final class Gateway {
         if (req.path().equals("/home")) return home(req);
         return routes.entrySet().stream()
             .filter(e -> req.path().startsWith(e.getKey()))
-            .findFirst()
+            .max(Comparator.comparingInt(e -> e.getKey().length()))
             .map(e -> e.getValue().handle(req))
             .orElse(new Response(404, "no route"));
     }
@@ -39,7 +41,8 @@ final class Gateway {
             () -> routes.get("/users").handle(req));
         var orders = CompletableFuture.supplyAsync(
             () -> routes.get("/orders").handle(req))
-            .exceptionally(e -> new Response(206, "orders unavailable"));
+            .orTimeout(300, TimeUnit.MILLISECONDS)
+            .exceptionally(e -> new Response(503, "orders:n/a"));
         return new Response(200,
             user.join().body() + " | " + orders.join().body());
     }

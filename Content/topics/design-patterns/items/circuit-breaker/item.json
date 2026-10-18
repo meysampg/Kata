@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "info",
-     "text": "Breakers react to measured failure, unlike a timeout that bounds one call. Production breakers usually trip on a failure rate over a sliding window."
+     "text": "Production breakers such as Resilience4j trip on a failure rate over a count- or time-based sliding window, and admit a configured number of half-open trial calls."
     }
    ]
   },
@@ -294,7 +294,7 @@
     },
     {
      "ref": "proxy",
-     "relation": "specializes",
+     "relation": "lookAlike",
      "difference": "A breaker is a protection proxy around a remote call that decides whether the call may happen."
     }
    ]
@@ -305,7 +305,7 @@
     {
      "where": "Resilience4j",
      "name": "CircuitBreaker",
-     "detail": "Sliding window by count or time, `failureRateThreshold`, `waitDurationInOpenState`, and `HALF_OPEN` trial calls."
+     "detail": "`COUNT_BASED` or `TIME_BASED` sliding window, `failureRateThreshold` (after `minimumNumberOfCalls`), `waitDurationInOpenState`, `permittedNumberOfCallsInHalfOpenState`."
     },
     {
      "where": "Spring Cloud",
@@ -315,7 +315,7 @@
     {
      "where": "Envoy",
      "name": "circuit_breakers and outlier_detection",
-     "detail": "Cluster-level limits plus ejection of hosts that return consecutive 5xx errors."
+     "detail": "`circuit_breakers` caps concurrent connections, pending requests and retries per cluster; `outlier_detection` ejects hosts after consecutive 5xx errors."
     },
     {
      "where": "Istio",
@@ -366,7 +366,7 @@
     "template": [
      "import java.util.function.*;",
      "class Snippet {",
-     "    LongSupplier clock = System::nanoTime;",
+     "    LongSupplier clock = System::currentTimeMillis;",
      "    long blockedUntil;",
      "    int misses;",
      "{{code}}",
@@ -474,14 +474,14 @@
    "modelAnswer": [
     {
      "type": "p",
-     "text": "Closed passes calls and counts failures; open rejects calls immediately or uses a fallback; half-open admits one probe after a cool-down. A timeout bounds one call and a retry repeats it. The breaker uses accumulated failures to stop calling at all, protecting the dependency and your threads."
+     "text": "Closed passes calls and counts failures; open rejects calls immediately or uses a fallback; half-open admits a probe (or a few) after a cool-down. A timeout bounds one call and a retry repeats it. The breaker uses accumulated failures to stop calling at all, protecting the dependency and your threads."
     }
    ],
    "keyPoints": [
     "Closed, open and half-open",
     "Trips on accumulated failures, not one call",
     "Open means fail fast or fallback",
-    "Half-open admits a single probe",
+    "Half-open admits a limited number of probes",
     "Complements timeouts and retries, not replaces them"
    ]
   }

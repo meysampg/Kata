@@ -11,7 +11,7 @@
       {"type": "callout", "tone": "warning", "text": "Delivery is almost always at-least-once: a consumer that crashes before acking causes redelivery. Consumers must tolerate duplicates."}
     ]},
     {"role": "implementation", "file": "CompetingConsumers.java",
-     "expectedOutput": "jobs=20 exactlyOnce=true total=210",
+     "expectedOutput": "jobs=20 eachOnce=true total=210",
      "walkthrough": [
       {"region": "message", "note": "A job is an immutable record. `STOP` is a sentinel (poison pill) compared by identity, so it can never collide with real work."},
       {"region": "consumer", "note": "Each worker loops on `take()`. The queue is the only shared coordination point: whoever calls `take()` first owns that job. Workers share no other state about which job is whose."},
@@ -78,7 +78,7 @@
         "`ExecutorService` with `newVirtualThreadPerTaskExecutor()` gives structured start and shutdown, as in the sample."]}
     ]},
     {"role": "compare", "rows": [
-      {"ref": "producer-consumer", "relation": "specializes", "difference": "Producer-Consumer is the in-process hand-off through a bounded buffer. Competing Consumers applies it across processes with a broker, acknowledgements, redelivery and scale-out."},
+      {"ref": "producer-consumer", "relation": "lookAlike", "difference": "Producer-Consumer is the in-process hand-off through a bounded buffer. Competing Consumers applies it across processes with a broker, acknowledgements, redelivery and scale-out."},
       {"ref": "thread-pool", "relation": "lookAlike", "difference": "A thread pool shares a work queue among threads of one JVM and loses the queue on exit. Competing consumers share a durable queue among separate processes."},
       {"ref": "observer", "relation": "oftenConfused", "difference": "Observer or pub/sub delivers each event to every subscriber. Competing consumers deliver each message to exactly one member of the group."},
       {"ref": "idempotent-consumer", "relation": "combines", "difference": "At-least-once delivery means a message can reach a second consumer after a timeout. Each consumer must be idempotent to make that harmless."},

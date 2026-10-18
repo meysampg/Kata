@@ -75,7 +75,7 @@
         "Polling every 50 ms where change-data-capture would remove the load."]},
       {"title": "Modern Java", "tone": "info", "items": [
         "Records model outbox rows well; serialize payloads with Jackson into a JSON column.",
-        "Use `SELECT ... FOR UPDATE SKIP LOCKED` to let several relays poll without duplicates."]}
+        "`SELECT ... FOR UPDATE SKIP LOCKED` lets several relays poll without claiming the same rows."]}
     ]},
     {"role": "compare", "rows": [
       {"ref": "idempotent-consumer", "relation": "combines", "difference": "The outbox guarantees at-least-once publication. The idempotent consumer on the other side makes the redelivered duplicates harmless."},
@@ -88,7 +88,7 @@
       {"where": "Debezium", "name": "Outbox Event Router", "detail": "An SMT (`io.debezium.transforms.outbox.EventRouter`) turns inserts into the outbox table into Kafka messages routed by aggregate type."},
       {"where": "Spring Modulith", "name": "Event publication registry", "detail": "Persists event publications in the same transaction and republishes incomplete ones, giving an outbox for application events."},
       {"where": "Eventuate Tram", "name": "Message table", "detail": "Writes messages to a `message` table inside the business transaction and relays them to Kafka via CDC or polling."},
-      {"where": "MassTransit", "name": "Transactional outbox (.NET)", "detail": "Entity Framework integration stores messages in the same transaction before delivery to the transport."}
+      {"where": "Debezium for Quarkus", "name": "Outbox extension", "detail": "Firing a CDI `ExportedEvent` writes an outbox row in the current transaction; Debezium's `EventRouter` then streams it to Kafka."}
     ]}
   ],
   "exercises": [
@@ -152,15 +152,15 @@
     {"id": "order-1", "kind": "reorder", "prompt": "Order the write path so that data and message commit together.",
      "blocks": [
       ["tx.begin();"],
-      ["orders.save(order);"],
-      ["outbox.save(new OutboxRow(order.id(), \"OrderPlaced\", json(order)));"],
+      ["Order saved = orders.save(order);"],
+      ["outbox.save(new OutboxRow(saved.id(), \"OrderPlaced\", json(saved)));"],
       ["tx.commit();"]],
-     "explanation": "Open the transaction, write the state and the message row inside it, and commit once. Nothing is published here; the relay sends the row afterwards.",
+     "explanation": "Open the transaction, save the order, build the message row from the saved order (its id is assigned on save), and commit once. Nothing is published here; the relay sends the row afterwards.",
      "compile": {"template": [
       "interface Tx { void begin(); void commit(); }",
       "record Order(String id) {}",
       "record OutboxRow(String id, String type, String payload) {}",
-      "interface Orders { void save(Order o); }", "interface Outbox { void save(OutboxRow r); }",
+      "interface Orders { Order save(Order o); }", "interface Outbox { void save(OutboxRow r); }",
       "class Snippet { Tx tx; Orders orders; Outbox outbox; Order order = new Order(\"1\");",
       "  String json(Order o) { return \"{}\"; }",
       "  void run() {",

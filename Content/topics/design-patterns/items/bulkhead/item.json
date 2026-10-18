@@ -287,8 +287,8 @@
     },
     {
      "ref": "thread-pool",
-     "relation": "specializes",
-     "difference": "A thread-pool bulkhead is a dedicated pool per dependency; the pattern is the partitioning, not the pool."
+     "relation": "lookAlike",
+     "difference": "A thread-pool bulkhead is a dedicated pool per dependency. The pattern is the partitioning; a single shared pool is no bulkhead at all."
     }
    ]
   },

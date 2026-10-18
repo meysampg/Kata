@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "warning",
-     "text": "Exactly-once delivery does not exist across a network. What you build is at-least-once delivery plus idempotent processing."
+     "text": "Exactly-once delivery to an external side effect is not achievable; Kafka's exactly-once covers Kafka-to-Kafka processing only. What you build is at-least-once delivery plus idempotent processing."
     }
    ]
   },
@@ -55,7 +55,7 @@
     },
     {
      "type": "p",
-     "text": "An orders service publishes `OrderPaid` events to Kafka. The loyalty service consumes them and adds points. A rebalance replays the last few hundred events. Without protection, customers receive double points. The consumer inserts the event id into a `processed_event` table with a unique constraint in the same transaction that updates the points. A replayed event hits the constraint, the transaction rolls back, and the message is acknowledged."
+     "text": "An orders service publishes `OrderPaid` events to Kafka. The loyalty service consumes them and adds points. A rebalance replays the last few hundred events. Without protection, customers receive double points. The consumer inserts the event id into a `processed_event` table with a unique constraint in the same transaction that updates the points. A replayed event finds its id already present, the handler skips the update, and the message is acknowledged."
     },
     {
      "type": "code",
@@ -274,7 +274,7 @@
      "tone": "info",
      "items": [
       "Prefer a database unique constraint as the final guard; an in-memory set protects only one process.",
-        "`ConcurrentHashMap.newKeySet().add(id)` checks and records atomically, but only within one JVM."
+      "`ConcurrentHashMap.newKeySet().add(id)` checks and records atomically, but only within one JVM."
      ]
     }
    ]
@@ -454,19 +454,18 @@
      "begin();"
     ],
     [
-     "if (processed.contains(m.id())) { rollback(); return; }"
+     "if (!processed.add(m.id())) {",
+     "    rollback(); return;",
+     "}"
     ],
     [
      "effect.apply(m);"
     ],
     [
-     "processed.add(m.id());"
-    ],
-    [
      "commit();"
     ]
    ],
-   "explanation": "Open the transaction, check for a duplicate, apply the effect, then record the id, so both are committed together or neither is.",
+   "explanation": "Open the transaction, insert the id (a duplicate is detected and rolled back before any effect), apply the effect, and commit both together, or neither.",
    "compile": {
     "template": [
      "import java.util.*;",

@@ -61,6 +61,6 @@ class Main {
         } // close() waits for every worker to finish
         boolean once = handled.values().stream().allMatch(n -> n == 1);
         System.out.println("jobs=" + handled.size()
-            + " exactlyOnce=" + once + " total=" + total.get());
+            + " eachOnce=" + once + " total=" + total.get());
     }
 }

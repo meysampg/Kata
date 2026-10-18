@@ -14,8 +14,8 @@
     {"role": "implementation", "file": "ApiGateway.java",
      "expectedOutput": "/users/7 -> 200 user:7\n/home -> 200 user:7 | orders:2\n/orders/7 -> 401 unauthorized\n/billing -> 404 no route",
      "walkthrough": [
-      {"region": "gateway", "note": "The gateway owns a sorted route table and the auth check. Unauthenticated requests are rejected before any service sees them; unknown paths get a 404."},
-      {"region": "aggregate", "note": "`/home` is composed: both calls run concurrently. A failing optional dependency degrades to a 206 fragment instead of failing the whole page."},
+      {"region": "gateway", "note": "The gateway owns the route table (longest prefix wins) and the auth check. Unauthenticated requests are rejected before any service sees them; unknown paths get a 404."},
+      {"region": "aggregate", "note": "`/home` is composed: both calls run concurrently. The optional orders call has a timeout and a fallback, so it degrades to a placeholder instead of failing the page."},
       {"region": "wire", "note": "Services are registered behind prefixes. They are lambdas here; in production they are remote clients with their own timeouts."},
       {"region": "client", "note": "The client sees one address. A valid token reaches services and composes; a bad token or unknown path never leaves the gateway."}
     ]},
@@ -77,7 +77,7 @@
         "Java 21 records make good immutable request and response envelopes at the gateway boundary."]}
     ]},
     {"role": "compare", "rows": [
-      {"ref": "facade", "relation": "specializes", "difference": "A facade simplifies an in-process subsystem. A gateway is a networked facade that also enforces security, quotas and protocol translation for remote clients."},
+      {"ref": "facade", "relation": "lookAlike", "difference": "A facade simplifies an in-process subsystem. A gateway is a networked facade that also enforces security, quotas and protocol translation for remote clients."},
       {"ref": "proxy", "relation": "lookAlike", "difference": "A proxy stands in for one object with the same interface. A gateway exposes a different, client-oriented API over many services."},
       {"ref": "sidecar", "relation": "oftenConfused", "difference": "A gateway is a shared north-south entry point at the edge. A sidecar is per-instance and handles that service's own traffic, including service-to-service calls."},
       {"ref": "strangler-fig", "relation": "combines", "difference": "The gateway is the routing facade a strangler migration needs: paths move from legacy to new services without clients noticing."},
@@ -152,19 +152,21 @@
       "}"]}},
     {"id": "order-1", "kind": "reorder", "prompt": "Order the gateway's request handling so each step depends only on earlier ones.",
      "blocks": [
-      ["if (!auth.valid(req.token())) return Response.status(401);"],
-      ["Backend target = routes.get(prefix(req.path()));"],
-      ["if (target == null) return Response.status(404);"],
-      ["Response res = target.call(req);"],
+      ["Route route = routes.get(prefix(req.path()));"],
+      ["if (route == null) return Response.status(404);"],
+      ["if (route.secured() && !auth.valid(req.token()))",
+       "    return Response.status(401);"],
+      ["Response res = route.backend().call(req);"],
       ["return res;"]],
-     "explanation": "Authenticate before spending any backend work, resolve the route, handle the missing route, call the service, then return its response.",
+     "explanation": "Resolve the route first: whether auth applies depends on it, and a missing route must be handled before use. Authenticate before the backend call, then return its response.",
      "compile": {"template": [
       "import java.util.Map;",
       "interface Auth { boolean valid(String t); }",
       "interface Backend { Response call(Request r); }",
       "record Request(String path, String token) {}",
       "record Response(int status) { static Response status(int s) { return new Response(s); } }",
-      "class Snippet { Auth auth; Map<String, Backend> routes;",
+      "record Route(Backend backend, boolean secured) {}",
+      "class Snippet { Auth auth; Map<String, Route> routes;",
       "  String prefix(String p) { return p; }",
       "  Response handle(Request req) {",
       "{{code}}", "} }"]}},

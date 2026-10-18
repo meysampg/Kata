@@ -77,7 +77,7 @@
         "For new code, a client library with the same policy may beat a separate process."]}
     ]},
     {"role": "compare", "rows": [
-      {"ref": "sidecar", "relation": "specializes", "difference": "An ambassador is a sidecar dedicated to one concern: the client's outbound access to a remote resource. A sidecar is the general co-located helper."},
+      {"ref": "sidecar", "relation": "lookAlike", "difference": "An ambassador is a sidecar dedicated to one concern: the client's outbound access to a remote resource. A sidecar is the general co-located helper."},
       {"ref": "proxy", "relation": "lookAlike", "difference": "Same stand-in shape, but an ambassador is deployed beside the client and adds connection policy; a remote proxy simply represents one remote object."},
       {"ref": "adapter", "relation": "oftenConfused", "difference": "An adapter converts one interface into another in-process. An ambassador keeps the interface and manages how the remote call is made."},
       {"ref": "circuit-breaker", "relation": "combines", "difference": "Breakers, retries and timeouts live naturally in the ambassador so clients inherit them."},
@@ -93,16 +93,16 @@
   "exercises": [
     {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
      "lines": [
+      "// runs as a helper process beside each app instance, on :6379",
       "final class LocalCacheEndpoint implements KeyValue {",
       "    private final List<List<KeyValue>> shards;",
-      "",
       "    LocalCacheEndpoint(List<List<KeyValue>> shards) { this.shards = shards; }",
-      "",
       "    public String get(String key) throws IOException {",
       "        int i = Math.floorMod(key.hashCode(), shards.size());",
       "        IOException last = new IOException(\"empty shard\");",
       "        for (KeyValue replica : shards.get(i)) {",
-      "            try { return replica.get(key); } catch (IOException e) { last = e; }",
+      "            try { return replica.get(key); }",
+      "            catch (IOException e) { last = e; }",
       "        }",
       "        throw last;",
       "    }",
@@ -147,9 +147,10 @@
     {"id": "order-1", "kind": "reorder", "prompt": "Order the ambassador's work for one read.",
      "blocks": [
       ["int shard = Math.floorMod(key.hashCode(), shards.size());"],
-      ["for (KeyValue replica : shards.get(shard)) {", "    try { return replica.get(key); }", "    catch (IOException e) { last = e; }", "}"],
+      ["List<KeyValue> replicas = shards.get(shard);"],
+      ["for (KeyValue replica : replicas) {", "    try { return replica.get(key); }", "    catch (IOException e) { last = e; }", "}"],
       ["throw new IOException(\"shard \" + shard + \" unavailable\", last);"]],
-     "explanation": "Pick the shard first, then try its replicas in order and return on success; the failure is raised only after the loop has exhausted every replica.",
+     "explanation": "Pick the shard, look up its replicas, try them in order and return on success; the failure is raised only after the loop has exhausted every replica.",
      "compile": {"template": [
       "import java.io.IOException;", "import java.util.List;",
       "interface KeyValue { String get(String key) throws IOException; }",

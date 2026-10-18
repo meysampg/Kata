@@ -8,7 +8,7 @@
         "**Orchestration:** a coordinator tells each participant what to do.",
         "**Choreography:** participants react to each other's events.",
         "**Compensation:** a semantic undo (refund), not a rollback."]},
-      {"type": "callout", "tone": "warning", "text": "Compensations can fail too, and some steps can't be undone (an email sent). Order steps so irreversible ones come last."}
+      {"type": "callout", "tone": "warning", "text": "Compensations can fail too, and some steps cannot be undone (an email sent). Order them: compensatable steps first, then the pivot step, then retriable steps that are never undone."}
     ]},
     {"role": "implementation", "file": "Saga.java",
      "expectedOutput": "true [do reserve, do hold-points, do charge, do ship] stock=4 held=10\nfalse [do reserve, do hold-points, fail charge, undo hold-points, undo reserve] stock=5 held=0",
@@ -23,9 +23,9 @@
       {"type": "p", "text": "Each service owns its database, so there is no shared transaction. The booking orchestrator reserves a seat, then a room, then charges the card. If the card is declined, it cancels the room and releases the seat. Each compensation is idempotent and retried until it succeeds, and the saga's state is persisted after each step so a restarted orchestrator resumes where it stopped."},
       {"type": "code", "language": "java", "lines": [
         "new Saga(List.of(",
-        "    new Step(\"seat\",  () -> flights.hold(trip), () -> flights.release(trip)),",
-        "    new Step(\"room\",  () -> hotels.hold(trip),  () -> hotels.release(trip)),",
-        "    new Step(\"charge\", () -> payments.charge(trip), () -> payments.refund(trip))",
+        "    new Step(\"seat\", () -> flights.hold(t), () -> flights.release(t)),",
+        "    new Step(\"room\", () -> hotels.hold(t), () -> hotels.release(t)),",
+        "    new Step(\"pay\", () -> payments.charge(t), () -> payments.refund(t))",
         ")).run();"]},
       {"type": "callout", "tone": "positive", "text": "Payoff: a failure at any point leaves every service consistent again, without locks held across the network."}
     ]},
@@ -66,7 +66,8 @@
       {"title": "Pitfalls", "tone": "warning", "items": [
         "Dirty reads: other requests see intermediate state until compensation runs.",
         "Every step and compensation must be idempotent and retryable.",
-        "Orchestrator state must be durable, or a crash strands the saga half done."]},
+        "Orchestrator state must be durable, or a crash strands the saga half done.",
+        "Lost updates: counter them with semantic locks (a PENDING state) or commutative updates."]},
       {"title": "Overuse smells", "tone": "warning", "items": [
         "A saga for two steps in the same service and database.",
         "Choreographed sagas across many services nobody can trace end to end."]},
@@ -148,14 +149,15 @@
     {"id": "order-1", "kind": "reorder", "prompt": "Order the failure handling of one saga run.",
      "blocks": [
       ["Deque<Step> done = new ArrayDeque<>();"],
-      ["step.action().run();", "done.push(step);"],
-      ["// payment declined: the action throws"],
-      ["Step undo = done.pop();", "undo.compensation().run();"]],
-     "explanation": "Track completed steps first, record each success after its action, hit the failure, and only then pop completed steps newest-first to compensate.",
+      ["reserve.action().run();", "done.push(reserve);"],
+      ["try {", "    charge.action().run();"],
+      ["} catch (RuntimeException e) {", "    while (!done.isEmpty()) {"],
+      ["        done.pop().compensation().run();", "    }", "}"]],
+     "explanation": "Create the stack, run and record the reservation, then attempt the charge. Only a completed, recorded step can be compensated, and the catch pops newest-first.",
      "compile": {"template": [
       "import java.util.*;",
       "record Step(String name, Runnable action, Runnable compensation) {}",
-      "class Snippet { void run(Step step) {",
+      "class Snippet { void run(Step reserve, Step charge) {",
       "{{code}}", "} }"]}},
     {"id": "recall-1", "kind": "recall",
      "prompt": "Explain a Saga: why it exists, how failure is handled, and what it cannot give you.",

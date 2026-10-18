@@ -229,7 +229,7 @@
      "tone": "warning",
      "items": [
       "Stampede: many readers miss on a popular key and hit the database together.",
-      "Race: a reader loads old data, a writer evicts, and the reader then caches the stale row.",
+      "Race even with write-then-evict: a slow reader caches a row it read before the write.",
       "Absent rows never cached, so repeated lookups for missing keys hit the database.",
       "No TTL: a missed eviction stays wrong forever."
      ]
@@ -409,7 +409,7 @@
    "flawLines": [
     2
    ],
-   "explanation": "A reader can miss, load the old row, and cache it between the eviction and the database write, leaving the stale name cached. Write the database first, then evict.",
+   "explanation": "A reader can miss, load the old row, and cache it between the eviction and the database write, leaving the stale name cached. Write the database first, then evict; that narrows the race, and a TTL bounds what remains.",
    "compile": {
     "template": [
      "import java.util.*;",

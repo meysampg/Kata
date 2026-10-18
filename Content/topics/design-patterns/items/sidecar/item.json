@@ -21,11 +21,11 @@
     ]},
     {"role": "example", "blocks": [
       {"type": "lead", "text": "Uniform mTLS and metrics across a polyglot fleet."},
-      {"type": "p", "text": "A platform has 200 services in Java, Go and Python, and security demands mutual TLS with rotated certificates plus consistent request metrics. Implementing that in three client libraries means three upgrade campaigns. Instead each pod gets an Envoy sidecar. The service speaks plain HTTP to localhost, and the proxy handles certificates, retries, and emits uniform metrics."},
+      {"type": "p", "text": "A platform has 200 services in Java, Go and Python, and security demands mutual TLS with rotated certificates plus consistent request metrics. Implementing that in three client libraries means three upgrade campaigns. Instead each pod gets an Envoy sidecar. The service speaks plain HTTP; the pod's traffic is redirected through the proxy, which handles certificates and retries and emits uniform metrics."},
       {"type": "code", "language": "java", "lines": [
-        "// the service knows nothing about TLS or retries",
+        "// plain HTTP; the sidecar intercepts it and upgrades to mTLS",
         "HttpRequest req = HttpRequest.newBuilder(",
-        "    URI.create(\"http://localhost:15001/payments/charge\"))",
+        "    URI.create(\"http://payments:8080/charge\"))",
         "    .POST(body).build();",
         "client.send(req, BodyHandlers.ofString());"]},
       {"type": "callout", "tone": "positive", "text": "Payoff: a certificate or retry policy change is one proxy rollout, not a rebuild of 200 services in three languages."}
@@ -62,7 +62,7 @@
         "Latency budgets are microseconds: each hop adds a localhost round trip."]},
       {"title": "Pitfalls", "tone": "warning", "items": [
         "Every pod pays the sidecar's memory and CPU; at scale that is real cost.",
-        "Startup and shutdown ordering: the app can start before its proxy is ready.",
+        "Startup ordering: the app may call out before its proxy is ready; native sidecars fix this.",
         "A sidecar upgrade means restarting pods, unless it supports hot restart."]},
       {"title": "Overuse smells", "tone": "warning", "items": [
         "A sidecar that holds business logic or shares the app's state.",
@@ -81,7 +81,7 @@
     {"role": "sightings", "entries": [
       {"where": "Istio", "name": "Envoy sidecar injection", "detail": "Namespaces labeled for injection get an `istio-proxy` container added to each pod, which handles mTLS, routing and telemetry."},
       {"where": "Linkerd", "name": "linkerd2-proxy", "detail": "A Rust micro-proxy injected into each pod as the service-mesh data plane."},
-      {"where": "Kubernetes", "name": "Native sidecar containers", "detail": "An `initContainers` entry with `restartPolicy: Always` starts before the app and runs for the pod's life."},
+      {"where": "Kubernetes", "name": "Native sidecar containers", "detail": "An `initContainers` entry with `restartPolicy: Always` starts before the app and runs for the pod's life (beta and on by default since 1.29)."},
       {"where": "Dapr", "name": "daprd", "detail": "A sidecar that exposes HTTP and gRPC APIs for state, pub/sub and service invocation to the app on localhost."},
       {"where": "Fluent Bit", "name": "Log-shipping sidecar", "detail": "A common deployment tails the app's log volume and forwards it, so the app only writes files."}
     ]}
@@ -89,21 +89,24 @@
   "exercises": [
     {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this deployment?",
      "lines": [
-      "spec:",
-      "  containers:",
-      "  - name: orders",
-      "    image: shop/orders:1.8",
-      "    ports: [{containerPort: 8080}]",
-      "  - name: proxy",
-      "    image: envoyproxy/envoy:v1.30",
-      "    ports: [{containerPort: 8443}]",
-      "    volumeMounts: [{name: certs, mountPath: /etc/certs}]",
-      "# traffic enters on 8443, is TLS-terminated, then forwarded to localhost:8080"],
+      "Pod orders = new Pod(\"orders-7f9c\", List.of(",
+      "    new Container(\"orders\", \"shop/orders:1.8\", 8080),",
+      "    new Container(\"proxy\", \"envoyproxy/envoy:v1.30-latest\", 8443)));",
+      "// one Pod per replica: both containers share its network",
+      "// namespace and lifecycle. proxy terminates mTLS on 8443,",
+      "// forwards to localhost:8080 and exports request metrics;",
+      "// the orders image contains no TLS or metrics code."],
      "options": [
       {"ref": "sidecar", "correct": true, "why": "A helper container shares the pod with the service and handles its TLS and traffic; the app is unchanged."},
       {"ref": "api-gateway", "why": "A gateway is one shared edge component for many services; this proxy exists once per service instance."},
-      {"ref": "adapter", "why": "The proxy does not convert one interface to another; it adds a capability around the same interface."},
-      {"ref": "decorator", "why": "Decorator wraps within one process. This is a separate container with its own image and lifecycle."}]},
+      {"ref": "ambassador", "why": "An ambassador handles the app's outbound calls to a remote resource. This proxy terminates inbound traffic and adds telemetry for its own service."},
+      {"ref": "decorator", "why": "Decorator wraps within one process. This is a separate container with its own image and lifecycle."}],
+     "compile": {"template": [
+      "import java.util.List;",
+      "record Container(String name, String image, int port) {}",
+      "record Pod(String name, List<Container> containers) {}",
+      "class Snippet { void deploy() {",
+      "{{code}}", "} }"]}},
     {"id": "pick-1", "kind": "choose",
      "scenario": "A company runs 150 services in Java, Go and Python. Security requires mutual TLS with rotated certificates and consistent request metrics, and the platform team cannot coordinate rebuilds of every service for each change.",
      "prompt": "Which pattern fits best?",

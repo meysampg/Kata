@@ -59,7 +59,7 @@
         "A slow dependency is worse than a failed one."]},
       {"title": "Avoid when", "tone": "negative", "items": [
         "The operation is a local, bounded computation.",
-        "Cancelling mid-way leaves a non-idempotent write in an unknown state."]},
+        "A long batch job that makes progress; bound idle gaps or heartbeats, not total time."]},
       {"title": "Pitfalls", "tone": "warning", "items": [
         "No timeout at all: many default clients wait forever.",
         "Stacked timeouts where the inner exceeds the outer, so the inner never fires first.",
@@ -69,7 +69,7 @@
         "Timeouts so tight that normal tail latency trips them constantly."]},
       {"title": "Modern Java", "tone": "info", "items": [
         "`HttpRequest.timeout`, `HttpClient.connectTimeout` and `CompletableFuture.orTimeout` cover most cases.",
-        "`StructuredTaskScope.joinUntil(Instant)` applies one deadline to a whole group of subtasks (preview API)."]}
+        "`StructuredTaskScope` (a preview API) can apply one timeout to a whole group of subtasks."]}
     ]},
     {"role": "compare", "rows": [
       {"ref": "retry-backoff", "relation": "combines", "difference": "A timeout turns an unbounded wait into a failure; a retry decides what to do with that failure. Each attempt needs its own timeout inside the overall deadline."},
@@ -88,19 +88,18 @@
   "exercises": [
     {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
      "lines": [
-      "Duration call(Remote remote, Instant giveUpAt, Clock clock) throws Exception {",
+      "String call(Remote remote, Instant giveUpAt, Clock clock) throws Exception {",
       "    Duration left = Duration.between(clock.instant(), giveUpAt);",
       "    if (left.isNegative() || left.isZero()) {",
       "        throw new TimeoutException(\"out of time\");",
       "    }",
       "    Future<String> f = pool.submit(remote::fetch);",
       "    try {",
-      "        f.get(left.toMillis(), TimeUnit.MILLISECONDS);",
+      "        return f.get(left.toMillis(), TimeUnit.MILLISECONDS);",
       "    } catch (TimeoutException e) {",
       "        f.cancel(true);",
       "        throw e;",
       "    }",
-      "    return left;",
       "}"],
      "options": [
       {"ref": "timeout", "correct": true, "why": "The wait is bounded by an absolute give-up time, and the call is cancelled when the budget runs out."},
@@ -140,11 +139,11 @@
     {"id": "order-1", "kind": "reorder", "prompt": "Order the steps of one call guarded by a request deadline.",
      "blocks": [
       ["Duration left = deadline.remaining();"],
-      ["if (left.isNegative()) throw new TimeoutException();"],
       ["Duration limit = left.compareTo(perCall) < 0 ? left : perCall;"],
+      ["if (!limit.isPositive()) throw new TimeoutException();"],
       ["String body = client.fetch(url, limit);"],
       ["return parse(body);"]],
-     "explanation": "Read the remaining budget, fail fast when it is gone, derive this call's limit from it, make the call with that limit, then use the result.",
+     "explanation": "Read the remaining budget, derive this call's limit from it, fail fast if that limit is not positive, call with it, then use the result.",
      "compile": {"template": [
       "import java.time.Duration;", "import java.util.concurrent.TimeoutException;",
       "interface Deadline { Duration remaining(); }",

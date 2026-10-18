@@ -48,7 +48,11 @@ class Main {
         var entered = new CountDownLatch(2);
         Supplier<String> stuck = () -> {
             entered.countDown();
-            try { release.await(); } catch (InterruptedException e) { }
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             return "done";
         };
         // [[saturate
