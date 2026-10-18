@@ -8,7 +8,7 @@
         "**Translates:** method names, types, units, error models.",
         "**Contains:** the vendor or legacy coupling in one class.",
         "**Does not:** add behavior; that is Decorator's job."]},
-      {"type": "callout", "tone": "info", "text": "Prefer an object adapter (composition). A class adapter needs multiple inheritance, which Java does not have for classes."}
+      {"type": "callout", "tone": "info", "text": "Prefer an object adapter (composition). A Java class adapter can extend the adaptee and implement the target, but it leaks the adaptee's methods and binds you to one concrete class."}
     ]},
     {"role": "implementation", "file": "Adapter.java",
      "expectedOutput": "Optional[Point[lat=52.52, lon=13.4]]\nOptional.empty",
@@ -142,10 +142,12 @@
     {"id": "order-1", "kind": "reorder", "prompt": "Order the body of an adapter's method so that each line only uses what came before.",
      "blocks": [
       ["String raw = legacy.lookup(address);"],
-      ["if (raw.isEmpty()) return Optional.empty();"],
       ["String[] parts = raw.split(\"\\\\|\");"],
-      ["return Optional.of(new Point(Double.parseDouble(parts[0]), Double.parseDouble(parts[1])));"]],
-     "explanation": "Call the adaptee, map its failure signal to the target's, parse the data, then return it in the target's type. Parsing an empty string would fail.",
+      ["if (parts.length != 2) return Optional.empty();"],
+      ["double lat = Double.parseDouble(parts[0]);",
+       "double lon = Double.parseDouble(parts[1]);"],
+      ["return Optional.of(new Point(lat, lon));"]],
+     "explanation": "Call the adaptee, split its answer, map an empty or malformed answer to the target's `Optional.empty()` before parsing would throw, then return the target's type.",
      "compile": {"template": [
       "import java.util.Optional;",
       "record Point(double lat, double lon) {}",

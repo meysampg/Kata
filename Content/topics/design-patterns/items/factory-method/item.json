@@ -85,7 +85,7 @@
         "Sealed interfaces plus a `switch` expression are enough for a closed set of products."]}
     ]},
     {"role": "compare", "rows": [
-      {"ref": "abstract-factory", "relation": "specializes", "difference": "Abstract Factory is a group of factory methods that must produce a consistent family. Factory Method creates one product and is usually a single hook in a bigger algorithm."},
+      {"ref": "abstract-factory", "relation": "oftenConfused", "difference": "Abstract Factory is a separate object, passed to the client, whose several creation methods keep a product family consistent. Factory Method is one overridable hook inside the creator's own algorithm."},
       {"ref": "template-method", "relation": "combines", "difference": "A factory method is typically one step inside a Template Method. The template fixes the sequence; the factory method supplies the object."},
       {"ref": "builder", "relation": "alternative", "difference": "Builder assembles one complex object in steps and validates it at the end. Factory Method only decides which class to instantiate."},
       {"ref": "prototype", "relation": "alternative", "difference": "Prototype creates by copying a configured instance and needs no creator subclasses. Factory Method creates by calling a constructor chosen polymorphically."},
@@ -94,7 +94,7 @@
     {"role": "sightings", "entries": [
       {"where": "JDK", "name": "java.util.Collection#iterator", "detail": "Each collection decides which `Iterator` implementation to return; callers see only the interface."},
       {"where": "JDK", "name": "java.util.concurrent.ThreadFactory", "detail": "`ThreadPoolExecutor` calls `newThread(Runnable)` to create workers, so you control naming, daemon status and handlers."},
-      {"where": "JDK", "name": "java.text.NumberFormat.getInstance", "detail": "Returns a locale-appropriate concrete `NumberFormat` without exposing its class."},
+      {"where": "JDK", "name": "java.net.URLStreamHandler#openConnection", "detail": "An abstract protected method each protocol handler overrides; `URL.openConnection()` calls it and gets back an `http`, `file` or `jar` `URLConnection`."},
       {"where": "Spring", "name": "FactoryBean<T>", "detail": "A bean whose `getObject()` produces the actual bean the container exposes under its name."}
     ]}
   ],
@@ -110,7 +110,7 @@
       "        }",
       "    }",
       "}",
-      "// PlainExporter returns a FileWriter; GzipExporter wraps it in GZIPOutputStream"],
+      "// Plain: a FileWriter. Gzip: an OutputStreamWriter over a GZIPOutputStream"],
      "options": [
       {"ref": "factory-method", "correct": true, "why": "A fixed algorithm calls an abstract creation method that subclasses implement to supply the concrete `Writer`."},
       {"ref": "template-method", "why": "It uses the same skeleton, but the varying step here is object creation, which is exactly what Factory Method names."},

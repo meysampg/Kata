@@ -16,7 +16,7 @@
       {"region": "implementor", "note": "The implementor hierarchy: one narrow `send` primitive and two transports. It knows nothing about what a message means."},
       {"region": "abstraction", "note": "The abstraction owns a `Channel` and declares the high-level operation. This field is the bridge between the two hierarchies."},
       {"region": "refined", "note": "Refined abstractions decide what to say and delegate how to send. Neither mentions `Email` or `Sms`."},
-      {"region": "client", "note": "Any message works with any channel. Two abstractions and two implementors give four combinations from four classes, not eight."}
+      {"region": "client", "note": "Any message works with any channel. At two by two the class count ties; a third channel costs one class here, but one subclass per message type without the bridge."}
     ]},
     {"role": "example", "blocks": [
       {"type": "lead", "text": "Rendering reports on several output targets."},
@@ -74,9 +74,9 @@
       {"ref": "composite", "relation": "combines", "difference": "Composite trees of abstractions can share one implementor, so the whole tree renders on the same target."}
     ]},
     {"role": "sightings", "entries": [
-      {"where": "JDK", "name": "java.sql.Driver and Connection", "detail": "Application code uses the JDBC API (abstraction); each vendor driver (implementor) is registered and chosen by URL."},
-      {"where": "JDK", "name": "java.nio.file.spi.FileSystemProvider", "detail": "`Path` and `Files` delegate to a provider, which is why the same code works on the default file system and on zip file systems."},
-      {"where": "SLF4J", "name": "LoggerFactory and providers", "detail": "The `Logger` API is separate from backends such as Logback, found at runtime via `ServiceLoader`."}
+      {"where": "JDK", "name": "java.util.logging.Handler and Formatter", "detail": "Handlers (`ConsoleHandler`, `FileHandler`, `SocketHandler`) hold a `Formatter` (`SimpleFormatter`, `XMLFormatter`) set by `setFormatter`; where records go and how they look vary independently."},
+      {"where": "JDK", "name": "java.nio.file.spi.FileSystemProvider", "detail": "`Files` operations delegate to `path.getFileSystem().provider()`, so the same calls work on the default file system and on a zip file system."},
+      {"where": "Swing", "name": "javax.swing.JComponent and ComponentUI", "detail": "Each component delegates painting and sizing to a `ComponentUI` held in its `ui` field; component types and look-and-feel delegates evolve separately."}
     ]}
   ],
   "exercises": [

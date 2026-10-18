@@ -248,7 +248,7 @@
      "tone": "info",
      "items": [
       "Records give immutable value types that suit flyweights.",
-      "`String` deduplication in G1 shares character arrays without code changes."
+      "String deduplication (`-XX:+UseStringDeduplication`) shares `String` backing arrays with no code changes."
      ]
     }
    ]
@@ -267,9 +267,9 @@
      "difference": "Immutable leaf nodes of a composite, such as glyphs in a document tree, are natural flyweights."
     },
     {
-     "ref": "factory-method",
+     "ref": "immutable-object",
      "relation": "combines",
-     "difference": "The flyweight factory is a keyed creation method that returns existing instances before building new ones."
+     "difference": "Sharing is only safe because flyweights are immutable: one change would leak to every holder. Immutable value objects are the natural material for a flyweight pool."
     },
     {
      "ref": "prototype",
@@ -408,7 +408,6 @@
    "prompt": "Order the lines so that each one only uses what came before.",
    "blocks": [
     [
-     "Map<String, Style> pool = new HashMap<>();",
      "String key = cell.font();"
     ],
     [
@@ -421,13 +420,13 @@
      "screen.add(out);"
     ]
    ],
-   "explanation": "The lookup key and pool exist first, then the shared instance is fetched or created. Only then can the extrinsic values from the cell be passed to it.",
+   "explanation": "The key comes from the cell, then the shared instance is fetched or created from the pool. Only then can the cell's extrinsic values be passed to it.",
    "compile": {
     "template": [
      "import java.util.*;",
      "record Style(String font) { String draw(String t, int c) { return font + t + c; } }",
      "record Cell(String font, String text, int col) {}",
-     "class Snippet { void run(Cell cell, List<String> screen) {",
+     "class Snippet { void run(Cell cell, List<String> screen, Map<String, Style> pool) {",
      "{{code}}",
      "} }"
     ]

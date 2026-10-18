@@ -42,7 +42,7 @@
     },
     {
      "region": "base",
-     "note": "An abstract decorator holds the wrapped `Notifier` and is itself a `Notifier`. It is the only place that knows about delegation."
+     "note": "An abstract decorator holds the wrapped `Notifier` and is itself a `Notifier`. It holds the shared `next` field, so each concrete wrapper writes only its own concern."
     },
     {
      "region": "wrappers",
@@ -303,7 +303,7 @@
     {
      "ref": "proxy",
      "relation": "lookAlike",
-     "difference": "Same wrapping shape, different intent. A proxy controls access to its subject and usually manages its lifecycle; a decorator adds responsibilities that the client opts into and can stack."
+     "difference": "Same wrapping shape, different intent. A proxy controls access to its subject and may manage its lifecycle; a decorator adds responsibilities that the client opts into and can stack."
     },
     {
      "ref": "adapter",
@@ -337,8 +337,8 @@
     },
     {
      "where": "JDK",
-     "name": "Collections.unmodifiableList",
-     "detail": "Wraps a `List` with the same interface and rejects mutation; `synchronizedList` adds locking the same way."
+     "name": "java.util.Collections#checkedList",
+     "detail": "Wraps a `List` behind the same interface and adds a runtime type check on every inserted element."
     },
     {
      "where": "Jakarta Servlet",

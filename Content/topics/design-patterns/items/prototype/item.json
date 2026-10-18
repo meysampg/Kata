@@ -14,7 +14,7 @@
      "expectedOutput": "orc hp=30 [slash]\norc hp=30 [slash, rage]\norc hp=30 [slash]\ntrue",
      "walkthrough": [
       {"region": "contract", "note": "A one-method copy contract. The generic parameter makes `copy()` return the concrete type without casts."},
-      {"region": "unit", "note": "`copy()` goes through a private copy constructor that clones the mutable list. This is a deep copy: the new unit owns its own `abilities`."},
+      {"region": "unit", "note": "`copy()` goes through a private copy constructor that clones the mutable list. The new unit owns its own `abilities`; the immutable `String` elements can safely be shared."},
       {"region": "registry", "note": "The registry holds configured templates under a key. Nobody mutates these instances; they exist only to be copied."},
       {"region": "spawn", "note": "Each spawn copies the template, then customizes the copy. The second unit gets an extra ability."},
       {"region": "check", "note": "The template and the first copy are unchanged by the second copy's `learn`, and the copies are distinct objects. Aliasing the list would have failed this."}
@@ -53,7 +53,7 @@
       {"title": "Pitfalls", "tone": "warning", "items": [
         "A shallow copy aliasing a mutable list or map leaks changes between copies.",
         "`Cloneable` skips constructors, so final fields and invariants can break.",
-        "Subclasses forgetting to override `copy()` return the parent type."]},
+        "A subclass that does not override `copy()` silently produces parent-class copies."]},
       {"title": "Overuse smells", "tone": "warning", "items": [
         "Cloning an object only to immediately overwrite every field.",
         "Deep-copying large graphs on every request instead of sharing immutables."]},
@@ -113,13 +113,16 @@
       "",
       "    Unit(String name, List<String> abilities) {",
       "        this.name = name;",
-      "        this.abilities = abilities;",
+      "        this.abilities = new ArrayList<>(abilities);",
       "    }",
-      "",
-      "    Unit copy() { return new Unit(name, abilities); }",
+      "    private Unit(Unit other) {",
+      "        this.name = other.name;",
+      "        this.abilities = other.abilities;",
+      "    }",
+      "    Unit copy() { return new Unit(this); }",
       "}"],
-     "flawLines": [10],
-     "explanation": "The copy shares the same `abilities` list, so changing one unit changes the template and every other copy. Pass `new ArrayList<>(abilities)`.",
+     "flawLines": [11],
+     "explanation": "The copy constructor aliases the template's `abilities` list, so changing one unit changes the template and every other copy. Assign `new ArrayList<>(other.abilities)`.",
      "compile": {"template": ["import java.util.*;", "{{code}}"]}},
     {"id": "order-1", "kind": "reorder", "prompt": "Order the steps to spawn a customized unit from a registry.",
      "blocks": [

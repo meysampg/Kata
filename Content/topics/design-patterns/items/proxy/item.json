@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "info",
-     "text": "The proxy usually owns the real subject's lifecycle. A decorator receives its component from outside and exists to add features."
+     "text": "A proxy often creates or owns the real subject's lifecycle. A decorator receives its component from outside and exists to add stackable features."
     }
    ]
   },
@@ -276,8 +276,8 @@
     },
     {
      "ref": "ambassador",
-     "relation": "specializes",
-     "difference": "An ambassador is a remote proxy lifted into a separate process beside the client, handling retries, TLS and routing."
+     "relation": "lookAlike",
+     "difference": "An ambassador is a remote proxy lifted out of the process into a co-located helper, handling retries, TLS and routing at the network level."
     }
    ]
   },
@@ -292,12 +292,12 @@
     {
      "where": "Spring",
      "name": "ProxyFactory",
-     "detail": "Spring AOP wraps beans in JDK or CGLIB proxies to apply `@Transactional`, `@Cacheable` and `@Async`."
+     "detail": "The programmatic core of Spring AOP; auto-proxy creators use it to wrap beans in JDK or CGLIB proxies for `@Transactional` and `@Cacheable`."
     },
     {
-     "where": "Hibernate",
+     "where": "Jakarta Persistence",
      "name": "EntityManager.getReference",
-     "detail": "Returns an uninitialized proxy that loads the row on first access to a field."
+     "detail": "Returns an uninitialized proxy (a Hibernate subclass proxy in practice) that loads the row when a non-id property is first accessed."
     },
     {
      "where": "JDK",
@@ -450,14 +450,14 @@
    "modelAnswer": [
     {
      "type": "p",
-     "text": "A proxy implements the same interface as the real subject and decides whether and when calls reach it. That enables lazy creation, access checks, remote access, caching or metering without changing callers. It usually owns the subject's lifecycle. A decorator looks the same but adds stackable features to a component it is given."
+     "text": "A proxy implements the same interface as the real subject and decides whether and when calls reach it. That enables lazy creation, access checks, remote access, caching or metering without changing callers. It often owns the subject's lifecycle. A decorator looks the same but adds stackable features to a component it is given."
     }
    ],
    "keyPoints": [
     "Same interface as the real subject; callers cannot tell",
     "Controls access, timing or location of the subject",
     "Kinds: virtual, protection, remote, smart",
-    "Usually creates and owns the real subject",
+    "Often creates and owns the real subject",
     "Decorator adds features; proxy controls access"
    ]
   }

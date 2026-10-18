@@ -38,7 +38,7 @@
         },
         {
           "region": "holder",
-          "note": "The holder idiom is lazy and lock-free. `Holder` initializes only when `get()` first touches it, and class initialization is guaranteed thread-safe."
+          "note": "Lazy and lock-free: `Holder` initializes on the first `get()`, and the JVM makes class initialization thread-safe. Unlike the enum, reflection can still call the constructor, and `Serializable` would need `readResolve`."
         },
         {
           "region": "useEnum",
@@ -228,13 +228,13 @@
         },
         {
           "where": "JDK",
-          "name": "java.awt.Desktop#getDesktop",
-          "detail": "Returns the `Desktop` instance of the current browser context for the application."
+          "name": "java.awt.Toolkit#getDefaultToolkit",
+          "detail": "Lazily creates the platform's default `Toolkit` once and returns that same instance on every later call."
         },
         {
           "where": "Spring",
-          "name": "default bean scope",
-          "detail": "Beans are singletons per container, which is one instance injected everywhere, not a class-level rule."
+          "name": "singleton bean scope",
+          "detail": "Spring's default scope: one instance per container, injected everywhere, not a class-level rule."
         },
         {
           "where": "Jakarta Inject",
@@ -317,21 +317,22 @@
       "lines": [
         "final class Registry {",
         "    private static Registry instance;",
-        "",
         "    private Registry() {}",
         "",
         "    static Registry get() {",
         "        if (instance == null) {",
-        "            instance = new Registry();",
+        "            synchronized (Registry.class) {",
+        "                if (instance == null) instance = new Registry();",
+        "            }",
         "        }",
         "        return instance;",
         "    }",
         "}"
       ],
       "flawLines": [
-        7
+        2
       ],
-      "explanation": "The unsynchronized check-then-act lets two threads both see null and create two instances. Use an enum, the holder idiom, or a synchronized accessor.",
+      "explanation": "Without `volatile`, the unlocked read on line 6 has no happens-before with the write inside the lock, so a thread can see a reference to a partly constructed object. Declare the field `volatile`, or use the holder idiom.",
       "compile": {
         "template": [
           "{{code}}"

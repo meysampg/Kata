@@ -1,0 +1,170 @@
+{
+  "id": "builder",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Collect an object's parts through a readable sequence of calls, then create it in one validated step."},
+      {"type": "p", "text": "A **builder** holds the mutable, in-progress state. Its `build()` method checks the invariants that span several fields and returns an **immutable** product. Callers name each value instead of passing a long positional argument list, and no half-built object ever escapes."},
+      {"type": "bullets", "items": [
+        "**Solves:** telescoping constructors and boolean-flag argument lists.",
+        "**Guarantees:** the product is valid and immutable once built.",
+        "**Needs:** a place for cross-field validation, which is `build()`."]},
+      {"type": "callout", "tone": "info", "text": "This is Bloch's fluent builder. The GoF original adds a **director** that drives the same steps against different builders to produce different representations, such as HTML or PDF."}
+    ]},
+    {"role": "implementation", "file": "Builder.java",
+     "expectedOutput": "ServerConfig[host=api.local, port=8443, timeout=PT5S, tls=true]\nrejected: tls on port 80",
+     "walkthrough": [
+      {"region": "product", "note": "The product is an immutable record. Its compact constructor guards null, and `builder(host)` is the single entry point."},
+      {"region": "builder", "note": "The builder keeps defaults for optional fields and requires the mandatory `host` up front. Each setter returns `this` to allow chaining."},
+      {"region": "build", "note": "`build()` validates rules that involve several fields, like TLS on port 80. Only a consistent configuration can leave the builder."},
+      {"region": "client", "note": "The call site reads like a named-argument list. Only the values that differ from defaults appear."},
+      {"region": "reject", "note": "An invalid combination fails at `build()` time with a precise message, not later inside the code that uses the config."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Constructing an outbound HTTP request in an API client."},
+      {"type": "p", "text": "A request has a method, URI, headers, a timeout, optional body and authentication. Most combinations are rare and some are illegal, such as a body on `GET` in your API. A builder exposes only the legal chain, adds headers incrementally, and rejects the illegal combinations in `build()` before anything touches the network."},
+      {"type": "code", "language": "java", "lines": [
+        "Request req = Request.post(\"/orders\")",
+        "    .header(\"Idempotency-Key\", key)",
+        "    .json(order)",
+        "    .timeout(Duration.ofSeconds(5))",
+        "    .build();"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: call sites document themselves, and an invalid request fails fast at one spot."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "col": 0.5, "row": 0},
+        {"id": "builder", "name": "Builder", "kind": "class", "role": "Builder", "col": 0, "row": 1,
+         "members": ["- host, port, timeout", "+ port(int): Builder", "+ tls(boolean): Builder", "+ build(): ServerConfig"]},
+        {"id": "product", "name": "ServerConfig", "kind": "record", "role": "Product", "col": 1, "row": 1,
+         "members": ["host, port", "timeout, tls"]}],
+       "edges": [
+        {"from": "client", "to": "builder", "rel": "dependency", "label": "configures"},
+        {"from": "builder", "to": "product", "rel": "dependency", "label": "builds"}],
+       "notes": [{"attachTo": "builder", "text": "build() validates"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "b", "name": "Builder", "role": "Builder"},
+        {"id": "p", "name": "ServerConfig", "role": "Product"}],
+       "messages": [
+        {"from": "client", "to": "b", "label": "port(8443)", "style": "call"},
+        {"from": "client", "to": "b", "label": "tls(true)", "style": "call"},
+        {"from": "client", "to": "b", "label": "build()", "style": "call"},
+        {"from": "b", "to": "b", "label": "validate fields", "style": "call"},
+        {"from": "b", "to": "p", "label": "new ServerConfig(...)", "style": "create"},
+        {"from": "b", "to": "client", "label": "config", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A type has many optional parameters or a long constructor.",
+        "Validity depends on several fields together and must be checked once.",
+        "You want an immutable product assembled from mutable steps."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Two or three required fields: a constructor or a record is shorter.",
+        "Most fields are required: a builder only catches omissions at runtime, a constructor at compile time."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Validating in setters instead of `build()` misses cross-field rules.",
+        "Reusing one builder after `build()` can leak shared mutable state.",
+        "A mandatory field made optional lets `null` reach the product."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A builder for a two-field value object.",
+        "A director class with one caller and one recipe."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Records remove the boilerplate of the product; generators such as Lombok `@Builder` or Immutables remove the builder's.",
+        "Add a `toBuilder()` or a `with...` method for copy-with-change instead of mutating."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "factory-method", "relation": "alternative", "difference": "Factory Method chooses which class to instantiate. Builder gathers many values for one class and checks them together."},
+      {"ref": "abstract-factory", "relation": "alternative", "difference": "Abstract Factory returns several products right away. Builder returns one product, after a sequence of configuration calls."},
+      {"ref": "prototype", "relation": "alternative", "difference": "Prototype starts from a configured copy and tweaks it. Builder starts from defaults and assembles; `toBuilder()` joins the two."},
+      {"ref": "composite", "relation": "combines", "difference": "Builders are a natural way to assemble Composite trees, with nested builders or `add` calls for children."},
+      {"ref": "immutable-object", "relation": "combines", "difference": "Builder is the standard way to produce an immutable object with many fields: mutate the builder, freeze the product."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.net.http.HttpRequest.Builder", "detail": "`HttpRequest.newBuilder()` chains `uri`, `header`, `timeout` and `POST(...)`, then `build()`."},
+      {"where": "JDK", "name": "java.lang.ProcessBuilder", "detail": "Configure command, directory, environment and redirects, then `start()` the process."},
+      {"where": "JDK", "name": "java.util.Locale.Builder", "detail": "`setLanguage`, `setRegion` and `setScript` reject ill-formed values as they are set; `build()` returns the `Locale`."},
+      {"where": "Guava", "name": "ImmutableList.Builder", "detail": "Accumulates elements, then `build()` returns an immutable list."},
+      {"where": "Protocol Buffers", "name": "generated Builder classes", "detail": "Every Java message has `newBuilder()` and `toBuilder()`; messages themselves are immutable."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "var mail = Mail.to(\"ann@example.com\")",
+      "    .subject(\"Invoice\")",
+      "    .cc(\"bo@example.com\")",
+      "    .attach(pdf)",
+      "    .priority(High)",
+      "    .build();",
+      "// build() throws if the body and attachments are both empty"],
+     "options": [
+      {"ref": "builder", "correct": true, "why": "Values accumulate through chained calls, and `build()` validates and returns the finished object."},
+      {"ref": "factory-method", "why": "No subclass or supplier decides which class to create; the focus is assembling one object's state."},
+      {"ref": "decorator", "why": "Chained calls look like wrapping, but each call mutates a builder rather than wrapping an object with the same interface."},
+      {"ref": "prototype", "why": "Nothing is copied from an existing instance; the object starts from `to(...)`."}],
+     "compile": {"template": [
+      "import java.util.*;",
+      "enum Prio { High }",
+      "class Pdf {}",
+      "class Mail {",
+      "  static Mail to(String a) { return new Mail(); }",
+      "  Mail subject(String s) { return this; }",
+      "  Mail cc(String s) { return this; }",
+      "  Mail attach(Pdf p) { return this; }",
+      "  Mail priority(Prio p) { return this; }",
+      "  Mail build() { return this; }",
+      "}",
+      "class Snippet { void run(Pdf pdf) { Prio High = Prio.High;",
+      "{{code}}", "} }"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A job-scheduler configuration has two required fields and eight optional ones. Some optional fields only make sense together, such as a retry count with a backoff, and the configuration should be immutable once created.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "builder", "correct": true, "why": "Many optional values, cross-field rules and an immutable result are exactly what a builder with a validating `build()` handles."},
+      {"ref": "factory-method", "why": "The difficulty is assembling and validating many values, not choosing between classes."},
+      {"ref": "prototype", "why": "Copying a template helps when instances are near-identical, but here the first configuration still has to be assembled."},
+      {"ref": "abstract-factory", "why": "There is one product, not a family of related ones."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Builder pattern.",
+     "lines": [
+      "final class Config {",
+      "    final String host;",
+      "    final int port;",
+      "    private Config(String h, int p) { this.host = h; this.port = p; }",
+      "",
+      "    static final class Builder {",
+      "        private String host;",
+      "        private int port = 80;",
+      "        Builder host(String h) { this.host = h; return this; }",
+      "        Builder port(int p) { this.port = p; return this; }",
+      "        Config build() { return new Config(host, port); }",
+      "    }",
+      "}"],
+     "flawLines": [11],
+     "explanation": "`build()` never validates, so a `Config` with a null host or an invalid port can exist. Check `host != null` and the port range before constructing.",
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the lifecycle of building and using a configuration.",
+     "blocks": [
+      ["var builder = ServerConfig.builder(\"api.local\");"],
+      ["builder.port(8443).tls(true);"],
+      ["ServerConfig cfg = builder.build();"],
+      ["server.start(cfg);"]],
+     "explanation": "Create the builder with its required value, set optional values, call `build()` to validate and freeze, then pass the immutable result on.",
+     "compile": {"template": [
+      "class ServerConfig {",
+      "  static B builder(String h) { return new B(); }",
+      "  static class B { B port(int p) { return this; } B tls(boolean t) { return this; } ServerConfig build() { return new ServerConfig(); } }",
+      "}",
+      "class Server { void start(ServerConfig c) {} }",
+      "class Snippet { void run(Server server) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Builder in your own words: where should validation happen, and when would you skip it?",
+     "modelAnswer": [
+      {"type": "p", "text": "A builder accumulates values through named, chainable calls and creates the product only in `build()`, which validates rules that span several fields and returns an immutable object. Skip it for small types where a constructor or record already reads clearly."}],
+     "keyPoints": [
+      "Mutable builder, immutable product",
+      "Validation of cross-field rules lives in `build()`",
+      "Replaces telescoping constructors and flag arguments",
+      "Not worth it for two or three fields",
+      "`toBuilder()` gives copy-with-change"]}
+  ]
+}

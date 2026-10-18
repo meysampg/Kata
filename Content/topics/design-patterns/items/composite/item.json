@@ -242,7 +242,7 @@
      "tone": "warning",
      "items": [
       "Cycles: a node added under itself recurses forever. Check on insertion or keep the tree immutable.",
-      "Leaf-only methods on the shared interface force `UnsupportedOperationException` stubs.",
+      "Transparency vs. safety: `add` on the component fails at runtime in leaves; on the composite, clients downcast.",
       "Deep trees can overflow the stack on naive recursion.",
       "Parent pointers add mutable state that must stay consistent."
      ]
@@ -472,7 +472,7 @@
     "Composite delegates to children and combines results",
     "Recursion handles any depth; the client never checks types",
     "Decorator wraps one component to add behavior; composite holds many",
-    "Watch for cycles and leaf-only methods on the interface"
+    "Watch for cycles and child methods that leaves cannot honor"
    ]
   }
  ]

@@ -15,7 +15,7 @@
      "walkthrough": [
       {"region": "products", "note": "Two abstract products. Each is a functional interface here, so implementations can be lambdas while the type stays distinct."},
       {"region": "factory", "note": "The abstract factory: one method per product kind. This interface is the only thing the client ever depends on."},
-      {"region": "local", "note": "A concrete factory for development. Both products it returns belong to the local family and reference each other's conventions."},
+      {"region": "local", "note": "A concrete factory for development. Both products it returns belong to the local family: files on disk and an in-memory bus."},
       {"region": "cloud", "note": "A second family with state of its own, the bucket name. Swapping `Infra` swaps blob storage and messaging together."},
       {"region": "client", "note": "`Uploader` asks one factory for both products. It cannot pair S3 storage with an in-memory bus, because it never names a concrete product."},
       {"region": "select", "note": "The environment picks a factory once, at the edge. The rest of the program is identical in both runs."}
@@ -63,7 +63,7 @@
         "Only one product kind varies; a Factory Method or a `Supplier` is lighter.",
         "New product kinds appear often, since each one edits every factory."]},
       {"title": "Pitfalls", "tone": "warning", "items": [
-        "Product kinds that differ in capability force lowest-common-denominator interfaces.",
+        "Families that differ in capability force lowest-common-denominator product interfaces.",
         "Leaking a concrete product type to the client re-introduces the coupling.",
         "Forgetting that every new family must implement all methods."]},
       {"title": "Overuse smells", "tone": "warning", "items": [
@@ -82,8 +82,8 @@
     ]},
     {"role": "sightings", "entries": [
       {"where": "JDK", "name": "java.sql.Connection", "detail": "Creates the matching `Statement`, `PreparedStatement` and `CallableStatement` for one database driver."},
-      {"where": "JDK", "name": "javax.xml.parsers.DocumentBuilderFactory", "detail": "`newInstance()` locates a provider; the factory then configures and produces parsers from that same implementation."},
-      {"where": "JDK", "name": "javax.xml.stream.XMLInputFactory", "detail": "Creates readers of several kinds (`createXMLStreamReader`, `createXMLEventReader`) from one provider."},
+      {"where": "JDK", "name": "javax.swing.LookAndFeel", "detail": "Through `UIDefaults`, the installed look and feel supplies the matching `ComponentUI` delegate for every Swing component, so one theme renders them all."},
+      {"where": "JDK", "name": "javax.xml.stream.XMLInputFactory", "detail": "One provider's factory creates both reader kinds, `createXMLStreamReader` and `createXMLEventReader`, so cursor and event parsing share one implementation."},
       {"where": "Jakarta Messaging", "name": "jakarta.jms.Session", "detail": "Creates producers, consumers, messages and queues that all belong to the same JMS provider."}
     ]}
   ],

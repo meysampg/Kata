@@ -316,8 +316,8 @@
     },
     {
      "ref": "abstract-factory",
-     "relation": "alternative",
-     "difference": "An abstract factory can hide how subsystem objects are created, while a facade hides how they are used together."
+     "relation": "combines",
+     "difference": "An abstract factory can create the subsystem objects a facade uses, hiding platform-specific classes. The facade then hides how those objects are used together."
     }
    ]
   },
@@ -325,9 +325,9 @@
    "role": "sightings",
    "entries": [
     {
-     "where": "SLF4J",
-     "name": "org.slf4j.LoggerFactory",
-     "detail": "The Simple Logging Facade for Java: one API in front of Logback, Log4j 2 or `java.util.logging`."
+     "where": "Jakarta Mail",
+     "name": "jakarta.mail.Transport#send",
+     "detail": "The static `send(Message)` obtains a transport from the message's session, connects, sends to every recipient and closes, in one call."
     },
     {
      "where": "Spring",
@@ -430,7 +430,7 @@
     "    private final Payments payments = new Payments();",
     "",
     "    Payments.Receipt place(String sku, int qty, String card) {",
-    "        inventory.reserve(sku, qty);",
+    "        if (!inventory.reserve(sku, qty)) throw new IllegalStateException();",
     "        return payments.charge(card, 1999L * qty);",
     "    }",
     "}"
