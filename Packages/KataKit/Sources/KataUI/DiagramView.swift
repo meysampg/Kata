@@ -7,7 +7,7 @@ typealias DScene = DiagramScene
 
 enum DiagramLayouts {
   @MainActor
-  static func scene(for diagram: Diagram, fontSize: CGFloat = 12) -> DiagramScene {
+  static func scene(for diagram: Diagram, fontSize: CGFloat = 14) -> DiagramScene {
     let m = MonoMetrics.metrics(size: fontSize)
     switch diagram {
     case .classDiagram(let d): return ClassDiagramLayout.layout(d, metrics: m)
@@ -19,7 +19,7 @@ enum DiagramLayouts {
 /// Draws a `DiagramScene` with `Canvas`, scaled to the width it is given.
 struct DiagramCanvas: View {
   let scene: DiagramScene
-  var fontSize: CGFloat = 12
+  var fontSize: CGFloat = 14
   var selectedID: String?
   var onTapBox: ((String?) -> Void)?
 
@@ -53,7 +53,8 @@ struct DiagramCanvas: View {
   // MARK: Drawing
 
   private var ink: Color { .primary }
-  private var bg: Color { Color(uiColor: .systemBackground) }
+  // Matches the deck's DiagramCardView background (`.background.secondary`).
+  private var bg: Color { Color(uiColor: .secondarySystemBackground) }
   private var boxFill: Color { Color(uiColor: .secondarySystemBackground) }
 
   private func connected(_ line: DScene.Line, to rect: CGRect) -> Bool {
@@ -256,7 +257,7 @@ public struct DiagramView: View {
       withAnimation(.smooth(duration: 0.2)) { selected = next }
       onSelect?(next)
     }
-    .frame(maxWidth: scene.size.width * 1.5)
+    .frame(maxWidth: scene.size.width * 2.0)
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(DiagramDescriber.describe(diagram))

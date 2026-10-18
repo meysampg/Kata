@@ -2,14 +2,14 @@ import CoreGraphics
 import Foundation
 
 public enum ClassDiagramLayout {
-  static let margin: CGFloat = 16
+  static let margin: CGFloat = 10
   static let padding: CGFloat = 8
   static let vPadding: CGFloat = 6
-  static let hGap: CGFloat = 48
+  static let hGap: CGFloat = 24
   static let vGap: CGFloat = 56
-  static let minNodeWidth: CGFloat = 96
-  static let noteGap: CGFloat = 14
-  static let noteWrap = 24
+  static let minNodeWidth: CGFloat = 80
+  static let noteGap: CGFloat = 10
+  static let noteWrap = 12
 
   public static func layout(_ d: ClassDiagram, metrics: TextMetrics = .default) -> DiagramScene {
     let lh = metrics.lineHeight
@@ -44,7 +44,20 @@ public enum ClassDiagramLayout {
     guard !d.nodes.isEmpty else { return Scene(size: CGSize(width: margin * 2, height: margin * 2)) }
     let maxW = contents.map(\.size.width).max() ?? 0
     let maxH = contents.map(\.size.height).max() ?? 0
-    let xPitch = maxW + hGap
+    // Smallest column pitch that keeps every same-row pair of nodes `hGap` apart.
+    let xPitch: CGFloat = {
+      var need: CGFloat = 0
+      var paired = false
+      for (i, a) in d.nodes.enumerated() {
+        for (j, b) in d.nodes.enumerated() where j > i && a.row == b.row {
+          let dc = abs(a.col - b.col)
+          guard dc >= 1 else { continue }  // closer than a column is the author's overlap to fix
+          paired = true
+          need = max(need, (contents[i].size.width / 2 + contents[j].size.width / 2 + hGap) / dc)
+        }
+      }
+      return paired ? need : maxW + hGap
+    }()
     let yPitch = maxH + vGap
     let minCol = d.nodes.map(\.col).min() ?? 0
     let minRow = d.nodes.map(\.row).min() ?? 0

@@ -307,3 +307,15 @@ enum Fixtures {
     #expect(DiagramLinter.issues(.classDiagram(d)).contains { $0.message.contains("overlap") })
   }
 }
+
+@Suite struct DiagramCompactnessTests {
+  /// At the default 14pt metrics, a 350pt-wide canvas must scale by >= ~0.8 so text stays >= ~11pt.
+  @Test func strategyFitsPhoneWidth() throws {
+    let c = ClassDiagramLayout.layout(try Fixtures.classDiagram())
+    let q = SequenceDiagramLayout.layout(try Fixtures.sequence())
+    #expect(c.size.width <= 440)
+    #expect(q.size.width <= 440)
+    #expect(14 * 350 / c.size.width >= 11)
+    #expect(14 * 350 / q.size.width >= 11)
+  }
+}

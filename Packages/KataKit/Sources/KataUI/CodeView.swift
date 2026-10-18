@@ -50,6 +50,7 @@ public struct CodeView: View {
   let lineDecorations: [Int: LineDecoration]
   let scrollsVertically: Bool
   let scrollToLine: Int?
+  let footer: AnyView?
 
   @Environment(\.colorScheme) private var scheme
   @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
@@ -57,18 +58,20 @@ public struct CodeView: View {
 
   /// - Parameters:
   ///   - scrollsVertically: wrap in a vertical `ScrollView` so `scrollToLine` works.
+  ///   - footer: shown after the last line, inside the vertical scroll (needs `scrollsVertically`).
   ///   - scrollToLine: when it changes, scrolls that line to the centre (needs `scrollsVertically`).
   public init(
     source: String, language: String = "java", fontSize: CGFloat = 14,
     showLineNumbers: Bool = true, highlightedLines: ClosedRange<Int>? = nil,
     dimOthers: Bool = false, onTapLine: ((Int) -> Void)? = nil,
     lineDecorations: [Int: LineDecoration] = [:], scrollsVertically: Bool = false,
-    scrollToLine: Int? = nil
+    scrollToLine: Int? = nil, footer: AnyView? = nil
   ) {
     self.source = source; self.language = language; self.fontSize = fontSize
     self.showLineNumbers = showLineNumbers; self.highlightedLines = highlightedLines
     self.dimOthers = dimOthers; self.onTapLine = onTapLine; self.lineDecorations = lineDecorations
     self.scrollsVertically = scrollsVertically; self.scrollToLine = scrollToLine
+    self.footer = footer
   }
 
   private var scaledSize: CGFloat { fontSize * scale }
@@ -76,7 +79,12 @@ public struct CodeView: View {
   public var body: some View {
     if scrollsVertically {
       ScrollViewReader { proxy in
-        ScrollView(.vertical) { content }
+        ScrollView(.vertical) {
+          VStack(spacing: 0) {
+            content
+            if let footer { footer }
+          }
+        }
           .onChange(of: scrollToLine) { _, line in
             guard let line else { return }
             withAnimation(.smooth) { proxy.scrollTo(line, anchor: .center) }

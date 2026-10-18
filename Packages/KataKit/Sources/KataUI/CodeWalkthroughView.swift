@@ -28,14 +28,17 @@ public struct CodeWalkthroughView: View {
   let fontSize: CGFloat
   let showLineNumbers: Bool
   let externalMode: Binding<CodeViewMode>?
+  let readFooter: AnyView?
 
   @State private var localMode: CodeViewMode = .read
   @State private var state: WalkthroughState
 
   public init(
     source: String, language: String = "java", steps: [WalkthroughState.Step],
-    fontSize: CGFloat = 14, showLineNumbers: Bool = true, mode: Binding<CodeViewMode>? = nil
+    fontSize: CGFloat = 14, showLineNumbers: Bool = true, mode: Binding<CodeViewMode>? = nil,
+    readFooter: AnyView? = nil
   ) {
+    self.readFooter = readFooter
     self.source = source; self.language = language; self.fontSize = fontSize
     self.showLineNumbers = showLineNumbers; self.externalMode = mode
     _state = State(initialValue: WalkthroughState(steps: steps))
@@ -43,12 +46,12 @@ public struct CodeWalkthroughView: View {
 
   public init(
     card: CodeCard, fontSize: CGFloat = 14, showLineNumbers: Bool = true,
-    mode: Binding<CodeViewMode>? = nil
+    mode: Binding<CodeViewMode>? = nil, readFooter: AnyView? = nil
   ) {
     self.init(
       source: card.source, language: card.language ?? "java",
       steps: WalkthroughState(card: card).steps, fontSize: fontSize,
-      showLineNumbers: showLineNumbers, mode: mode)
+      showLineNumbers: showLineNumbers, mode: mode, readFooter: readFooter)
   }
 
   private var mode: CodeViewMode { externalMode?.wrappedValue ?? localMode }
@@ -62,7 +65,8 @@ public struct CodeWalkthroughView: View {
       CodeView(
         source: source, language: language, fontSize: fontSize, showLineNumbers: showLineNumbers,
         highlightedLines: walking ? state.current?.lines : nil, dimOthers: walking,
-        scrollsVertically: true, scrollToLine: walking ? state.current?.lines.lowerBound : nil
+        scrollsVertically: true, scrollToLine: walking ? state.current?.lines.lowerBound : nil,
+        footer: walking ? nil : readFooter
       )
       .animation(.smooth, value: state.index)
       .animation(.smooth, value: walking)

@@ -2,10 +2,10 @@ import CoreGraphics
 import Foundation
 
 public enum SequenceDiagramLayout {
-  static let margin: CGFloat = 16
+  static let margin: CGFloat = 10
   static let padding: CGFloat = 8
-  static let hGap: CGFloat = 40
-  static let minWidth: CGFloat = 90
+  static let hGap: CGFloat = 28
+  static let minWidth: CGFloat = 84
   static let step: CGFloat = 38
   static let selfStep: CGFloat = 50
   static let selfWidth: CGFloat = 32

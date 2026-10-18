@@ -11,8 +11,8 @@ public struct TextMetrics: Sendable, Equatable {
     self.lineHeight = lineHeight
   }
 
-  /// Approximation for the 12 pt system monospaced font.
-  public static let `default` = TextMetrics(charWidth: 7.2, lineHeight: 15)
+  /// Approximation for the 14 pt system monospaced font (the app's default diagram size).
+  public static let `default` = TextMetrics(charWidth: 8.4, lineHeight: 17)
 
   public func width(of text: String) -> CGFloat {
     CGFloat(text.count) * charWidth
