@@ -17,7 +17,7 @@ let package = Package(
     .target(name: "KataCode"),
     .target(name: "KataDiagram"),
     .target(name: "KataCore", dependencies: ["KataSRS", "KataCode", "KataDiagram"]),
-    .target(name: "KataUI", dependencies: ["KataCore"]),
+    .target(name: "KataUI", dependencies: ["KataCore", "KataSRS", "KataCode", "KataDiagram"]),
     .executableTarget(name: "kata-pack", dependencies: ["KataCore"]),
     .testTarget(name: "KataSRSTests", dependencies: ["KataSRS"]),
     .testTarget(name: "KataCodeTests", dependencies: ["KataCode"]),
@@ -25,6 +25,7 @@ let package = Package(
     .testTarget(
       name: "KataCoreTests", dependencies: ["KataCore", "KataSRS", "KataDiagram"],
       resources: [.copy("Fixtures")]),
+    .testTarget(name: "KataUITests", dependencies: ["KataUI", "KataSRS", "KataCode"]),
     .testTarget(name: "ContentTests", dependencies: ["KataCore"])
   ]
 )
