@@ -1,0 +1,489 @@
+{
+  "id": "read-write-lock",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Let many threads read shared state at the same time, while a writer gets exclusive access."
+        },
+        {
+          "type": "p",
+          "text": "A **read-write lock** has two modes. Any number of threads may hold the **read lock** together; the **write lock** excludes everyone, readers included. It pays off when reads dominate and the guarded section is long enough that serializing readers would hurt. For tiny sections a plain lock is often faster, because the extra bookkeeping costs more than the parallelism saves."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Read lock:** shared with other readers, excluded by a writer.",
+            "**Write lock:** exclusive, and sees every earlier write.",
+            "**No upgrade:** holding read and asking for write deadlocks; downgrading is allowed."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Memory model: releasing the write lock happens-before the next successful acquisition of either lock, so readers always see completed writes."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "ReadWriteLock.java",
+      "expectedOutput": "readers inside: 2\nwriter could enter: false\nwriter could enter: true",
+      "walkthrough": [
+        {
+          "region": "guarded",
+          "note": "All access goes through a lock mode. Callers pass a query or an update, never touching the map directly, and `finally` guarantees release."
+        },
+        {
+          "region": "probe",
+          "note": "Test hooks: `getReadLockCount` reports concurrent readers, and `tryLock` on the write side shows whether a writer could enter right now."
+        },
+        {
+          "region": "readers",
+          "note": "Two readers enter `read` and park inside it on a latch. If readers excluded each other the second could never enter, and the run would hang."
+        },
+        {
+          "region": "check",
+          "note": "With both readers inside, the count is 2 and a writer cannot enter. Releasing the latch lets them finish."
+        },
+        {
+          "region": "after",
+          "note": "Once the readers have left, try-locking the write side succeeds. Waiting for them was done by closing the executor."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A routing table consulted on every packet."
+        },
+        {
+          "type": "p",
+          "text": "A gateway looks up routes for each request on 32 threads, while a control thread applies a route update about once a minute. The table is too large to copy per update, and an update touches many entries that lookups must see all-or-nothing. Lookups take the read lock and run in parallel; the control thread takes the write lock, so a lookup sees the table either before the update or after it, never half applied."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "Route hit = table.read(m -> m.lookup(dest));",
+            "// control thread, once a minute",
+            "table.write(m -> m.apply(update));"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: lookups never wait on each other, and updates are atomic to every reader without copying the table."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "reader",
+              "name": "Reader",
+              "kind": "class",
+              "role": "Reader",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ query()"
+              ]
+            },
+            {
+              "id": "writer",
+              "name": "Writer",
+              "kind": "class",
+              "role": "Writer",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ update()"
+              ]
+            },
+            {
+              "id": "book",
+              "name": "PriceBook",
+              "kind": "class",
+              "role": "GuardedResource",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "- prices: Map",
+                "+ read(query)",
+                "+ write(update)"
+              ]
+            },
+            {
+              "id": "rw",
+              "name": "ReadWriteLock",
+              "kind": "interface",
+              "role": "Lock",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "+ readLock(): Lock",
+                "+ writeLock(): Lock"
+              ]
+            },
+            {
+              "id": "impl",
+              "name": "ReentrantReadWriteLock",
+              "kind": "class",
+              "role": "Lock",
+              "col": 0.5,
+              "row": 3,
+              "members": []
+            }
+          ],
+          "edges": [
+            {
+              "from": "reader",
+              "to": "book",
+              "rel": "dependency",
+              "label": "read"
+            },
+            {
+              "from": "writer",
+              "to": "book",
+              "rel": "dependency",
+              "label": "write"
+            },
+            {
+              "from": "book",
+              "to": "rw",
+              "rel": "composition",
+              "label": "lock"
+            },
+            {
+              "from": "impl",
+              "to": "rw",
+              "rel": "realizes"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "r1",
+              "name": "Reader 1"
+            },
+            {
+              "id": "r2",
+              "name": "Reader 2"
+            },
+            {
+              "id": "w",
+              "name": "Writer"
+            },
+            {
+              "id": "lock",
+              "name": "Lock",
+              "role": "Lock"
+            }
+          ],
+          "messages": [
+            {
+              "from": "r1",
+              "to": "lock",
+              "label": "readLock().lock()",
+              "style": "call"
+            },
+            {
+              "from": "r2",
+              "to": "lock",
+              "label": "readLock().lock()",
+              "style": "call"
+            },
+            {
+              "from": "w",
+              "to": "lock",
+              "label": "writeLock().lock()",
+              "style": "call"
+            },
+            {
+              "from": "r1",
+              "to": "lock",
+              "label": "unlock()",
+              "style": "call"
+            },
+            {
+              "from": "r2",
+              "to": "lock",
+              "label": "unlock()",
+              "style": "call"
+            },
+            {
+              "from": "lock",
+              "to": "w",
+              "label": "acquired",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Reads vastly outnumber writes.",
+            "Read sections are long enough to amortize the lock's overhead.",
+            "A multi-field update must never be seen half done."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Sections are tiny: `synchronized` or an immutable snapshot is cheaper.",
+            "Writes are frequent, so readers queue behind them anyway."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Read-to-write upgrade deadlocks: release the read lock first, then re-check.",
+            "\"Read-only\" operations that mutate, such as `get` on an access-ordered `LinkedHashMap`.",
+            "Unlock outside `finally` leaks the lock on exceptions.",
+            "Fairness mode trades throughput for starvation guarantees; know which you run."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "`StampedLock` offers optimistic reads that take no lock and are validated afterwards.",
+            "For rarely changed data, a `volatile` immutable snapshot gives readers no lock at all.",
+            "Java 21 virtual threads pin their carrier inside `synchronized`; lock classes do not."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "immutable-object",
+          "relation": "alternative",
+          "difference": "Publish a new immutable snapshot through a `volatile` field and readers need no lock. Read-write locks suit data too big or too hot to copy."
+        },
+        {
+          "ref": "double-checked-locking",
+          "relation": "oftenConfused",
+          "difference": "Both avoid locking on the read path, but DCL only guards one-time lazy initialization. A read-write lock guards ongoing reads and writes."
+        },
+        {
+          "ref": "cache-aside",
+          "relation": "combines",
+          "difference": "An in-process cache is a classic client: lookups take the read lock, and a miss refills under the write lock."
+        },
+        {
+          "ref": "active-object",
+          "relation": "alternative",
+          "difference": "Confine the state to one thread and send it requests, instead of sharing it under locks. Simpler reasoning, but readers are serialized."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.locks.ReentrantReadWriteLock",
+          "detail": "The standard implementation; supports reentrancy, fairness and write-to-read downgrading."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.locks.StampedLock",
+          "detail": "Adds optimistic reads via `tryOptimisticRead` and `validate`; it is not reentrant."
+        },
+        {
+          "where": "Go",
+          "name": "sync.RWMutex",
+          "detail": "The standard library's reader/writer mutex: `RLock`, `RUnlock`, `Lock`, `Unlock`."
+        },
+        {
+          "where": "POSIX",
+          "name": "pthread_rwlock_t",
+          "detail": "The C-level primitive behind many runtimes: `pthread_rwlock_rdlock` and `pthread_rwlock_wrlock`."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Registry {",
+        "    private final ReentrantReadWriteLock gate = new ReentrantReadWriteLock();",
+        "    private final Map<String, String> entries = new HashMap<>();",
+        "    String lookup(String key) {",
+        "        gate.readLock().lock();",
+        "        try { return entries.get(key); } finally { gate.readLock().unlock(); }",
+        "    }",
+        "    void register(String key, String value) {",
+        "        gate.writeLock().lock();",
+        "        try { entries.put(key, value); } finally { gate.writeLock().unlock(); }",
+        "    }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "read-write-lock",
+          "correct": true,
+          "why": "Lookups share the read lock while registrations take the exclusive write lock around the same map."
+        },
+        {
+          "ref": "guarded-suspension",
+          "why": "No caller waits for a condition to become true; the locks only exclude, they never block on state."
+        },
+        {
+          "ref": "immutable-object",
+          "why": "The map is mutated in place; there is no immutable snapshot being swapped."
+        },
+        {
+          "ref": "double-checked-locking",
+          "why": "There is no lazy initialization and no unlocked first check."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.concurrent.locks.*;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A routing table with 50,000 entries is consulted on every packet by 32 threads and updated in place by one control thread about once a minute. A lookup reads several fields, and an update touches many entries that must appear atomically. The table is too large to copy per update.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "read-write-lock",
+          "correct": true,
+          "why": "Lookups run in parallel under the shared lock, and the rare update gets exclusive, atomic access."
+        },
+        {
+          "ref": "active-object",
+          "why": "Funnelling all 32 threads' lookups through one owner thread serializes reads that could run in parallel."
+        },
+        {
+          "ref": "double-checked-locking",
+          "why": "It guards one-time lazy initialization. The table already exists and keeps changing."
+        },
+        {
+          "ref": "producer-consumer",
+          "why": "There is no stream of work items to buffer; threads query shared state directly."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that deadlocks.",
+      "lines": [
+        "cache.readLock().lock();",
+        "try {",
+        "    if (!map.containsKey(k)) {",
+        "        cache.writeLock().lock();",
+        "        try { map.put(k, load(k)); } finally { cache.writeLock().unlock(); }",
+        "    }",
+        "    return map.get(k);",
+        "} finally { cache.readLock().unlock(); }"
+      ],
+      "flawLines": [
+        4
+      ],
+      "explanation": "A thread holding the read lock cannot acquire the write lock: it waits for all readers, itself included, to leave. Release the read lock first, take the write lock, and re-check the condition.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.concurrent.locks.*;",
+          "class Snippet {",
+          "  ReentrantReadWriteLock cache = new ReentrantReadWriteLock();",
+          "  Map<String, String> map = new HashMap<>();",
+          "  String load(String k) { return k; }",
+          "  String get(String k) {",
+          "{{code}}",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the lines of a write-to-read downgrade.",
+      "blocks": [
+        [
+          "lock.writeLock().lock();"
+        ],
+        [
+          "try {",
+          "    map.put(key, value);",
+          "    lock.readLock().lock(); // downgrade"
+        ],
+        [
+          "} finally {",
+          "    lock.writeLock().unlock();",
+          "}"
+        ],
+        [
+          "try { return map.get(key); } finally { lock.readLock().unlock(); }"
+        ]
+      ],
+      "explanation": "Take the read lock while still holding the write lock, then release the write lock. No other writer can slip in between, and the final read sees the value just written.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.concurrent.locks.*;",
+          "class Snippet {",
+          "  ReentrantReadWriteLock lock = new ReentrantReadWriteLock();",
+          "  Map<String, String> map = new HashMap<>();",
+          "  String run(String key, String value) {",
+          "{{code}}",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain a read-write lock in your own words: when it beats a plain lock, and the one thing you must never do while holding the read lock.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "It lets any number of readers share the lock while a writer excludes everyone, so read-heavy state with non-trivial read sections scales across cores. For tiny sections or frequent writes a plain lock is simpler and often faster. Never try to upgrade from read to write while holding the read lock: it deadlocks."
+        }
+      ],
+      "keyPoints": [
+        "Many concurrent readers, one exclusive writer",
+        "Wins with read-heavy load and non-trivial read sections",
+        "Plain lock or immutable snapshot often wins for tiny sections",
+        "Read-to-write upgrade deadlocks; write-to-read downgrade is allowed",
+        "Release in finally; never mutate under the read lock"
+      ]
+    }
+  ]
+}

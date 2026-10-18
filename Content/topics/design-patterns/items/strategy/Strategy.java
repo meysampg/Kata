@@ -13,7 +13,9 @@ interface DiscountPolicy {
 // [[concrete
 record PercentOff(int percent) implements DiscountPolicy {
     PercentOff {
-        if (percent < 0 || percent > 100) throw new IllegalArgumentException("percent");
+        if (percent < 0 || percent > 100) {
+            throw new IllegalArgumentException("percent");
+        }
     }
     public BigDecimal apply(BigDecimal subtotal) {
         BigDecimal factor = BigDecimal.valueOf(100 - percent, 2);
@@ -35,7 +37,8 @@ final class Checkout {
     Checkout(DiscountPolicy policy) { this.policy = policy; }
 
     BigDecimal total(List<BigDecimal> prices) {
-        BigDecimal subtotal = prices.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal subtotal =
+            prices.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         return policy.apply(subtotal);
     }
 }

@@ -1,0 +1,509 @@
+{
+ "id": "domain-event",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Record that something meaningful happened in the domain, as an immutable past-tense fact other parts can react to."
+    },
+    {
+     "type": "p",
+     "text": "A **domain event** such as `OrderPlaced` is raised by an aggregate when its state changes. It names a fact, not a request, and carries only the data about it. Handlers react in their own modules, so the aggregate never learns who is listening. That keeps the core small and the reactions decoupled."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Named in the past tense:** `OrderPlaced`, not `PlaceOrder`.",
+      "**Immutable:** a record of what happened.",
+      "**Raised by the aggregate,** dispatched after the state is saved."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Decide the delivery semantics: synchronous in the same transaction, or after commit. They fail differently."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "DomainEvent.java",
+   "expectedOutput": "saved o-1\nmail: confirm o-1\nledger: book 4200\nmail: shipped o-1",
+   "walkthrough": [
+    {
+     "region": "events",
+     "note": "Events are records in a sealed hierarchy: immutable, past tense, minimal data. Sealing lets handlers switch exhaustively."
+    },
+    {
+     "region": "aggregate",
+     "note": "The aggregate records events as it changes state and exposes `pullEvents()`, which returns and clears them. It knows no handlers."
+    },
+    {
+     "region": "bus",
+     "note": "A tiny type-routed bus. `on` registers a typed handler; `publish` dispatches each event to handlers of its exact class, in registration order."
+    },
+    {
+     "region": "client",
+     "note": "Change state, persist, then publish. Publishing after the save keeps handlers from reacting to a change that never committed."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Patient discharge in a hospital system."
+    },
+    {
+     "type": "p",
+     "text": "Discharging a patient must trigger billing, bed cleaning and a pharmacy hand-off. The ward module should not import those modules. The `Patient` aggregate emits `PatientDischarged(patientId, bedId, at)`. Each department subscribes and reacts on its own. Adding a transport-booking step later means one more handler, not a change to ward code. Spring Modulith publishes such events between modules."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "record PatientDischarged(PatientId id, BedId bed, Instant at) {}",
+      "",
+      "@ApplicationModuleListener",
+      "void on(PatientDischarged e) { housekeeping.clean(e.bed()); }"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: modules stay independent; reactions are added or removed without editing the code that raised the event."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "agg",
+       "name": "Order",
+       "kind": "class",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "- events: List",
+        "+ ship()",
+        "+ pullEvents()"
+       ],
+       "role": "Aggregate"
+      },
+      {
+       "id": "evt",
+       "name": "DomainEvent",
+       "kind": "interface",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "OrderPlaced",
+        "OrderShipped"
+       ],
+       "role": "Event"
+      },
+      {
+       "id": "bus",
+       "name": "EventBus",
+       "kind": "class",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ on(type, handler)",
+        "+ publish(events)"
+       ],
+       "role": "Dispatcher"
+      },
+      {
+       "id": "h1",
+       "name": "MailHandler",
+       "kind": "class",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "+ handle(event)"
+       ],
+       "role": "Handler"
+      },
+      {
+       "id": "h2",
+       "name": "LedgerHandler",
+       "kind": "class",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "+ handle(event)"
+       ],
+       "role": "Handler"
+      }
+     ],
+     "edges": [
+      {
+       "from": "agg",
+       "to": "evt",
+       "rel": "dependency",
+       "label": "raises"
+      },
+      {
+       "from": "bus",
+       "to": "evt",
+       "rel": "dependency",
+       "label": "routes"
+      },
+      {
+       "from": "bus",
+       "to": "h1",
+       "rel": "association"
+      },
+      {
+       "from": "bus",
+       "to": "h2",
+       "rel": "association"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "o",
+       "name": "Order",
+       "role": "Aggregate"
+      },
+      {
+       "id": "s",
+       "name": "Service"
+      },
+      {
+       "id": "b",
+       "name": "EventBus",
+       "role": "Dispatcher"
+      },
+      {
+       "id": "h",
+       "name": "Handler",
+       "role": "Handler"
+      }
+     ],
+     "messages": [
+      {
+       "from": "s",
+       "to": "o",
+       "label": "ship()",
+       "style": "call"
+      },
+      {
+       "from": "o",
+       "to": "o",
+       "label": "record OrderShipped",
+       "style": "call"
+      },
+      {
+       "from": "s",
+       "to": "s",
+       "label": "save(order)",
+       "style": "call"
+      },
+      {
+       "from": "s",
+       "to": "o",
+       "label": "pullEvents()",
+       "style": "call"
+      },
+      {
+       "from": "o",
+       "to": "s",
+       "label": "[OrderShipped]",
+       "style": "return"
+      },
+      {
+       "from": "s",
+       "to": "b",
+       "label": "publish(events)",
+       "style": "call"
+      },
+      {
+       "from": "b",
+       "to": "h",
+       "label": "handle(e)",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Side effects belong to other modules or bounded contexts.",
+      "A business fact matters beyond the aggregate that produced it.",
+      "You want an audit trail or integration hook without coupling."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "One caller and one effect; a direct method call is clearer.",
+      "The reaction must succeed or fail with the original change and you cannot afford eventual consistency."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Publishing before the state change commits, so handlers act on rolled-back facts.",
+      "Events shaped like commands or like database rows.",
+      "Losing events when a handler fails after commit; pair with an outbox.",
+      "Hidden control flow: no single place shows what reacts."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "An event for every setter. Events should mark facts that matter to the business.",
+      "Events that carry whole aggregates instead of the few facts handlers need."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Records and sealed interfaces fit events well; `switch` pattern matching handles them exhaustively.",
+      "Records and sealed interfaces give exhaustive, immutable event types."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "observer",
+     "relation": "lookAlike",
+     "difference": "Observer wires listeners to an object in-process. A domain event is a named business fact, often dispatched after commit and possibly across modules."
+    },
+    {
+     "ref": "event-sourcing",
+     "relation": "oftenConfused",
+     "difference": "Domain events notify others. Event sourcing makes the event stream the source of truth, from which state is rebuilt."
+    },
+    {
+     "ref": "transactional-outbox",
+     "relation": "combines",
+     "difference": "To avoid losing events between commit and publish, write them to an outbox in the same transaction."
+    },
+    {
+     "ref": "command",
+     "relation": "oftenConfused",
+     "difference": "A command asks for something and can be rejected. An event reports what already happened and cannot be refused."
+    },
+    {
+     "ref": "mediator",
+     "relation": "alternative",
+     "difference": "A mediator coordinates colleagues it knows about. An event publisher does not know its subscribers."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Spring Framework",
+     "name": "ApplicationEventPublisher",
+     "detail": "Publishes application events to `@EventListener` methods inside the context."
+    },
+    {
+     "where": "Spring Data",
+     "name": "AbstractAggregateRoot and @DomainEvents",
+     "detail": "Aggregates register events; Spring Data publishes them when the repository saves."
+    },
+    {
+     "where": "Spring",
+     "name": "@TransactionalEventListener",
+     "detail": "Delivers an event after commit (by default), so handlers see persisted state."
+    },
+    {
+     "where": "Spring Modulith",
+     "name": "@ApplicationModuleListener",
+     "detail": "Event listener between application modules, with event publication tracking."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Cart {",
+    "    private final long id = 7;",
+    "    private final List<Object> pending = new ArrayList<>();",
+    "    private boolean checkedOut;",
+    "",
+    "    void checkout() {",
+    "        if (checkedOut) throw new IllegalStateException();",
+    "        checkedOut = true;",
+    "        pending.add(new CartCheckedOut(id));",
+    "    }",
+    "",
+    "    List<Object> drain() { var out = List.copyOf(pending); pending.clear(); return out; }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "domain-event",
+     "correct": true,
+     "why": "The aggregate records an immutable, past-tense fact and hands it out for others to react to."
+    },
+    {
+     "ref": "observer",
+     "why": "No subscribers are registered with the cart; it only stores facts to be collected."
+    },
+    {
+     "ref": "command",
+     "why": "`CartCheckedOut` is a fact that already happened, not a request to do something."
+    },
+    {
+     "ref": "memento",
+     "why": "It captures what happened, not a snapshot of state for later restoration."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record CartCheckedOut(long id) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "When a payment is captured, receipts must be sent and the ledger updated. The billing module must not depend on those modules, new reactions will be added later, and the capture itself is a fact worth recording.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "domain-event",
+     "correct": true,
+     "why": "Billing emits `PaymentCaptured`; other modules subscribe, so reactions are added without editing billing."
+    },
+    {
+     "ref": "command",
+     "why": "Sending commands to named modules makes billing depend on them and encodes the reactions in billing."
+    },
+    {
+     "ref": "mediator",
+     "why": "A mediator would have to know every colleague and be edited for each new reaction."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade offers a simplified API; it does not decouple producers from their reactions."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Domain Event pattern.",
+   "lines": [
+    "final class ConfirmBooking {",
+    "    private final Bookings bookings;",
+    "    private final EventBus bus;",
+    "",
+    "    ConfirmBooking(Bookings bookings, EventBus bus) {",
+    "        this.bookings = bookings; this.bus = bus;",
+    "    }",
+    "",
+    "    void handle(String id) {",
+    "        Booking b = bookings.load(id);",
+    "        b.confirm();",
+    "        bus.publish(b.pullEvents());",
+    "        bookings.save(b);",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    12
+   ],
+   "explanation": "Handlers run before the change is persisted, so a failing save leaves them reacting to a fact that never became true. Save first, then publish (ideally via an outbox).",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Bookings { Booking load(String id); void save(Booking b); }",
+     "interface EventBus { void publish(List<Object> events); }",
+     "class Booking { void confirm() {} List<Object> pullEvents() { return List.of(); } }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the use case so each line only uses what came before.",
+   "blocks": [
+    [
+     "String id = request.orderId();"
+    ],
+    [
+     "Order order = orders.load(id);"
+    ],
+    [
+     "order.ship();"
+    ],
+    [
+     "orders.save(order);"
+    ],
+    [
+     "bus.publish(order.pullEvents());"
+    ]
+   ],
+   "explanation": "Load the aggregate, let it change and record the event, persist the new state, and only then publish what it recorded.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Request(String orderId) {}",
+     "final class Order { void ship() {} List<Object> pullEvents() { return List.of(); } }",
+     "interface Orders { Order load(String id); void save(Order o); }",
+     "interface EventBus { void publish(List<Object> events); }",
+     "class Snippet { void run(Request request, Orders orders, EventBus bus) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Domain Event in your own words: what is it, who raises it, and when should it be dispatched?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A domain event is an immutable, past-tense record of a business fact, such as `OrderPlaced`. The aggregate raises it when its state changes, without knowing who listens. Other modules handle it independently. Dispatch after the state is saved, ideally through an outbox, so handlers never react to a change that rolled back."
+    }
+   ],
+   "keyPoints": [
+    "Immutable past-tense fact, not a request",
+    "Raised by the aggregate, which knows no handlers",
+    "Handlers react independently",
+    "Dispatch after commit to avoid phantom facts",
+    "Not the same as event sourcing"
+   ]
+  }
+ ]
+}

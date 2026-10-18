@@ -1,0 +1,483 @@
+{
+ "id": "bulkhead",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Give each dependency or consumer its own bounded share of resources, so one failure cannot consume everything."
+    },
+    {
+     "type": "p",
+     "text": "The name comes from ship compartments: a breach floods one section, not the hull. Software bulkheads cap the **concurrency** each downstream or tenant may use, through separate thread pools, semaphores or connection pools. When one dependency stalls, only its compartment fills; the others keep working."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Semaphore bulkhead:** counts concurrent calls on the caller's thread; cheap.",
+      "**Thread-pool bulkhead:** a dedicated pool and queue per dependency; isolates blocking calls.",
+      "**Reject fast** when full instead of queueing without bound."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "The size of a compartment is a capacity decision: concurrency is roughly throughput times latency (Little's law)."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Bulkhead.java",
+   "expectedOutput": "inventory rejected: inventory is full\npayments paid\ninventory ok",
+   "walkthrough": [
+    {
+     "region": "reject",
+     "note": "A dedicated, unchecked rejection tells callers the compartment is full, so they can degrade instead of waiting."
+    },
+    {
+     "region": "bulkhead",
+     "note": "A `Semaphore` is the compartment. `tryAcquire` never blocks, and `finally` returns the permit even when the operation throws."
+    },
+    {
+     "region": "wiring",
+     "note": "One bulkhead per dependency. Inventory slowness can consume at most two permits and never touches payments."
+    },
+    {
+     "region": "saturate",
+     "note": "Two virtual threads hold both inventory permits. `entered.await()` guarantees both are inside, so the next outcome is deterministic."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A reporting service that shares a pool with checkout."
+    },
+    {
+     "type": "p",
+     "text": "A web app uses one thread pool for everything. A new reporting endpoint runs slow queries, and during month-end all threads end up inside it. Checkout requests queue behind them and time out, though checkout itself is healthy. Giving reporting its own pool of ten and checkout its own of fifty means a reporting storm degrades reporting only."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "var reporting = new Bulkhead(\"reporting\", 10);",
+      "var checkout  = new Bulkhead(\"checkout\", 50);",
+      "",
+      "reporting.call(() -> reports.monthEnd(tenant));  // may be rejected"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the blast radius of a slow dependency is its compartment, and the core business path stays available."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "caller",
+       "name": "Service",
+       "kind": "class",
+       "role": "Caller",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ handle(request)"
+       ]
+      },
+      {
+       "id": "b1",
+       "name": "Bulkhead",
+       "kind": "class",
+       "role": "Compartment A",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "- permits: Semaphore",
+        "+ call(op): T"
+       ]
+      },
+      {
+       "id": "b2",
+       "name": "Bulkhead",
+       "kind": "class",
+       "role": "Compartment B",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "- permits: Semaphore",
+        "+ call(op): T"
+       ]
+      },
+      {
+       "id": "d1",
+       "name": "Inventory",
+       "kind": "interface",
+       "role": "Dependency",
+       "col": 0,
+       "row": 2
+      },
+      {
+       "id": "d2",
+       "name": "Payments",
+       "kind": "interface",
+       "role": "Dependency",
+       "col": 1,
+       "row": 2
+      }
+     ],
+     "edges": [
+      {
+       "from": "caller",
+       "to": "b1",
+       "rel": "association"
+      },
+      {
+       "from": "caller",
+       "to": "b2",
+       "rel": "association"
+      },
+      {
+       "from": "b1",
+       "to": "d1",
+       "rel": "dependency",
+       "label": "guards"
+      },
+      {
+       "from": "b2",
+       "to": "d2",
+       "rel": "dependency",
+       "label": "guards"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "caller",
+       "name": "Caller"
+      },
+      {
+       "id": "b",
+       "name": "Bulkhead",
+       "role": "Compartment"
+      },
+      {
+       "id": "dep",
+       "name": "Dependency"
+      }
+     ],
+     "messages": [
+      {
+       "from": "caller",
+       "to": "b",
+       "label": "call(op)",
+       "style": "call"
+      },
+      {
+       "from": "b",
+       "to": "b",
+       "label": "tryAcquire: ok",
+       "style": "call"
+      },
+      {
+       "from": "b",
+       "to": "dep",
+       "label": "op.get()",
+       "style": "call"
+      },
+      {
+       "from": "dep",
+       "to": "b",
+       "label": "result",
+       "style": "return"
+      },
+      {
+       "from": "b",
+       "to": "caller",
+       "label": "result, permit released",
+       "style": "return"
+      },
+      {
+       "from": "caller",
+       "to": "b",
+       "label": "call(op) when full",
+       "style": "call"
+      },
+      {
+       "from": "b",
+       "to": "caller",
+       "label": "BulkheadFullException",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "One slow dependency could exhaust threads or connections shared with healthy ones.",
+      "Tenants or priorities must not starve each other.",
+      "Failure should degrade a feature, not the whole service."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Load is uniform and a single well-sized pool already serves it.",
+      "Splitting would leave each compartment too small to absorb normal bursts."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Compartments sized by guess; measure latency and concurrency first.",
+      "Without timeouts, permits are held forever and the compartment stays full.",
+      "Unbounded queues in a thread-pool bulkhead hide the saturation.",
+      "Idle compartments waste capacity that others could use."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Virtual threads make threads cheap, so a semaphore per dependency is the idiomatic bulkhead.",
+      "Thread-pool bulkheads still make sense to isolate CPU-bound or blocking native calls."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "circuit-breaker",
+     "relation": "combines",
+     "difference": "The bulkhead limits how many calls are in flight; the breaker stops calls based on past failures. The bulkhead protects you immediately, the breaker after evidence."
+    },
+    {
+     "ref": "rate-limiter",
+     "relation": "oftenConfused",
+     "difference": "A rate limiter bounds arrivals per unit of time. A bulkhead bounds concurrent work in progress, regardless of how fast it arrived."
+    },
+    {
+     "ref": "timeout",
+     "relation": "combines",
+     "difference": "Timeouts release permits held by slow calls. Without them a bulkhead only slows the moment it fills."
+    },
+    {
+     "ref": "thread-pool",
+     "relation": "specializes",
+     "difference": "A thread-pool bulkhead is a dedicated pool per dependency; the pattern is the partitioning, not the pool."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Resilience4j",
+     "name": "Bulkhead and ThreadPoolBulkhead",
+     "detail": "`SemaphoreBulkhead` limits concurrent calls with `maxConcurrentCalls`; `ThreadPoolBulkhead` uses a dedicated pool and queue."
+    },
+    {
+     "where": "Envoy",
+     "name": "circuit_breakers thresholds",
+     "detail": "Per-cluster `max_connections`, `max_pending_requests` and `max_requests` cap concurrency to each upstream."
+    },
+    {
+     "where": "Kubernetes",
+     "name": "resources requests and limits",
+     "detail": "Per-container CPU and memory limits isolate a misbehaving pod from its neighbors."
+    },
+    {
+     "where": "HikariCP",
+     "name": "HikariConfig.setMaximumPoolSize",
+     "detail": "A separate connection pool per data source caps database concurrency for each consumer."
+    },
+    {
+     "where": "Tomcat",
+     "name": "Executor maxThreads",
+     "detail": "A bounded worker pool per connector limits how many requests are processed at once."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Gate {",
+    "    private final Semaphore slots;",
+    "",
+    "    Gate(int n) { slots = new Semaphore(n); }",
+    "",
+    "    <T> T run(Supplier<T> op) {",
+    "        if (!slots.tryAcquire()) throw new IllegalStateException(\"busy\");",
+    "        try { return op.get(); } finally { slots.release(); }",
+    "    }",
+    "}",
+    "// one Gate per downstream: new Gate(10), new Gate(50)"
+   ],
+   "options": [
+    {
+     "ref": "bulkhead",
+     "correct": true,
+     "why": "Each downstream gets its own bounded share of concurrency, and excess work is rejected rather than queued."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "Permits are returned when work finishes, so this bounds concurrency, not the number of arrivals per second."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "Rejection depends on how many calls are running now, not on a history of failures."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "No threads are created or managed; the code only counts and gates concurrent callers."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.concurrent.Semaphore;",
+     "import java.util.function.Supplier;",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "An API serves three tenants from one worker pool. Tenant A launched a batch that sends a thousand slow queries; tenants B and C now see timeouts although their own traffic is small and normal.",
+   "prompt": "Which pattern addresses the root cause?",
+   "options": [
+    {
+     "ref": "bulkhead",
+     "correct": true,
+     "why": "Per-tenant concurrency limits keep A's backlog from consuming the capacity B and C depend on."
+    },
+    {
+     "ref": "retry-backoff",
+     "why": "B and C would retry into the same saturated pool and make it worse."
+    },
+    {
+     "ref": "cache-aside",
+     "why": "A's queries are slow and probably unique; caching does not stop them from occupying workers."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "Nothing downstream is failing; the shared pool is being monopolized."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that undermines this bulkhead.",
+   "lines": [
+    "<T> T call(Supplier<T> op) throws InterruptedException {",
+    "    permits.acquire();",
+    "    try {",
+    "        return op.get();",
+    "    } finally {",
+    "        permits.release();",
+    "    }",
+    "}",
+    "// permits = new Semaphore(10)"
+   ],
+   "flawLines": [
+    2
+   ],
+   "explanation": "`acquire()` blocks when all permits are taken, so callers pile up behind a saturated dependency and the isolation is lost. Use `tryAcquire()` (or a short timeout) and reject.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.Semaphore;",
+     "import java.util.function.Supplier;",
+     "class Snippet {",
+     "    final Semaphore permits = new Semaphore(10);",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the guarded call.",
+   "blocks": [
+    [
+     "if (!permits.tryAcquire()) {",
+     "    throw new BulkheadFullException(name);",
+     "}"
+    ],
+    [
+     "try {"
+    ],
+    [
+     "    return op.get();"
+    ],
+    [
+     "} finally {",
+     "    permits.release();",
+     "}"
+    ]
+   ],
+   "explanation": "Reserve a permit first and reject if none; the try block starts only after the permit is held, and finally guarantees its release.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.Semaphore;",
+     "import java.util.function.Supplier;",
+     "class BulkheadFullException extends RuntimeException { private static final long serialVersionUID = 1L; BulkheadFullException(String n) { super(n); } }",
+     "class Snippet {",
+     "    final Semaphore permits = new Semaphore(2);",
+     "    final String name = \"x\";",
+     "    <T> T call(Supplier<T> op) {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain what a bulkhead isolates, how it differs from a rate limiter, and why it needs timeouts.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A bulkhead gives each dependency or tenant its own cap on concurrent work, so one slow dependency can fill only its compartment. A rate limiter bounds arrivals per time; a bulkhead bounds work in flight. Permits are held while a call runs, so timeouts are required or a hung call keeps its permit forever."
+    }
+   ],
+   "keyPoints": [
+    "Separate bounded compartments per dependency or tenant",
+    "Caps concurrency (work in flight), not arrival rate",
+    "Reject fast when full rather than queue unboundedly",
+    "Semaphore or dedicated pool",
+    "Needs timeouts to release permits"
+   ]
+  }
+ ]
+}

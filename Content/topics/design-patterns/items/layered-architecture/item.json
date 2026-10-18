@@ -1,0 +1,473 @@
+{
+  "id": "layered-architecture",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Split a system into horizontal layers, each depending only on the layer directly beneath it."
+        },
+        {
+          "type": "p",
+          "text": "Typical layers are **presentation**, **business** (service/domain) and **data access**. A call travels down and a result travels back up. Dependencies point one way, so you can replace or test a layer without touching the ones above it."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Strict layering:** a layer may use only the one directly below.",
+            "**Relaxed layering:** a layer may skip down, trading isolation for fewer pass-through methods.",
+            "**Never:** a lower layer referring to a higher one."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Layers are about dependency direction, not deployment. Three layers in one JVM are still layered; three services are not automatically layered."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "LayeredArchitecture.java",
+      "expectedOutput": "200 Refactoring\n409 already on loan\n404 unknown book",
+      "walkthrough": [
+        {
+          "region": "domain",
+          "note": "A plain record that every layer may use. It carries data and no framework or persistence type."
+        },
+        {
+          "region": "data",
+          "note": "The bottom layer exposes `BookRepository` and hides storage behind it. Swapping the map for JDBC changes only this layer."
+        },
+        {
+          "region": "service",
+          "note": "The business layer holds the lending rule. It knows the repository interface but nothing about HTTP, status codes or views."
+        },
+        {
+          "region": "presentation",
+          "note": "The top layer translates between the outside protocol and the service: parsing input, mapping exceptions to status codes."
+        },
+        {
+          "region": "wiring",
+          "note": "Construction runs bottom-up, matching the dependency direction. Each layer receives only the layer below it."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A claims back office maintained by rotating teams."
+        },
+        {
+          "type": "p",
+          "text": "Adjusters use a web UI to register and approve insurance claims. Validation and approval limits live in a service layer, persistence in a data layer, and the UI team never writes SQL. A new engineer can predict where a change goes: a screen change is presentation, a payout limit is business, a new index is data."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "claims-web      // controllers, forms, templates",
+            "claims-service  // ApprovalPolicy, ClaimService",
+            "claims-data     // ClaimRepository, JDBC adapter",
+            "// claims-web depends on claims-service, never the reverse"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: predictable change locations, and service rules can be tested with a fake repository, no web server or database."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "ctl",
+              "name": "LoanController",
+              "kind": "class",
+              "role": "Presentation",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ lend(isbn): String"
+              ]
+            },
+            {
+              "id": "svc",
+              "name": "LoanService",
+              "kind": "class",
+              "role": "Business",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ lend(isbn): Book"
+              ]
+            },
+            {
+              "id": "repo",
+              "name": "BookRepository",
+              "kind": "interface",
+              "role": "Data access",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "+ find(isbn): Book",
+                "+ save(book)"
+              ]
+            },
+            {
+              "id": "mem",
+              "name": "InMemoryBookRepository",
+              "kind": "class",
+              "role": "Data access",
+              "col": 0.5,
+              "row": 3,
+              "members": [
+                "- rows: Map"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "ctl",
+              "to": "svc",
+              "rel": "dependency"
+            },
+            {
+              "from": "svc",
+              "to": "repo",
+              "rel": "dependency"
+            },
+            {
+              "from": "mem",
+              "to": "repo",
+              "rel": "realizes"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "svc",
+              "text": "knows nothing about HTTP"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "c",
+              "name": "Controller",
+              "role": "Presentation"
+            },
+            {
+              "id": "s",
+              "name": "LoanService",
+              "role": "Business"
+            },
+            {
+              "id": "r",
+              "name": "Repository",
+              "role": "Data"
+            }
+          ],
+          "messages": [
+            {
+              "from": "c",
+              "to": "s",
+              "label": "lend(isbn)",
+              "style": "call"
+            },
+            {
+              "from": "s",
+              "to": "r",
+              "label": "find(isbn)",
+              "style": "call"
+            },
+            {
+              "from": "r",
+              "to": "s",
+              "label": "book",
+              "style": "return"
+            },
+            {
+              "from": "s",
+              "to": "r",
+              "label": "save(lent)",
+              "style": "call"
+            },
+            {
+              "from": "s",
+              "to": "c",
+              "label": "book",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The team is small to mid-sized and the domain is mostly CRUD plus validation.",
+            "You want a structure every newcomer already recognizes.",
+            "Teams can specialize by layer, such as UI and persistence."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Business rules are rich and long-lived: layers tie them to the database.",
+            "Many integrations come and go; consider [Hexagonal Architecture](kata:hexagonal)."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "The domain ends up depending on persistence classes, since data access sits below it.",
+            "Pass-through methods: a service that only forwards to a repository.",
+            "Entities or ORM proxies leaking into the presentation layer."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Every layer has an identical mirror class: `UserEntity`, `UserModel`, `UserDto`, `UserView`.",
+            "One feature requires edits in five packages."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Java modules (`module-info.java`) and ArchUnit rules can enforce the dependency direction at build time.",
+            "Records give every layer cheap, immutable data carriers across layer boundaries."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "hexagonal",
+          "relation": "alternative",
+          "difference": "Layers point down toward storage, so the domain depends on persistence. Hexagonal points every dependency toward the domain, which owns the interfaces that infrastructure implements."
+        },
+        {
+          "ref": "mvc",
+          "relation": "oftenConfused",
+          "difference": "MVC splits the presentation layer into model, view and controller roles. Layering stacks whole responsibilities; MVC divides one of them."
+        },
+        {
+          "ref": "repository",
+          "relation": "combines",
+          "difference": "The repository is the usual contract of the data layer, giving the business layer a collection-like view of storage."
+        },
+        {
+          "ref": "facade",
+          "relation": "lookAlike",
+          "difference": "A service layer often acts as a facade over the domain. The facade simplifies access; layering also restricts who may depend on whom."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "Spring",
+          "name": "@Controller, @Service, @Repository",
+          "detail": "Stereotype annotations in `org.springframework.stereotype` that name the three classic layers."
+        },
+        {
+          "where": "ArchUnit",
+          "name": "Architectures.layeredArchitecture()",
+          "detail": "Fluent API that fails the build when a lower layer imports a higher one."
+        },
+        {
+          "where": "JDK",
+          "name": "module-info.java requires",
+          "detail": "The module system rejects compilation when a module uses a package it does not require, enforcing direction."
+        },
+        {
+          "where": "Networking",
+          "name": "TCP/IP protocol stack",
+          "detail": "Application, transport, internet and link layers each use only the one below."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "class OrderEndpoint {",
+        "    private final OrderService service;",
+        "    OrderEndpoint(OrderService s) { this.service = s; }",
+        "    String post(String body) {",
+        "        return service.place(parse(body)).toString();",
+        "    }",
+        "}",
+        "class OrderService {",
+        "    private final JdbcOrderRepo repo = new JdbcOrderRepo();",
+        "    Order place(Order o) { validate(o); return repo.save(o); }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "layered-architecture",
+          "correct": true,
+          "why": "Each class talks only to the one below: endpoint to service to repository, with no references upward."
+        },
+        {
+          "ref": "hexagonal",
+          "why": "The service constructs a concrete `JdbcOrderRepo`; in hexagonal the core owns a port and an adapter implements it."
+        },
+        {
+          "ref": "mvc",
+          "why": "There is no view or model-change notification; this is a call chain, not three cooperating roles."
+        },
+        {
+          "ref": "facade",
+          "why": "The service adds rules and persistence calls; it is not just a simplified front for a subsystem."
+        }
+      ],
+      "compile": {
+        "template": [
+          "record Order() {}",
+          "class JdbcOrderRepo { Order save(Order o) { return o; } }",
+          "class Snippet {",
+          "  static Order parse(String s) { return new Order(); }",
+          "  static void validate(Order o) {}",
+          "{{code}}",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A 4-person team builds an internal admin tool: forms over one relational database, a few validation rules, no external integrations, expected lifetime of years. New hires should find their way quickly.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "layered-architecture",
+          "correct": true,
+          "why": "Simple, familiar structure that matches a CRUD-shaped problem without extra indirection."
+        },
+        {
+          "ref": "hexagonal",
+          "why": "Ports for integrations that do not exist add interfaces and mapping with no payoff here."
+        },
+        {
+          "ref": "cqrs",
+          "why": "Separate read and write models solve scaling and complexity problems this tool does not have."
+        },
+        {
+          "ref": "event-sourcing",
+          "why": "Storing events adds replay and versioning cost for a system that only needs current state."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Layered Architecture pattern.",
+      "lines": [
+        "final class LoanService {",
+        "    private final BookRepository books;",
+        "",
+        "    LoanService(BookRepository b) { this.books = b; }",
+        "",
+        "    Book lend(HttpRequest request) {",
+        "        String isbn = request.param(\"isbn\");",
+        "        Book book = books.find(isbn);",
+        "        if (book.onLoan()) throw new IllegalStateException();",
+        "        books.save(book.lent());",
+        "        return book;",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        6
+      ],
+      "explanation": "The service accepts a web-layer type, so the business layer now depends upward. Take plain arguments, `lend(String isbn)`, and let the controller extract them from the request.",
+      "compile": {
+        "template": [
+          "interface HttpRequest { String param(String k); }",
+          "record Book(boolean onLoan) { Book lent() { return new Book(true); } }",
+          "interface BookRepository { Book find(String i); void save(Book b); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "var repo = new InMemoryBookRepository();"
+        ],
+        [
+          "var service = new LoanService(repo);"
+        ],
+        [
+          "var controller = new LoanController(service);"
+        ],
+        [
+          "String response = controller.lend(\"111\");"
+        ],
+        [
+          "System.out.println(response);"
+        ]
+      ],
+      "explanation": "Build bottom-up: each layer is constructed from the layer below it, and the request is sent through the top.",
+      "compile": {
+        "template": [
+          "class InMemoryBookRepository {}",
+          "class LoanService { LoanService(InMemoryBookRepository r) {} }",
+          "class LoanController { LoanController(LoanService s) {} String lend(String i) { return i; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain Layered Architecture: what rule defines it, and what is its main weakness?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Code is arranged in layers, typically presentation, business and data access, and each layer may depend only on the one below it. That isolates responsibilities and makes layers replaceable. The weakness is that the business layer ends up depending on persistence, and rules of thumb like this erode into pass-through code."
+        }
+      ],
+      "keyPoints": [
+        "Dependencies point strictly downward",
+        "Typical layers: presentation, business, data",
+        "A layer is replaceable behind its interface",
+        "Weakness: domain depends on data access",
+        "Differs from MVC: layers stack, MVC roles cooperate"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,393 @@
+{
+  "id": "singleton",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Guarantee that a scope holds exactly one instance of a class, and give it a well-known access point."
+        },
+        {
+          "type": "p",
+          "text": "The classic form uses a private constructor and a static accessor, making the instance **global**. Modern Java gets the guarantee from an **enum** or from a **DI container's singleton scope**, which keeps the one-instance rule without hiding a global dependency."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Guarantees:** one instance per class loader or container.",
+            "**Costs:** global state, hidden dependencies, harder tests.",
+            "**Better form:** one instance, passed in, not looked up."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "warning",
+          "text": "Singleton is the most overused pattern. Often you need one instance by choice, which is a wiring decision, not a class-level rule."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Singleton.java",
+      "expectedOutput": "1\n2\ncreated before: 0\nsame: true\ncreated after: 1",
+      "walkthrough": [
+        {
+          "region": "enumSingleton",
+          "note": "An enum constant is the simplest correct singleton. The JVM guarantees one instance, thread-safe creation, and protection from reflection and serialization attacks."
+        },
+        {
+          "region": "holder",
+          "note": "The holder idiom is lazy and lock-free. `Holder` initializes only when `get()` first touches it, and class initialization is guaranteed thread-safe."
+        },
+        {
+          "region": "useEnum",
+          "note": "Each call reaches the same `AtomicLong`, so the numbers increase across call sites without synchronization."
+        },
+        {
+          "region": "useHolder",
+          "note": "Nothing is created before first use, the two references are identical, and the constructor ran exactly once."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A shared metrics registry in a server application."
+        },
+        {
+          "type": "p",
+          "text": "Counters and timers from every component must land in one registry that a scrape endpoint reads. Instead of a static accessor, the application creates a single `MetricRegistry` at startup and the container injects it into each component. There is still one instance, but tests can pass a fresh one and no class reaches out to a global."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "@Bean",
+            "MetricRegistry metrics() { return new MetricRegistry(); }",
+            "",
+            "@Service",
+            "class OrderService {",
+            "    OrderService(MetricRegistry metrics) { ... }",
+            "}"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: one shared instance without a global, so tests and parallel runs stay isolated."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "client",
+              "name": "Client",
+              "kind": "class",
+              "col": 0,
+              "row": 0
+            },
+            {
+              "id": "single",
+              "name": "AppConfig",
+              "kind": "class",
+              "role": "Singleton",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "- AppConfig()",
+                "- static Holder.INSTANCE",
+                "+ static get(): AppConfig"
+              ]
+            },
+            {
+              "id": "holder",
+              "name": "Holder",
+              "kind": "class",
+              "col": 1,
+              "row": 1,
+              "members": [
+                "static final INSTANCE"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "client",
+              "to": "single",
+              "rel": "dependency",
+              "label": "get()"
+            },
+            {
+              "from": "single",
+              "to": "holder",
+              "rel": "composition",
+              "label": "lazy"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "single",
+              "text": "private constructor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Exactly one instance is required by the domain, such as a hardware handle or a JVM-wide cache.",
+            "A container manages the single instance and you inject it."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "You only want to share an object; pass it as a dependency instead.",
+            "Tests need to replace it, which a static accessor makes hard."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Hidden dependencies: any code can call `get()` and become coupled to it.",
+            "Mutable singletons are shared state that needs explicit thread safety.",
+            "Hand-written double-checked locking without `volatile` is broken."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Every service reaches `X.getInstance()` instead of receiving X.",
+            "A singleton holding per-request or per-user data."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Use an enum when you need a true language-level singleton.",
+            "Otherwise prefer the container's singleton scope; one instance per container, injected."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "dependency-injection",
+          "relation": "alternative",
+          "difference": "Injection gives you one shared instance without making it global. The one-instance rule lives in wiring, so tests can substitute it."
+        },
+        {
+          "ref": "service-locator",
+          "relation": "lookAlike",
+          "difference": "Both are global access points. A locator looks up many services by key; a singleton exposes exactly one, and both hide dependencies."
+        },
+        {
+          "ref": "flyweight",
+          "relation": "oftenConfused",
+          "difference": "A singleton is one instance of a whole class. Flyweight shares many small immutable instances, one per distinct value."
+        },
+        {
+          "ref": "abstract-factory",
+          "relation": "combines",
+          "difference": "Concrete factories are usually stateless, so one instance per application is enough and is often held as a singleton."
+        },
+        {
+          "ref": "double-checked-locking",
+          "relation": "combines",
+          "difference": "Lazy singletons were the original reason for this idiom; the holder class and enums make it unnecessary in Java."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.lang.Runtime#getRuntime",
+          "detail": "Returns the single `Runtime` of the running JVM."
+        },
+        {
+          "where": "JDK",
+          "name": "java.awt.Desktop#getDesktop",
+          "detail": "Returns the `Desktop` instance of the current browser context for the application."
+        },
+        {
+          "where": "Spring",
+          "name": "default bean scope",
+          "detail": "Beans are singletons per container, which is one instance injected everywhere, not a class-level rule."
+        },
+        {
+          "where": "Jakarta Inject",
+          "name": "jakarta.inject.Singleton",
+          "detail": "Marks an injectable class so the injector creates a single instance and reuses it."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Settings {",
+        "    private static final class Holder {",
+        "        static final Settings INSTANCE = new Settings();",
+        "    }",
+        "",
+        "    private Settings() {}",
+        "",
+        "    static Settings get() { return Holder.INSTANCE; }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "singleton",
+          "correct": true,
+          "why": "A private constructor and a static accessor over a lazily initialized holder ensure a single shared instance."
+        },
+        {
+          "ref": "flyweight",
+          "why": "Flyweight keeps a pool of many shared instances keyed by value, not one instance of the whole class."
+        },
+        {
+          "ref": "factory-method",
+          "why": "The accessor never varies the type it returns; it returns the same object every time."
+        },
+        {
+          "ref": "prototype",
+          "why": "Nothing is copied; the accessor hands out the one instance itself."
+        }
+      ],
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A desktop tool talks to one physical hardware dongle. Only one connection may exist per process, many unrelated components need it, and the tool runs without a DI container.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "singleton",
+          "correct": true,
+          "why": "The domain demands exactly one instance, and with no container a guarded static access point is the pragmatic way to provide it."
+        },
+        {
+          "ref": "dependency-injection",
+          "why": "It would be preferable, but here there is no container to wire the instance, so a class-level guarantee is what enforces the rule."
+        },
+        {
+          "ref": "prototype",
+          "why": "Copying would create a second connection to the device, which is the one thing that must not happen."
+        },
+        {
+          "ref": "flyweight",
+          "why": "Flyweight shares many small immutable values; this is a single stateful connection."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Singleton pattern.",
+      "lines": [
+        "final class Registry {",
+        "    private static Registry instance;",
+        "",
+        "    private Registry() {}",
+        "",
+        "    static Registry get() {",
+        "        if (instance == null) {",
+        "            instance = new Registry();",
+        "        }",
+        "        return instance;",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        7
+      ],
+      "explanation": "The unsynchronized check-then-act lets two threads both see null and create two instances. Use an enum, the holder idiom, or a synchronized accessor.",
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the body of a double-checked lazy accessor.",
+      "blocks": [
+        [
+          "Cfg local = instance;"
+        ],
+        [
+          "if (local != null) return local;"
+        ],
+        [
+          "synchronized (Cfg.class) {"
+        ],
+        [
+          "    if (instance == null) instance = new Cfg();",
+          "    return instance;",
+          "}"
+        ]
+      ],
+      "explanation": "Read the volatile field once, return on the fast path, take the lock only if needed, then re-check inside it before creating.",
+      "compile": {
+        "template": [
+          "final class Cfg {",
+          "  private static volatile Cfg instance;",
+          "  private Cfg() {}",
+          "  static Cfg get() {",
+          "{{code}}",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain Singleton in your own words: what does it guarantee, and why is it often a poor choice?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Singleton guarantees one instance in a scope and exposes it globally. The global access hides dependencies and makes testing and parallel runs hard. Prefer one instance held by a DI container and injected, or an enum when a true language-level singleton is needed."
+        }
+      ],
+      "keyPoints": [
+        "One instance per class loader, enforced by the class",
+        "Global access hides dependencies and hurts tests",
+        "Enum or holder idiom are the safe forms",
+        "Container singleton scope separates 'one' from 'global'",
+        "Lazy init without synchronization is a race"
+      ]
+    }
+  ]
+}

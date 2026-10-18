@@ -1,0 +1,406 @@
+{
+ "id": "active-record",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "An object wraps one database row and carries both its data and the methods to load and save itself."
+    },
+    {
+     "type": "p",
+     "text": "An **active record** holds a row's fields, domain behavior and persistence: static finders like `find(id)` and instance methods like `save()` and `delete()`. There is no separate mapping layer, so simple CRUD is fast to build. The price is that business logic and storage are coupled in one class."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Shape:** class mirrors the table, one instance per row.",
+      "**Persistence:** `save`, `delete` on the instance, finders on the class.",
+      "**Fits:** CRUD-heavy apps with little domain logic."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Rails ActiveRecord, Django models and Laravel Eloquent popularized this style."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "ActiveRecord.java",
+   "expectedOutput": "created #1\nbalance 70\nrejected: insufficient funds",
+   "walkthrough": [
+    {
+     "region": "table",
+     "note": "The class holds its own table. A static map stands in for the database. `id` is null until the first save, which is how a record knows it is new."
+    },
+    {
+     "region": "finders",
+     "note": "Class-level finders build instances from stored rows. A factory creates unsaved records. The constructor stays private so every instance is valid."
+    },
+    {
+     "region": "behavior",
+     "note": "Domain behavior sits on the same class as persistence. This is both the convenience and the coupling."
+    },
+    {
+     "region": "persist",
+     "note": "`save()` assigns an id on first call and upserts the row. The instance is responsible for its own storage."
+    },
+    {
+     "region": "client",
+     "note": "No mapper or repository: open, save, find, change, save again. Rule violations surface as exceptions from the record itself."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Feature-flag admin screen in a back-office tool."
+    },
+    {
+     "type": "p",
+     "text": "Flags have a name, an on/off value and a rollout percentage. The screen lists them, toggles them and that is all. No rich rules and the schema is the model. An entity with public fields and built-in persistence is the fastest correct design, and Quarkus Panache supports this style directly."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "@Entity class FeatureFlag extends PanacheEntity {",
+      "    public String name;",
+      "    public boolean enabled;",
+      "    static FeatureFlag byName(String n) {",
+      "        return find(\"name\", n).firstResult();",
+      "    }",
+      "}",
+      "FeatureFlag.byName(\"dark-mode\").enabled = true;"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: a working CRUD screen with almost no layers, which is right when the domain has nothing to protect."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "client",
+       "name": "Client",
+       "kind": "class",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "uses the record directly"
+       ],
+       "role": "Client"
+      },
+      {
+       "id": "acct",
+       "name": "Account",
+       "kind": "class",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "- id, balance",
+        "+ find(id): Optional",
+        "+ open(initial)",
+        "+ withdraw(n)",
+        "+ save()",
+        "+ delete()"
+       ],
+       "role": "ActiveRecord"
+      },
+      {
+       "id": "tbl",
+       "name": "accounts table",
+       "kind": "class",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "id, balance"
+       ],
+       "role": "Row storage"
+      }
+     ],
+     "edges": [
+      {
+       "from": "client",
+       "to": "acct",
+       "rel": "association",
+       "label": "calls"
+      },
+      {
+       "from": "acct",
+       "to": "tbl",
+       "rel": "dependency",
+       "label": "reads/writes"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "acct",
+       "text": "domain logic and SQL live together"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Classes map almost one-to-one onto tables.",
+      "Logic is mostly validation and CRUD.",
+      "Speed of delivery beats long-term flexibility."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Domain rules are rich and must be tested without a database.",
+      "The object model diverges from the schema (inheritance, value objects)."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Business rules scattered across models and callbacks.",
+      "Tests that need a database for every rule.",
+      "Static finders and global connection state are hard to substitute.",
+      "Leaking records straight into API responses."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Fat models with hundreds of methods: introduce services or a [Data Mapper](kata:data-mapper).",
+      "Models that call other models, send emails and run jobs inside `save()` callbacks."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "In Java this is the exception, not the norm. Quarkus Panache offers it; Spring favors repositories.",
+      "Records suit immutable values; Active Record needs mutable, identity-bearing instances, so it fits Java less naturally."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "data-mapper",
+     "relation": "alternative",
+     "difference": "A mapper keeps entities ignorant of storage and allows the model to differ from the schema. Active Record is simpler but couples the two."
+    },
+    {
+     "ref": "repository",
+     "relation": "alternative",
+     "difference": "A repository separates access from the entity. With Active Record, the entity's static finders are the access API."
+    },
+    {
+     "ref": "unit-of-work",
+     "relation": "alternative",
+     "difference": "Active Record writes on every `save()`. A unit of work tracks changes and writes them together in one transaction."
+    },
+    {
+     "ref": "dto",
+     "relation": "oftenConfused",
+     "difference": "A record mirrors a table and has behavior; a DTO is a passive shape for a boundary. Expose DTOs, not records, in APIs."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Ruby on Rails",
+     "name": "ActiveRecord::Base",
+     "detail": "The framework that named the pattern: models with `find`, `save`, `where` and validations."
+    },
+    {
+     "where": "Django",
+     "name": "django.db.models.Model",
+     "detail": "Model instances call `save()` and `delete()`; managers provide class-level queries."
+    },
+    {
+     "where": "Laravel",
+     "name": "Eloquent Model",
+     "detail": "Each model corresponds to a table and persists itself."
+    },
+    {
+     "where": "Quarkus",
+     "name": "PanacheEntity",
+     "detail": "Hibernate with Panache active-record style: `persist()` on the entity and static `find`, `list`."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Post {",
+    "    private Long id;",
+    "    private String title;",
+    "",
+    "    static Post find(long id) { return Db.select(id); }",
+    "    Post save() { id = Db.upsert(id, title); return this; }",
+    "    void delete() { Db.remove(id); }",
+    "    void rename(String t) { title = t.strip(); save(); }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "active-record",
+     "correct": true,
+     "why": "The class holds its fields, behavior and its own find, save and delete."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "No separate class translates; persistence is inside `Post` itself."
+    },
+    {
+     "ref": "repository",
+     "why": "The finder is a static method on the entity, not a separate collection-like object."
+    },
+    {
+     "ref": "dto",
+     "why": "A DTO has no behavior and does not persist itself."
+    }
+   ],
+   "compile": {
+    "template": [
+     "final class Db { static Post select(long id) { return null; } static Long upsert(Long id, String t) { return id; } static void remove(Long id) {} }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "An internal admin tool has ten tables that map almost one-to-one onto classes. Features are CRUD with light validation, and a team of three must ship in two weeks. There is little domain logic to protect.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "active-record",
+     "correct": true,
+     "why": "Entities mirror tables and persist themselves; it is the lightest design that works here."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "Schema and model are the same here, so the extra mapping layer buys nothing."
+    },
+    {
+     "ref": "event-sourcing",
+     "why": "No audit or time-travel need justifies the complexity of events and projections."
+    },
+    {
+     "ref": "cqrs",
+     "why": "Read and write shapes are identical; splitting models would only add code."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Active Record pattern.",
+   "lines": [
+    "final class Note {",
+    "    private Long id;",
+    "    private String text;",
+    "",
+    "    Note save() {",
+    "        if (id == null) id = Table.nextId();",
+    "        Table.insert(this);",
+    "        return this;",
+    "    }",
+    "",
+    "    void edit(String t) { text = t; save(); }",
+    "}"
+   ],
+   "flawLines": [
+    7
+   ],
+   "explanation": "The record always inserts, even when it already has an id, so each edit creates a duplicate row. Branch on `id`: insert when it was null, otherwise `Table.update(this)`.",
+   "compile": {
+    "template": [
+     "final class Table { static long nextId() { return 1; } static void insert(Note n) {} static void update(Note n) {} }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the use case so each line only uses what came before.",
+   "blocks": [
+    [
+     "long id = request.accountId();"
+    ],
+    [
+     "Account account = Account.find(id).orElseThrow();"
+    ],
+    [
+     "account.withdraw(30);"
+    ],
+    [
+     "account.save();"
+    ],
+    [
+     "receipt.print(account.balance());"
+    ]
+   ],
+   "explanation": "Get the key, load the record, apply behavior, persist it, then report the saved state. Each step uses the previous variable.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Request(long accountId) {}",
+     "interface Receipt { void print(long b); }",
+     "final class Account { static Optional<Account> find(long id) { return Optional.empty(); } void withdraw(long a) {} Account save() { return this; } long balance() { return 0; } }",
+     "class Snippet { void run(Request request, Receipt receipt) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Active Record in your own words: what does the object own, and when is it the wrong choice?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "An active record is an object that represents one row and owns its persistence: it has fields, domain behavior, finders, and save and delete. It is the fastest route for CRUD apps whose model matches the schema. It is the wrong choice when rich domain logic must be tested without a database or the model differs from the table."
+    }
+   ],
+   "keyPoints": [
+    "One instance per row, owning its persistence",
+    "Finders on the class, save and delete on the instance",
+    "Fast for CRUD where model equals schema",
+    "Couples logic to storage and hampers testing",
+    "Data Mapper is the decoupled alternative"
+   ]
+  }
+ ]
+}

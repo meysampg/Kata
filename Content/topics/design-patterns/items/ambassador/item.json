@@ -1,0 +1,170 @@
+{
+  "id": "ambassador",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Put a helper next to a client to handle its outbound calls to a remote resource, so the client stays simple."},
+      {"type": "p", "text": "The client talks to a local endpoint as if the resource were next door. The **ambassador** owns the awkward parts of reaching the real one: service discovery, sharding, connection pooling, TLS, retries and failover. It is a sidecar specialized for the outbound path."},
+      {"type": "bullets", "items": [
+        "**Client sees:** one stable local address and a simple protocol.",
+        "**Ambassador owns:** routing, retries, timeouts, credentials.",
+        "**Useful for:** legacy clients you cannot modify."]},
+      {"type": "callout", "tone": "info", "text": "Think of it as the client's diplomat: it speaks the remote system's language and policies so the client doesn't have to."}
+    ]},
+    {"role": "implementation", "file": "Ambassador.java",
+     "expectedOutput": "a2:user:1\nb1:user:2\na2:user:3\ntrace: [a1, a2, b1, a1, a2]",
+     "walkthrough": [
+      {"region": "port", "note": "The client-side contract is a plain `KeyValue`. Whether it is a map, one server or a cluster is invisible to callers."},
+      {"region": "node", "note": "A scripted fake node: it records every attempt in a shared trace and fails deterministically when `up` is false, so failover is testable without real time."},
+      {"region": "ambassador", "note": "The ambassador picks the shard from a stable hash of the key, then tries that shard's replicas in order. Only if all fail does the client see an error."},
+      {"region": "app", "note": "The application code is a single call. It has no shard map, no retry loop and no knowledge of replicas."},
+      {"region": "wire", "note": "Two shards of two replicas. Replica `a1` is down. Calls to shard A fall through to `a2` while shard B answers on its first replica."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A legacy app talking to a sharded Redis cluster."},
+      {"type": "p", "text": "An old billing service only speaks to one Redis address and has no cluster awareness. Rewriting its client library is out of scope. Next to each instance runs a proxy that exposes `localhost:6379`, hashes keys to shards, follows failover to replicas and reuses pooled connections. The app is unchanged while the cache tier grows from two shards to eight."},
+      {"type": "code", "language": "java", "lines": [
+        "// legacy code: unchanged, believes in one local Redis",
+        "try (Jedis redis = new Jedis(\"localhost\", 6379)) {",
+        "    redis.set(\"invoice:\" + id, json);",
+        "}",
+        "// the ambassador on :6379 picks shard and replica"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: topology, failover and connection policy move out of the app, so scaling the cache tier needs no application release."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "app", "name": "ProfileService", "kind": "class", "role": "Client", "col": 0.5, "row": 0,
+         "members": ["- store: KeyValue", "+ load(user)"]},
+        {"id": "kv", "name": "KeyValue", "kind": "interface", "role": "Port", "col": 0.5, "row": 1,
+         "members": ["+ get(key): String"]},
+        {"id": "amb", "name": "Ambassador", "kind": "class", "role": "Ambassador", "col": 0, "row": 2,
+         "members": ["- shards: List", "+ get(key): String"]},
+        {"id": "node", "name": "Node", "kind": "record", "role": "RemoteResource", "col": 1, "row": 2,
+         "members": ["+ get(key): String"]}],
+       "edges": [
+        {"from": "app", "to": "kv", "rel": "association", "label": "uses"},
+        {"from": "amb", "to": "kv", "rel": "realizes"},
+        {"from": "node", "to": "kv", "rel": "realizes"},
+        {"from": "amb", "to": "node", "rel": "aggregation", "label": "replicas"}],
+       "notes": [{"attachTo": "amb", "text": "shard, retry, failover"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "app", "name": "App", "role": "Client"}, {"id": "amb", "name": "Ambassador", "role": "Ambassador"},
+        {"id": "a1", "name": "Replica a1", "role": "RemoteResource"}, {"id": "a2", "name": "Replica a2", "role": "RemoteResource"}],
+       "messages": [
+        {"from": "app", "to": "amb", "label": "get(key)", "style": "call"},
+        {"from": "amb", "to": "a1", "label": "get(key)", "style": "call"},
+        {"from": "a1", "to": "amb", "label": "IOException", "style": "return"},
+        {"from": "amb", "to": "a2", "label": "get(key)", "style": "call"},
+        {"from": "a2", "to": "amb", "label": "value", "style": "return"},
+        {"from": "amb", "to": "app", "label": "value", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A client cannot be changed but must reach a complex remote resource.",
+        "Connection policy (retry, TLS, discovery) should be shared across clients and languages.",
+        "You want to test the client against a local stub."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "One client library already does the job and you control the code.",
+        "Added localhost latency or another moving part outweighs the benefit."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Blind retries through the ambassador on non-idempotent calls cause duplicates.",
+        "Hidden failover can mask an outage; export metrics from the ambassador.",
+        "Client timeouts must exceed the ambassador's retry budget, or they cancel mid-failover."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "An ambassador that transforms business data instead of managing connectivity.",
+        "One ambassador per call site instead of per client instance."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Sealed result types or checked exceptions model 'all replicas down' explicitly for callers.",
+        "For new code, a client library with the same policy may beat a separate process."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "sidecar", "relation": "specializes", "difference": "An ambassador is a sidecar dedicated to one concern: the client's outbound access to a remote resource. A sidecar is the general co-located helper."},
+      {"ref": "proxy", "relation": "lookAlike", "difference": "Same stand-in shape, but an ambassador is deployed beside the client and adds connection policy; a remote proxy simply represents one remote object."},
+      {"ref": "adapter", "relation": "oftenConfused", "difference": "An adapter converts one interface into another in-process. An ambassador keeps the interface and manages how the remote call is made."},
+      {"ref": "circuit-breaker", "relation": "combines", "difference": "Breakers, retries and timeouts live naturally in the ambassador so clients inherit them."},
+      {"ref": "retry-backoff", "relation": "combines", "difference": "The ambassador is a good place for retry with backoff and failover, applied uniformly to every client."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Twitter / Twemproxy", "name": "twemproxy (nutcracker)", "detail": "Proxy that shards keys across memcached or Redis servers so clients talk to a single address."},
+      {"where": "Google Cloud", "name": "Cloud SQL Auth Proxy", "detail": "Runs next to the app, listens locally and handles TLS and IAM-based authentication to Cloud SQL."},
+      {"where": "Istio / Envoy", "name": "Outbound listener", "detail": "The injected Envoy captures the app's outbound traffic and applies discovery, retries, timeouts and mTLS on the way out."},
+      {"where": "Kubernetes", "name": "Multi-container Pod", "detail": "The proxy runs as a second container in the Pod; the app reaches it on `localhost` through the shared network namespace."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class LocalCacheEndpoint implements KeyValue {",
+      "    private final List<List<KeyValue>> shards;",
+      "",
+      "    LocalCacheEndpoint(List<List<KeyValue>> shards) { this.shards = shards; }",
+      "",
+      "    public String get(String key) throws IOException {",
+      "        int i = Math.floorMod(key.hashCode(), shards.size());",
+      "        IOException last = new IOException(\"empty shard\");",
+      "        for (KeyValue replica : shards.get(i)) {",
+      "            try { return replica.get(key); } catch (IOException e) { last = e; }",
+      "        }",
+      "        throw last;",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "ambassador", "correct": true, "why": "A client-side stand-in hides sharding and replica failover for a remote resource behind a simple local interface."},
+      {"ref": "proxy", "why": "A plain proxy guards or represents one object. This one adds routing, retries and failover policy for a cluster."},
+      {"ref": "api-gateway", "why": "A gateway faces many external clients at the edge; this serves one client's outbound calls."},
+      {"ref": "strategy", "why": "The replicas are not interchangeable algorithms selected by the caller; the helper chooses and retries on its own."}],
+     "compile": {"template": [
+      "import java.io.IOException;", "import java.util.List;",
+      "interface KeyValue { String get(String key) throws IOException; }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A legacy billing service opens one connection to a single database address and cannot be rebuilt. The database has been moved to a sharded cluster with TLS and token authentication, and it will be resharded again next year.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "ambassador", "correct": true, "why": "A local helper presents the old single address while handling sharding, TLS and tokens on the client's behalf."},
+      {"ref": "api-gateway", "why": "A gateway is an edge entry for external clients; here an internal client needs help reaching a resource."},
+      {"ref": "strangler-fig", "why": "No system is being replaced piece by piece; the client's destination simply changed shape."},
+      {"ref": "sidecar", "why": "Close, but sidecar is the general helper. The need here is specifically outbound access, which is an ambassador."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the ambassador's contract.",
+     "lines": [
+      "public String get(String key) throws IOException {",
+      "    int shard = Math.floorMod(key.hashCode(), shards.size());",
+      "    for (KeyValue replica : shards.get(shard)) {",
+      "        try {",
+      "            return replica.get(key);",
+      "        } catch (IOException e) {",
+      "            System.exit(1);",
+      "        }",
+      "    }",
+      "    throw new IOException(\"shard \" + shard + \" unavailable\");",
+      "}"],
+     "flawLines": [7],
+     "explanation": "On a replica failure the helper must fail over to the next replica, and only report an error when all are exhausted. Exiting the process takes the client down; remove it and continue the loop.",
+     "compile": {"template": [
+      "import java.io.IOException;", "import java.util.List;",
+      "interface KeyValue { String get(String key) throws IOException; }",
+      "class Holder implements KeyValue { List<List<KeyValue>> shards;",
+      "{{code}}", "}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the ambassador's work for one read.",
+     "blocks": [
+      ["int shard = Math.floorMod(key.hashCode(), shards.size());"],
+      ["for (KeyValue replica : shards.get(shard)) {", "    try { return replica.get(key); }", "    catch (IOException e) { last = e; }", "}"],
+      ["throw new IOException(\"shard \" + shard + \" unavailable\", last);"]],
+     "explanation": "Pick the shard first, then try its replicas in order and return on success; the failure is raised only after the loop has exhausted every replica.",
+     "compile": {"template": [
+      "import java.io.IOException;", "import java.util.List;",
+      "interface KeyValue { String get(String key) throws IOException; }",
+      "class Snippet { List<List<KeyValue>> shards;",
+      "  String get(String key) throws IOException { IOException last = null;",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain the Ambassador pattern and how it differs from a general sidecar.",
+     "modelAnswer": [
+      {"type": "p", "text": "An ambassador is a helper beside the client that makes outbound calls to a remote resource: it hides discovery, sharding, TLS, retries and failover behind a simple local address. It is a sidecar specialized for outbound access, and useful when the client cannot be changed."}],
+     "keyPoints": [
+      "Helper deployed with the client for its outbound calls",
+      "Client sees a simple local address",
+      "Owns sharding, retries, failover, TLS and credentials",
+      "A sidecar specialized for the outbound path",
+      "Lets unchanged legacy clients reach modern resources"]}
+  ]
+}

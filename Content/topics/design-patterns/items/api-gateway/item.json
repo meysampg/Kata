@@ -1,0 +1,182 @@
+{
+  "id": "api-gateway",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Give clients a single entry point that authenticates, routes and aggregates calls to the services behind it."},
+      {"type": "p", "text": "Instead of every client knowing every service address, protocol and auth scheme, a **gateway** terminates the request at the edge. It applies cross-cutting policy once, routes by path or header, and can compose several backend calls into one response tailored to a client type."},
+      {"type": "bullets", "items": [
+        "**Routing:** path, host or header to a service.",
+        "**Policy at the edge:** authentication, rate limits, TLS, logging.",
+        "**Composition:** one client call fans out to several services.",
+        "**Translation:** public REST to internal gRPC, or mobile to desktop payloads."]},
+      {"type": "callout", "tone": "warning", "text": "The gateway is on every request path. It must stay thin and highly available, or it becomes a bottleneck and a distributed monolith's front door."}
+    ]},
+    {"role": "implementation", "file": "ApiGateway.java",
+     "expectedOutput": "/users/7 -> 200 user:7\n/home -> 200 user:7 | orders:2\n/orders/7 -> 401 unauthorized\n/billing -> 404 no route",
+     "walkthrough": [
+      {"region": "gateway", "note": "The gateway owns a sorted route table and the auth check. Unauthenticated requests are rejected before any service sees them; unknown paths get a 404."},
+      {"region": "aggregate", "note": "`/home` is composed: both calls run concurrently. A failing optional dependency degrades to a 206 fragment instead of failing the whole page."},
+      {"region": "wire", "note": "Services are registered behind prefixes. They are lambdas here; in production they are remote clients with their own timeouts."},
+      {"region": "client", "note": "The client sees one address. A valid token reaches services and composes; a bad token or unknown path never leaves the gateway."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A mobile banking app on twelve backend services."},
+      {"type": "p", "text": "The home screen needs balance, recent transactions and offers. Calling three services over a cellular link costs three round trips and exposes internal topology. A gateway offers `GET /mobile/home`: it validates the JWT once, calls the services in parallel with a 300 ms budget, drops the optional offers on timeout and returns one compact payload. The web client gets its own, different composition."},
+      {"type": "code", "language": "java", "lines": [
+        "// route: /mobile/home  ->  composition",
+        "var balance = accounts.balance(user);      // required",
+        "var recent  = ledger.recent(user, 5);      // required",
+        "var picks   = offers.forUser(user)         // optional",
+        "                    .orTimeout(300, MILLISECONDS)",
+        "                    .exceptionally(e -> List.of());"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: one round trip for the app, one place for auth and rate limits, and services stay free to be split or renamed behind the facade."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "role": "Client", "col": 0.5, "row": 0,
+         "members": ["+ request(path)"]},
+        {"id": "gw", "name": "Gateway", "kind": "class", "role": "ApiGateway", "col": 0.5, "row": 1,
+         "members": ["- routes: Map", "+ handle(request)"]},
+        {"id": "users", "name": "UserService", "kind": "class", "role": "Service", "col": 0, "row": 2,
+         "members": ["+ handle(request)"]},
+        {"id": "orders", "name": "OrderService", "kind": "class", "role": "Service", "col": 1, "row": 2,
+         "members": ["+ handle(request)"]}],
+       "edges": [
+        {"from": "client", "to": "gw", "rel": "dependency", "label": "calls"},
+        {"from": "gw", "to": "users", "rel": "association", "label": "routes"},
+        {"from": "gw", "to": "orders", "rel": "association", "label": "routes"}],
+       "notes": [{"attachTo": "gw", "text": "auth, limits, routing, composition"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "c", "name": "Client"}, {"id": "g", "name": "Gateway", "role": "ApiGateway"},
+        {"id": "u", "name": "Users", "role": "Service"}, {"id": "o", "name": "Orders", "role": "Service"}],
+       "messages": [
+        {"from": "c", "to": "g", "label": "GET /home + token", "style": "call"},
+        {"from": "g", "to": "u", "label": "get user", "style": "async"},
+        {"from": "g", "to": "o", "label": "get orders", "style": "async"},
+        {"from": "u", "to": "g", "label": "user", "style": "return"},
+        {"from": "o", "to": "g", "label": "orders", "style": "return"},
+        {"from": "g", "to": "c", "label": "composed page", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Many clients need one stable, secured address for many services.",
+        "Cross-cutting policy (auth, quotas, TLS) belongs at the edge.",
+        "Different client types need differently shaped responses."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "There is one service and one client: a plain reverse proxy is enough.",
+        "Services call each other: east-west traffic belongs to a mesh, not the edge gateway."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Business logic creeping into the gateway until every team must change it.",
+        "A single shared gateway owned by one team becomes a release bottleneck.",
+        "Aggregation without timeouts and fallbacks makes the slowest service your latency."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "Gateway routes that rewrite payloads field by field for each service.",
+        "A gateway in front of a monolith that only forwards requests."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Virtual threads and `CompletableFuture` make fan-out composition short; set a deadline on each call.",
+        "Java 21 records make good immutable request and response envelopes at the gateway boundary."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "facade", "relation": "specializes", "difference": "A facade simplifies an in-process subsystem. A gateway is a networked facade that also enforces security, quotas and protocol translation for remote clients."},
+      {"ref": "proxy", "relation": "lookAlike", "difference": "A proxy stands in for one object with the same interface. A gateway exposes a different, client-oriented API over many services."},
+      {"ref": "sidecar", "relation": "oftenConfused", "difference": "A gateway is a shared north-south entry point at the edge. A sidecar is per-instance and handles that service's own traffic, including service-to-service calls."},
+      {"ref": "strangler-fig", "relation": "combines", "difference": "The gateway is the routing facade a strangler migration needs: paths move from legacy to new services without clients noticing."},
+      {"ref": "rate-limiter", "relation": "combines", "difference": "Quotas and throttling are typically enforced at the gateway, per client or API key, before traffic reaches services."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Spring Cloud Gateway", "name": "RouteLocator and GatewayFilter", "detail": "Routes match on predicates and pass through filters for auth, rate limiting, retries and path rewriting."},
+      {"where": "Kubernetes", "name": "Gateway API: Gateway and HTTPRoute", "detail": "The `HTTPRoute` resource binds hosts and paths to Services behind a `Gateway`."},
+      {"where": "AWS", "name": "Amazon API Gateway", "detail": "Managed gateway with routes, authorizers, usage plans and integrations to Lambda or HTTP backends."},
+      {"where": "Envoy", "name": "Envoy edge proxy", "detail": "HTTP connection manager with route configuration, used as the data plane of Emissary, Istio ingress and others."},
+      {"where": "Kong", "name": "Kong Gateway", "detail": "Plugin-based gateway: authentication, rate limiting and transformations attach to routes and services."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Edge {",
+      "    Response handle(Request req) {",
+      "        if (!auth.valid(req.token())) return Response.status(401);",
+      "        if (!quota.tryAcquire(req.client())) return Response.status(429);",
+      "        return switch (firstSegment(req.path())) {",
+      "            case \"users\"  -> users.call(req);",
+      "            case \"orders\" -> orders.call(req);",
+      "            default      -> Response.status(404);",
+      "        };",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "api-gateway", "correct": true, "why": "One entry point authenticates, throttles and routes requests to several backend services."},
+      {"ref": "facade", "why": "A facade simplifies a local subsystem; it does not enforce auth and quotas for remote clients."},
+      {"ref": "chain-of-responsibility", "why": "The checks here are fixed sequential code, not pluggable handlers deciding whether to pass the request on."},
+      {"ref": "strategy", "why": "The switch picks a destination by path; there is no interchangeable algorithm behind one interface."}],
+     "compile": {"template": [
+      "interface Auth { boolean valid(String token); }",
+      "interface Quota { boolean tryAcquire(String client); }",
+      "interface Backend { Response call(Request r); }",
+      "record Request(String path, String token, String client) {}",
+      "record Response(int status) { static Response status(int s) { return new Response(s); } }",
+      "class Holder {",
+      "  Auth auth; Quota quota; Backend users; Backend orders;",
+      "  static String firstSegment(String p) { return p.split(\"/\")[1]; }",
+      "  {{code}}",
+      "}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A mobile app renders its home screen from five microservices, so it makes five calls on a slow network. Security wants a single place to validate tokens, and the service topology is changing every quarter.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "api-gateway", "correct": true, "why": "One edge entry point validates tokens once, composes the five calls into one, and hides the changing topology."},
+      {"ref": "sidecar", "why": "A sidecar handles each service's own traffic; it does not give the client one composed endpoint."},
+      {"ref": "ambassador", "why": "An ambassador helps a client reach one remote resource; it does not compose or secure many services for external callers."},
+      {"ref": "adapter", "why": "Adapting one interface to another does not aggregate calls or centralize authentication."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that makes the gateway fragile.",
+     "lines": [
+      "Response home(Request req) {",
+      "    var user = CompletableFuture.supplyAsync(",
+      "        () -> users.call(req));",
+      "    var extras = CompletableFuture.supplyAsync(",
+      "        () -> offers.call(req));",
+      "    return new Response(",
+      "        user.join().body() + extras.join().body());",
+      "}"],
+     "flawLines": [7],
+     "explanation": "Joining the optional `extras` call without a timeout or fallback lets the slowest, least important service dictate the page's latency and failures. Add `orTimeout` and `exceptionally` to the optional call.",
+     "compile": {"template": [
+      "import java.util.concurrent.CompletableFuture;",
+      "interface Backend { Response call(Request r); }",
+      "record Request(String path) {}",
+      "record Response(String body) {}",
+      "class Holder {",
+      "  Backend users; Backend offers;",
+      "  {{code}}",
+      "}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the gateway's request handling so each step depends only on earlier ones.",
+     "blocks": [
+      ["if (!auth.valid(req.token())) return Response.status(401);"],
+      ["Backend target = routes.get(prefix(req.path()));"],
+      ["if (target == null) return Response.status(404);"],
+      ["Response res = target.call(req);"],
+      ["return res;"]],
+     "explanation": "Authenticate before spending any backend work, resolve the route, handle the missing route, call the service, then return its response.",
+     "compile": {"template": [
+      "import java.util.Map;",
+      "interface Auth { boolean valid(String t); }",
+      "interface Backend { Response call(Request r); }",
+      "record Request(String path, String token) {}",
+      "record Response(int status) { static Response status(int s) { return new Response(s); } }",
+      "class Snippet { Auth auth; Map<String, Backend> routes;",
+      "  String prefix(String p) { return p; }",
+      "  Response handle(Request req) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain an API Gateway: what it centralizes, what it should not do, and how it differs from a sidecar.",
+     "modelAnswer": [
+      {"type": "p", "text": "A gateway is the single edge entry point that authenticates, rate-limits, routes and composes calls to backend services, so clients stay simple. It should stay thin: routing and policy, not business logic. A sidecar sits beside each service instance and handles its own traffic, including service-to-service calls."}],
+     "keyPoints": [
+      "One entry point for routing, auth, quotas and TLS",
+      "Can compose several backend calls into one response",
+      "Keep it thin: no business logic, with timeouts and fallbacks",
+      "It is a shared north-south hop, a bottleneck risk",
+      "A sidecar is per instance; the gateway is shared at the edge"]}
+  ]
+}

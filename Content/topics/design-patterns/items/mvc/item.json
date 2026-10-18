@@ -1,0 +1,459 @@
+{
+  "id": "mvc",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Split an interactive feature into a model for state and rules, a view for display, and a controller for input."
+        },
+        {
+          "type": "p",
+          "text": "The **model** owns data and business rules and knows nothing about the screen. The **view** renders model state. The **controller** translates user input into model operations. A change in the model reaches the view through notification, not through the controller."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Model:** state plus rules, UI-free.",
+            "**View:** output only, reads the model.",
+            "**Controller:** input in, model calls out."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Server-side web frameworks use a variant: the controller selects a model and a view per request, with no live notifications."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Mvc.java",
+      "expectedOutput": "Target: 30C\nTarget: 30C\nTarget: 29C\nUnknown: sing",
+      "walkthrough": [
+        {
+          "region": "model",
+          "note": "The model owns the target temperature and the clamping rule. It announces changes through a listener interface and has no import of any view."
+        },
+        {
+          "region": "view",
+          "note": "The view implements the listener and renders. It holds no rules and sends no commands to the model."
+        },
+        {
+          "region": "controller",
+          "note": "The controller maps raw input to model operations. It does not format output or repeat the clamping rule."
+        },
+        {
+          "region": "wiring",
+          "note": "Wiring registers the view as a model listener and gives the controller the model. The view and controller never reference each other."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Server-rendered account pages in a web portal."
+        },
+        {
+          "type": "p",
+          "text": "In a request-driven MVC framework the controller receives `GET /accounts/42`, asks the domain model for the account, puts it into a view model and names a template. The template only renders. Changing the page layout never touches the account rules, and a JSON endpoint reuses the same model with a different view."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "@GetMapping(\"/accounts/{id}\")",
+            "String show(@PathVariable long id, Model m) {",
+            "    m.addAttribute(\"account\", accounts.find(id));",
+            "    return \"account/show\";   // view name",
+            "}"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: HTML, JSON and PDF views share one model, and account rules are testable without a servlet container."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "ctl",
+              "name": "Controller",
+              "kind": "class",
+              "role": "Controller",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ onInput(command)"
+              ]
+            },
+            {
+              "id": "view",
+              "name": "ConsoleView",
+              "kind": "class",
+              "role": "View",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ changed(target)"
+              ]
+            },
+            {
+              "id": "model",
+              "name": "Thermostat",
+              "kind": "class",
+              "role": "Model",
+              "col": 0,
+              "row": 1,
+              "members": [
+                "- target: int",
+                "+ adjust(delta)"
+              ]
+            },
+            {
+              "id": "lis",
+              "name": "ModelListener",
+              "kind": "interface",
+              "role": "Observer",
+              "col": 1,
+              "row": 1,
+              "members": [
+                "+ changed(target)"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "ctl",
+              "to": "model",
+              "rel": "association",
+              "label": "updates"
+            },
+            {
+              "from": "model",
+              "to": "lis",
+              "rel": "aggregation",
+              "label": "notifies"
+            },
+            {
+              "from": "view",
+              "to": "lis",
+              "rel": "realizes"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "u",
+              "name": "User"
+            },
+            {
+              "id": "c",
+              "name": "Controller",
+              "role": "Controller"
+            },
+            {
+              "id": "m",
+              "name": "Thermostat",
+              "role": "Model"
+            },
+            {
+              "id": "v",
+              "name": "ConsoleView",
+              "role": "View"
+            }
+          ],
+          "messages": [
+            {
+              "from": "u",
+              "to": "c",
+              "label": "onInput(\"up\")",
+              "style": "call"
+            },
+            {
+              "from": "c",
+              "to": "m",
+              "label": "adjust(1)",
+              "style": "call"
+            },
+            {
+              "from": "m",
+              "to": "v",
+              "label": "changed(30)",
+              "style": "call"
+            },
+            {
+              "from": "m",
+              "to": "c",
+              "label": "done",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The same state needs several presentations or input paths.",
+            "UI-free rules should be tested without a screen.",
+            "A framework already structures requests as controller plus view."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "A reactive UI with rich bindings fits [MVVM](kata:mvvm) better.",
+            "The screen is trivial and has no rules worth isolating."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "The controller grows into a God class that holds business rules.",
+            "The view reads from many models and recomputes rules.",
+            "The model calling a view method directly, which breaks the dependency direction."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "One controller, view and model per button.",
+            "Controllers that only forward to a service and return a view name."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records make fine immutable view models. Listener interfaces are often replaced by `java.util.concurrent.Flow` or reactive streams.",
+            "Pattern-matching `switch` over sealed command types gives controllers exhaustive input handling."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "mvvm",
+          "relation": "alternative",
+          "difference": "MVVM replaces the controller with a view model that exposes state and commands, and the view binds to it declaratively. MVC's view is usually updated through code."
+        },
+        {
+          "ref": "observer",
+          "relation": "combines",
+          "difference": "MVC uses Observer so the model can notify views without referencing them. Observer is one mechanism; MVC is the three-role split."
+        },
+        {
+          "ref": "mediator",
+          "relation": "oftenConfused",
+          "difference": "A controller coordinates model and view like a mediator, but its main job is translating input; a mediator manages peer-to-peer collaboration."
+        },
+        {
+          "ref": "layered-architecture",
+          "relation": "combines",
+          "difference": "MVC usually lives inside the presentation layer, with the model drawing on the business layer below."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "Spring",
+          "name": "DispatcherServlet, @Controller, Model",
+          "detail": "Spring MVC routes requests to controllers, fills a `Model`, and resolves a view."
+        },
+        {
+          "where": "Jakarta EE",
+          "name": "Jakarta MVC (jakarta.mvc.Controller)",
+          "detail": "Action-based MVC specification for Jakarta REST, with Eclipse Krazo as an implementation."
+        },
+        {
+          "where": "JDK Swing",
+          "name": "javax.swing.table.TableModel and JTable",
+          "detail": "The table component renders a model it observes; `AbstractTableModel.fireTableDataChanged` notifies it."
+        },
+        {
+          "where": "JDK Swing",
+          "name": "javax.swing.ListModel and JList",
+          "detail": "Same split: the list view listens to a model, input handlers change the model."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Counter {",
+        "    private int n;",
+        "    private final List<IntConsumer> watchers = new ArrayList<>();",
+        "    void watch(IntConsumer w) { watchers.add(w); }",
+        "    void add(int d) { n += d; watchers.forEach(w -> w.accept(n)); }",
+        "}",
+        "final class Screen {",
+        "    Screen(Counter c) { c.watch(n -> System.out.println(\"count=\" + n)); }",
+        "}",
+        "final class KeyHandler {",
+        "    private final Counter c;",
+        "    KeyHandler(Counter c) { this.c = c; }",
+        "    void onKey(char k) { if (k == '+') c.add(1); else if (k == '-') c.add(-1); }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "mvc",
+          "correct": true,
+          "why": "State with rules, a display that observes it, and a separate input translator that mutates it."
+        },
+        {
+          "ref": "mvvm",
+          "why": "No presentation state is exposed for binding; the screen subscribes directly to the domain object."
+        },
+        {
+          "ref": "observer",
+          "why": "Observer is only the notification mechanism here; the input-handling role makes it the full three-part split."
+        },
+        {
+          "ref": "mediator",
+          "why": "`KeyHandler` does not coordinate peers; it forwards one kind of input to one model."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.function.IntConsumer;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A server-rendered admin portal: each request needs to read some domain state, choose a template and return HTML. There is no client-side data binding and pages are stateless between requests.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "mvc",
+          "correct": true,
+          "why": "Controllers handle the request, the model supplies data and a template renders it: the request-driven variant fits."
+        },
+        {
+          "ref": "mvvm",
+          "why": "MVVM depends on long-lived bindings between view and view model, which a stateless request cycle lacks."
+        },
+        {
+          "ref": "observer",
+          "why": "Nothing needs to be pushed to subscribers; each page is built once per request."
+        },
+        {
+          "ref": "mediator",
+          "why": "There are no peer components to decouple; the problem is separating roles in the request flow."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the MVC pattern.",
+      "lines": [
+        "final class Counter {",
+        "    private final List<IntConsumer> listeners = new ArrayList<>();",
+        "    private int n;",
+        "",
+        "    void listen(IntConsumer l) { listeners.add(l); }",
+        "",
+        "    void add(int delta) {",
+        "        n += delta;",
+        "        System.out.println(\"count=\" + n);",
+        "        listeners.forEach(l -> l.accept(n));",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "The model prints, so it now knows about one particular presentation. Remove the line and let a view subscribe through `listen`.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.function.IntConsumer;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "var model = new Thermostat(20);"
+        ],
+        [
+          "model.addListener(new ConsoleView());"
+        ],
+        [
+          "var controller = new Controller(model);"
+        ],
+        [
+          "controller.onInput(\"up\");"
+        ]
+      ],
+      "explanation": "The model must exist before a view can listen to it or a controller can be given it; input comes last, once both are connected.",
+      "compile": {
+        "template": [
+          "interface ModelListener { void changed(int t); }",
+          "class Thermostat { Thermostat(int t) {} void addListener(ModelListener l) {} }",
+          "class ConsoleView implements ModelListener { public void changed(int t) {} }",
+          "class Controller { Controller(Thermostat m) {} void onInput(String c) {} }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain MVC: what each role owns and how the view finds out about changes.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "The model holds state and rules and has no UI knowledge. The view renders model state. The controller turns user input into model calls. The model notifies registered views when it changes, so the view never depends on the controller and the model never depends on the view."
+        }
+      ],
+      "keyPoints": [
+        "Model: state and rules, UI-free",
+        "View: renders, no rules",
+        "Controller: input to model operations",
+        "Changes reach the view via notification",
+        "Server frameworks use a request-driven variant"
+      ]
+    }
+  ]
+}

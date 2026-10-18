@@ -1,0 +1,491 @@
+{
+ "id": "chain-of-responsibility",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Pass a request along a chain of handlers, where each one either handles it or forwards it to the next."
+    },
+    {
+     "type": "p",
+     "text": "The sender knows only the first link. Each **handler** inspects the request and chooses: answer it and **stop**, change it and **forward**, or do both around the rest of the chain. The chain's order is the policy, and handlers can be added, removed or reordered without touching the sender or each other."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Varies:** which handlers exist and their order.",
+      "**Stays stable:** the sender and the request type.",
+      "**Short-circuit:** any handler may end the chain early."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Middleware pipelines (servlet filters, Netty, OkHttp interceptors) are the dominant modern form: every link runs, and each decides whether to continue."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Chain.java",
+   "expectedOutput": "Response[status=401, body=login]\nResponse[status=200, body=hello ann]\nResponse[status=200, body=hello ann]\nResponse[status=429, body=slow down]",
+   "walkthrough": [
+    {
+     "region": "handler",
+     "note": "`Filter` receives the request and a `Next` representing the rest of the chain. Calling `next.proceed` is the only way forward, so every filter controls continuation."
+    },
+    {
+     "region": "link",
+     "note": "The chain is built from the end: each filter is bound to the already-built remainder. The result is a single `Next` the caller can invoke."
+    },
+    {
+     "region": "filters",
+     "note": "`auth` stops the chain with 401 when there is no user. `limit` counts requests per user and stops with 429 after two. Otherwise both forward."
+    },
+    {
+     "region": "assemble",
+     "note": "The terminal handler does the real work. Order is explicit: authentication runs before rate limiting, so anonymous callers are never counted."
+    },
+    {
+     "region": "client",
+     "note": "The anonymous request stops at `auth`. The third request from `ann` is stopped by `limit`; the application handler never runs for either."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Fraud screening before a card payment is authorized."
+    },
+    {
+     "type": "p",
+     "text": "A payment passes through a blocklist check, a velocity check, a geo-mismatch check and an amount threshold, in that order. Each rule can approve, reject, or defer to the next one. Cheap checks come first so most transactions leave early, and risk teams reorder or add rules from configuration, with no change to the payment service."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "Screen chain = Screens.of(",
+      "    new Blocklist(), new Velocity(10, Duration.ofMinutes(1)),",
+      "    new GeoMismatch(), new AmountOver(Money.eur(5_000)));",
+      "Verdict v = chain.check(payment); // first decisive rule wins"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: rules are independent and individually testable, and their order and membership are configuration, not code."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "client",
+       "name": "Client",
+       "kind": "class",
+       "role": "Client",
+       "col": 0.5,
+       "row": 0,
+       "members": []
+      },
+      {
+       "id": "filter",
+       "name": "Filter",
+       "kind": "interface",
+       "role": "Handler",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ apply(request, next)"
+       ]
+      },
+      {
+       "id": "next",
+       "name": "Next",
+       "kind": "interface",
+       "role": "Successor",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "+ proceed(request)"
+       ]
+      },
+      {
+       "id": "auth",
+       "name": "auth",
+       "kind": "class",
+       "role": "ConcreteHandler",
+       "col": 0,
+       "row": 3,
+       "members": [
+        "401 or next"
+       ]
+      },
+      {
+       "id": "limit",
+       "name": "limit",
+       "kind": "class",
+       "role": "ConcreteHandler",
+       "col": 1,
+       "row": 3,
+       "members": [
+        "429 or next"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "client",
+       "to": "next",
+       "rel": "dependency"
+      },
+      {
+       "from": "auth",
+       "to": "filter",
+       "rel": "realizes"
+      },
+      {
+       "from": "limit",
+       "to": "filter",
+       "rel": "realizes"
+      },
+      {
+       "from": "filter",
+       "to": "next",
+       "rel": "dependency",
+       "label": "calls"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "auth",
+       "name": "auth",
+       "role": "ConcreteHandler"
+      },
+      {
+       "id": "limit",
+       "name": "limit",
+       "role": "ConcreteHandler"
+      },
+      {
+       "id": "app",
+       "name": "app",
+       "role": "Terminal"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "auth",
+       "label": "proceed(req)",
+       "style": "call"
+      },
+      {
+       "from": "auth",
+       "to": "limit",
+       "label": "next.proceed(req)",
+       "style": "call"
+      },
+      {
+       "from": "limit",
+       "to": "app",
+       "label": "next.proceed(req)",
+       "style": "call"
+      },
+      {
+       "from": "app",
+       "to": "limit",
+       "label": "200",
+       "style": "return"
+      },
+      {
+       "from": "limit",
+       "to": "auth",
+       "label": "200",
+       "style": "return"
+      },
+      {
+       "from": "auth",
+       "to": "client",
+       "label": "200",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Several objects may handle a request and the right one is not known up front.",
+      "Processing steps should be added, removed or reordered by configuration.",
+      "Cross-cutting checks (auth, limits, logging) wrap a core handler."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Exactly one handler is known from the request: pick it directly.",
+      "Every step must run regardless; a plain list loop is simpler."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "A request that falls off the end unhandled needs an explicit terminal.",
+      "Order bugs: a limiter before auth counts anonymous traffic.",
+      "Hard-to-debug flow; log which link decided.",
+      "A handler that forgets to forward silently ends the chain."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A chain with two links that never change.",
+      "Handlers sharing mutable request state in hidden ways."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "A functional interface plus a fold over a list builds the chain without handler base classes.",
+      "A sealed result type makes handled, rejected and passed outcomes explicit."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "decorator",
+     "relation": "lookAlike",
+     "difference": "Both wrap a successor behind one interface. A decorator always delegates and adds behavior; a chain handler may stop and answer the request itself."
+    },
+    {
+     "ref": "observer",
+     "relation": "alternative",
+     "difference": "Observer notifies every subscriber and none can veto the others. A chain stops at the first handler that claims the request."
+    },
+    {
+     "ref": "strategy",
+     "relation": "alternative",
+     "difference": "Strategy picks one algorithm up front. A chain lets each handler decide at runtime whether the request is its."
+    },
+    {
+     "ref": "command",
+     "relation": "combines",
+     "difference": "Requests in a chain are often command objects, so a handler can queue, log or reject them."
+    },
+    {
+     "ref": "composite",
+     "relation": "oftenConfused",
+     "difference": "A composite fans an operation out to all children and combines results. A chain passes one request along a line until it is handled."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Jakarta Servlet",
+     "name": "Filter and FilterChain",
+     "detail": "Each `Filter` calls `chain.doFilter(request, response)` to continue or returns early to short-circuit."
+    },
+    {
+     "where": "Netty",
+     "name": "ChannelPipeline",
+     "detail": "An ordered list of `ChannelHandler`s; each uses `ctx.fireChannelRead` to pass an event to the next."
+    },
+    {
+     "where": "Spring Security",
+     "name": "SecurityFilterChain",
+     "detail": "An ordered list of security filters, with `FilterChainProxy` selecting the chain that matches the request."
+    },
+    {
+     "where": "OkHttp",
+     "name": "Interceptor.Chain",
+     "detail": "Interceptors call `chain.proceed(request)` to continue and can return a response without doing so."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class LimitRule implements Rule {",
+    "    private final String name;",
+    "    private final long limit;",
+    "    private final Rule next; // may be null",
+    "",
+    "    LimitRule(String name, long limit, Rule next) {",
+    "        this.name = name; this.limit = limit; this.next = next;",
+    "    }",
+    "",
+    "    public String decide(Expense e) {",
+    "        if (e.cents() <= limit) return \"approved by \" + name;",
+    "        return next == null ? \"escalate\" : next.decide(e);",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "chain-of-responsibility",
+     "correct": true,
+     "why": "Each rule handles the request or passes it to its successor; the chain is wired by constructors."
+    },
+    {
+     "ref": "decorator",
+     "why": "A decorator always delegates and adds behavior. This rule may answer and stop."
+    },
+    {
+     "ref": "composite",
+     "why": "A composite aggregates many children. Here each rule holds one successor, and one answer ends the walk."
+    },
+    {
+     "ref": "strategy",
+     "why": "Strategy is chosen up front and does the whole job. Here each rule decides whether to defer."
+    }
+   ],
+   "compile": {
+    "template": [
+     "interface Rule { String decide(Expense e); }",
+     "record Expense(long cents) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "Incoming support tickets are tried against a spam filter, a VIP rule, a language router and a default queue. The first rule that claims a ticket stops processing, and teams add or reorder rules from configuration.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "chain-of-responsibility",
+     "correct": true,
+     "why": "An ordered line of handlers where the first to claim the request ends processing, and order is configuration."
+    },
+    {
+     "ref": "command",
+     "why": "It packages a request to queue or undo; it does not decide which of several rules should handle it."
+    },
+    {
+     "ref": "strategy",
+     "why": "The applicable rule is not known up front; each rule must examine the ticket."
+    },
+    {
+     "ref": "observer",
+     "why": "Every listener would see every ticket, and none could stop the others."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Chain of Responsibility pattern.",
+   "lines": [
+    "final class AuthFilter implements Filter {",
+    "    public Response apply(Request r, Next next) {",
+    "        if (r.user().isEmpty()) {",
+    "            return new Response(401, \"login\");",
+    "        }",
+    "        System.out.println(\"auth ok: \" + r.user());",
+    "        return new Response(200, \"ok\");",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    7
+   ],
+   "explanation": "A handler that does not claim the request must pass it on. Answering 200 here makes every later filter and the real handler unreachable. Return `next.proceed(r)` instead.",
+   "compile": {
+    "template": [
+     "record Request(String user) {}",
+     "record Response(int status, String body) {}",
+     "interface Next { Response proceed(Request r); }",
+     "interface Filter { Response apply(Request r, Next next); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that each one only uses what came before.",
+   "blocks": [
+    [
+     "Next app = r -> new Response(200, \"ok\");"
+    ],
+    [
+     "Next limited = r -> limit.apply(r, app);"
+    ],
+    [
+     "Next secured = r -> auth.apply(r, limited);"
+    ],
+    [
+     "Response res = secured.proceed(request);"
+    ]
+   ],
+   "explanation": "A chain is built from the end: each link needs the already-built remainder. The request enters at the first link, so it is sent last.",
+   "compile": {
+    "template": [
+     "record Request(String user) {}",
+     "record Response(int status, String body) {}",
+     "interface Next { Response proceed(Request r); }",
+     "interface Filter { Response apply(Request r, Next next); }",
+     "class Snippet { void run(Filter auth, Filter limit, Request request) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Chain of Responsibility in your own words: who decides where a request stops, and how does it differ from Decorator?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A request enters the first handler of an ordered chain. Each handler decides: handle it and stop, or forward it to the next, possibly after changing it. The sender knows only the head, so handlers can be added or reordered freely. A decorator also wraps a successor but always delegates; a chain handler can end the request."
+    }
+   ],
+   "keyPoints": [
+    "Sender knows only the first link",
+    "Each handler decides to handle, forward, or both",
+    "Order is the policy and is configurable",
+    "A handler can short-circuit; a decorator always delegates",
+    "Needs a terminal for unhandled requests"
+   ]
+  }
+ ]
+}

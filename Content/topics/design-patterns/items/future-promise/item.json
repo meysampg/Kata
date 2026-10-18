@@ -1,0 +1,476 @@
+{
+  "id": "future-promise",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Represent a result that is not ready yet, and compose what happens when it arrives without blocking a thread."
+        },
+        {
+          "type": "p",
+          "text": "A **future** is a read-only handle to a pending result; a **promise** is the writable side that completes it. In Java, `CompletableFuture` is both. You attach stages with `thenApply`, `thenCompose` and `thenCombine`; each runs when its inputs complete, and a failure travels down the chain until some stage handles it."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Completes once:** with a value or an exception, never both, never twice.",
+            "**Compose, don't wait:** `get()` blocks a thread; `thenX` registers a continuation.",
+            "**Where it runs:** async stages default to the common pool; pass an executor for I/O."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Memory model: actions taken by the computation happen-before the actions that follow the corresponding `get()` in the waiting thread. No extra synchronization is needed."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "FuturePromise.java",
+      "expectedOutput": "user-7 owes 36\nuser-3+user-4\nfallback: no user 0\npromise: 42",
+      "walkthrough": [
+        {
+          "region": "source",
+          "note": "Each call returns a `CompletableFuture` at once; the lambda runs on the supplied executor. A thrown exception completes the future exceptionally."
+        },
+        {
+          "region": "compose",
+          "note": "`thenCompose` flattens a dependent call (the balance needs the user). `thenCombine` joins two independent futures that run in parallel."
+        },
+        {
+          "region": "failure",
+          "note": "`handle` receives value or error. Through a dependent stage the error arrives wrapped in `CompletionException`, so the message is read from `getCause()`."
+        },
+        {
+          "region": "promise",
+          "note": "A bare `new CompletableFuture<>()` is a promise: nothing computes it. The dependent stage attached first fires when `complete(21)` is called."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A product page aggregating pricing, stock and reviews."
+        },
+        {
+          "type": "p",
+          "text": "The page needs three independent backend calls. Run one after another they cost the sum of their latencies; started as futures they cost about the slowest. Each call carries its own timeout, and reviews fall back to an empty list, so a slow reviews service degrades the page instead of failing it. The combined future completes once all three inputs have, and the page assembler runs a single time."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "var price = pricing.fetch(id).orTimeout(300, MILLISECONDS);",
+            "var stock = stocks.fetch(id).orTimeout(300, MILLISECONDS);",
+            "var reviews = reviewsApi.fetch(id)",
+            "    .completeOnTimeout(List.of(), 300, MILLISECONDS);",
+            "return price.thenCombine(stock, Offer::new)",
+            "    .thenCombine(reviews, Page::new);"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: latency is the slowest call, not the sum, and timeouts and fallbacks are part of the chain."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "task",
+              "name": "Task",
+              "kind": "class",
+              "role": "Producer",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ run()"
+              ]
+            },
+            {
+              "id": "caller",
+              "name": "Caller",
+              "kind": "class",
+              "role": "Consumer",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ onResult(v)"
+              ]
+            },
+            {
+              "id": "stage",
+              "name": "CompletionStage<T>",
+              "kind": "interface",
+              "role": "Future",
+              "col": 0,
+              "row": 1,
+              "members": [
+                "+ thenApply(f)",
+                "+ thenCompose(f)"
+              ]
+            },
+            {
+              "id": "fut",
+              "name": "Future<T>",
+              "kind": "interface",
+              "role": "Future",
+              "col": 1,
+              "row": 1,
+              "members": [
+                "+ get(): T"
+              ]
+            },
+            {
+              "id": "cf",
+              "name": "CompletableFuture<T>",
+              "kind": "class",
+              "role": "Promise",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "+ complete(v): boolean",
+                "+ completeExceptionally(e)"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "task",
+              "to": "cf",
+              "rel": "dependency",
+              "label": "complete"
+            },
+            {
+              "from": "caller",
+              "to": "stage",
+              "rel": "dependency",
+              "label": "then..."
+            },
+            {
+              "from": "caller",
+              "to": "fut",
+              "rel": "dependency",
+              "label": "get"
+            },
+            {
+              "from": "cf",
+              "to": "stage",
+              "rel": "realizes"
+            },
+            {
+              "from": "cf",
+              "to": "fut",
+              "rel": "realizes"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "cf",
+              "text": "write side: the promise"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "caller",
+              "name": "Caller"
+            },
+            {
+              "id": "task",
+              "name": "Task"
+            },
+            {
+              "id": "cf",
+              "name": "Promise",
+              "role": "Promise"
+            }
+          ],
+          "messages": [
+            {
+              "from": "caller",
+              "to": "cf",
+              "label": "new CompletableFuture",
+              "style": "create"
+            },
+            {
+              "from": "caller",
+              "to": "task",
+              "label": "start",
+              "style": "async"
+            },
+            {
+              "from": "caller",
+              "to": "cf",
+              "label": "thenApply(f)",
+              "style": "call"
+            },
+            {
+              "from": "task",
+              "to": "cf",
+              "label": "complete(v)",
+              "style": "call"
+            },
+            {
+              "from": "cf",
+              "to": "caller",
+              "label": "f(v) runs",
+              "style": "async"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Independent calls can run in parallel and be combined.",
+            "A result feeds follow-up steps without parking a thread per step.",
+            "Timeouts and fallbacks belong in the chain."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Straight-line blocking code on virtual threads is simpler to read and debug.",
+            "You need cancellation that stops the work: `cancel` does not interrupt it."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "`get()` or `join()` inside a stage blocks a pool thread.",
+            "Without an executor, blocking I/O lands on the common pool.",
+            "An unhandled exception vanishes if nobody calls `get`, `join` or `handle`.",
+            "`allOf` returns `CompletableFuture<Void>`: collect the values yourself."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "On virtual threads, plain blocking code often replaces long chains.",
+            "`StructuredTaskScope` (preview in Java 21) scopes forked subtasks and cancels siblings on failure."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "thread-pool",
+          "relation": "combines",
+          "difference": "The pool supplies the threads that run asynchronous stages; the future is the handle through which results and failures come back."
+        },
+        {
+          "ref": "observer",
+          "relation": "lookAlike",
+          "difference": "A continuation is a one-shot observer of a single completion. Observer keeps a list of subscribers notified on every event."
+        },
+        {
+          "ref": "guarded-suspension",
+          "relation": "alternative",
+          "difference": "Guarded suspension parks a thread until a condition holds. A future lets you register what happens next and keep the thread free."
+        },
+        {
+          "ref": "active-object",
+          "relation": "combines",
+          "difference": "An active object's asynchronous methods return futures; the caller composes on them while the servant works."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.CompletableFuture",
+          "detail": "The standard promise: `supplyAsync`, `thenCompose`, `orTimeout`, `completeOnTimeout`, `allOf`."
+        },
+        {
+          "where": "JDK",
+          "name": "HttpClient.sendAsync",
+          "detail": "`java.net.http.HttpClient` returns `CompletableFuture<HttpResponse<T>>` for non-blocking requests."
+        },
+        {
+          "where": "Netty",
+          "name": "io.netty.util.concurrent.Promise",
+          "detail": "A writable future (`setSuccess`, `setFailure`) used throughout Netty's channel operations."
+        },
+        {
+          "where": "Guava",
+          "name": "SettableFuture",
+          "detail": "A Guava `ListenableFuture` whose result you set by hand, often to bridge a callback API."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "CompletableFuture<Profile> profile(long id) {",
+        "    var user = CompletableFuture.supplyAsync(() -> db.load(id), io);",
+        "    var orders = CompletableFuture.supplyAsync(() -> api.orders(id), io);",
+        "    return user.thenCombine(orders, Profile::new)",
+        "        .exceptionally(e -> Profile.anonymous());",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "future-promise",
+          "correct": true,
+          "why": "Pending results are returned immediately, combined with continuations, and failures are handled in the chain."
+        },
+        {
+          "ref": "fork-join",
+          "why": "Fork-join recursively splits one problem and joins the halves. Here two unrelated calls are composed with continuations."
+        },
+        {
+          "ref": "producer-consumer",
+          "why": "There is no queue between roles; each call yields a result handle for the caller."
+        },
+        {
+          "ref": "chain-of-responsibility",
+          "why": "No handler decides whether to pass a request along; every stage always runs when its inputs complete."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.concurrent.*;",
+          "record Profile(String user, List<String> orders) {",
+          "  static Profile anonymous() { return new Profile(\"?\", List.of()); } }",
+          "interface Db { String load(long id); }",
+          "interface Api { List<String> orders(long id); }",
+          "class Svc { Db db; Api api; Executor io;",
+          "{{code}}",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A checkout step needs a price from one service and a stock level from another. The calls are independent, each takes up to 300 ms, and the next step needs both results. Calling them one after another doubles the latency.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "future-promise",
+          "correct": true,
+          "why": "Start both calls as futures, combine them when both complete, and attach timeouts or fallbacks to the chain."
+        },
+        {
+          "ref": "producer-consumer",
+          "why": "A queue and consumer could run the calls, but it gives the caller no handle to get two results back and combine them."
+        },
+        {
+          "ref": "active-object",
+          "why": "It serializes calls on one thread, so the two independent calls would still run one after the other."
+        },
+        {
+          "ref": "read-write-lock",
+          "why": "No shared state is contended; the problem is waiting on two slow remote calls."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that defeats the non-blocking chain.",
+      "lines": [
+        "CompletableFuture<String> greeting(Executor io) {",
+        "    return CompletableFuture",
+        "        .supplyAsync(() -> fetchName(), io)",
+        "        .thenApply(name -> {",
+        "            String title = fetchTitle(name).join();",
+        "            return title + \" \" + name;",
+        "        });",
+        "}"
+      ],
+      "flawLines": [
+        5
+      ],
+      "explanation": "`join()` blocks a pool thread inside a stage, and with a small pool it can starve the very task it waits on. Use `thenCompose(name -> fetchTitle(name).thenApply(...))` to flatten the dependent future.",
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "class Snippet {",
+          "  static String fetchName() { return \"Ada\"; }",
+          "  static CompletableFuture<String> fetchTitle(String n) { return CompletableFuture.completedFuture(\"Dr\"); }",
+          "{{code}}",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the lines so the dependent stage is attached before completion and the result is read last.",
+      "blocks": [
+        [
+          "var promise = new CompletableFuture<String>();"
+        ],
+        [
+          "var shout = promise.thenApply(String::toUpperCase);"
+        ],
+        [
+          "promise.complete(\"done\");"
+        ],
+        [
+          "String result = shout.get();"
+        ]
+      ],
+      "explanation": "The promise must exist before anything attaches to it. Reading with `get()` before `complete` would block forever, so the read comes last.",
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "class Snippet { void run() throws Exception {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain Future/Promise in your own words: the two sides, why you compose instead of calling get(), and where a stage runs.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A promise is the writable side that completes a pending result once, with a value or an error; the future is the read side others hold. Instead of blocking with get, you attach stages that run on completion and propagate failures. Async stages run on an executor, by default the common pool, so pass one for blocking work."
+        }
+      ],
+      "keyPoints": [
+        "Promise completes once; future is the read-only handle",
+        "thenApply, thenCompose, thenCombine chain without blocking",
+        "Errors flow down the chain to handle or exceptionally",
+        "Pass an executor for blocking work, not the common pool",
+        "get() or join() inside a stage reintroduces blocking"
+      ]
+    }
+  ]
+}

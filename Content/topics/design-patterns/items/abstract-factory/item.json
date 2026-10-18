@@ -1,0 +1,166 @@
+{
+  "id": "abstract-factory",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Provide one interface for creating a family of related objects, so a client can never mix products from different families."},
+      {"type": "p", "text": "An **abstract factory** declares one creation method per product kind. Each **concrete factory** returns a matching set: everything from the same vendor, platform or environment. The client receives the factory once and asks it for every product it needs."},
+      {"type": "bullets", "items": [
+        "**Varies:** the whole family, swapped by changing one factory.",
+        "**Guarantees:** products created together are compatible.",
+        "**Cost:** adding a new product kind changes every factory."]},
+      {"type": "callout", "tone": "info", "text": "The point is consistency across products. If you create only one kind of object, you want a Factory Method, not this."}
+    ]},
+    {"role": "implementation", "file": "AbstractFactory.java",
+     "expectedOutput": "mem-bus/uploaded: file:/data/q3.csv\nsns/uploaded: s3://acme-prod/q3.csv",
+     "walkthrough": [
+      {"region": "products", "note": "Two abstract products. Each is a functional interface here, so implementations can be lambdas while the type stays distinct."},
+      {"region": "factory", "note": "The abstract factory: one method per product kind. This interface is the only thing the client ever depends on."},
+      {"region": "local", "note": "A concrete factory for development. Both products it returns belong to the local family and reference each other's conventions."},
+      {"region": "cloud", "note": "A second family with state of its own, the bucket name. Swapping `Infra` swaps blob storage and messaging together."},
+      {"region": "client", "note": "`Uploader` asks one factory for both products. It cannot pair S3 storage with an in-memory bus, because it never names a concrete product."},
+      {"region": "select", "note": "The environment picks a factory once, at the edge. The rest of the program is identical in both runs."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A checkout that supports several payment providers."},
+      {"type": "p", "text": "Each provider needs a matching trio: a `PaymentGateway`, a `WebhookVerifier` and a `ReceiptFormatter`. A Stripe webhook signature is meaningless to an Adyen verifier, so mixing them is a production incident. A `PaymentKit` factory hands out all three from the same provider, and the region configuration selects one kit per tenant."},
+      {"type": "code", "language": "java", "lines": [
+        "interface PaymentKit {",
+        "    PaymentGateway gateway();",
+        "    WebhookVerifier verifier();",
+        "    ReceiptFormatter receipts();",
+        "}",
+        "PaymentKit kit = kits.get(tenant.provider());",
+        "var checkout = new Checkout(kit);"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: onboarding a provider is one new kit, and incompatible combinations cannot be written."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Uploader", "kind": "class", "role": "Client", "col": 0.5, "row": 0,
+         "members": ["- infra: Infra"]},
+        {"id": "infra", "name": "Infra", "kind": "interface", "role": "AbstractFactory", "col": 0.5, "row": 1,
+         "members": ["+ blobs(): BlobStore", "+ events(): EventBus"]},
+        {"id": "local", "name": "LocalInfra", "kind": "record", "role": "ConcreteFactory", "col": 0, "row": 2},
+        {"id": "cloud", "name": "CloudInfra", "kind": "record", "role": "ConcreteFactory", "col": 1, "row": 2,
+         "members": ["bucket: String"]},
+        {"id": "blob", "name": "BlobStore", "kind": "interface", "role": "AbstractProductA", "col": 0, "row": 3,
+         "members": ["+ put(key, body)"]},
+        {"id": "bus", "name": "EventBus", "kind": "interface", "role": "AbstractProductB", "col": 1, "row": 3,
+         "members": ["+ publish(topic, msg)"]}],
+       "edges": [
+        {"from": "client", "to": "infra", "rel": "association", "label": "uses"},
+        {"from": "local", "to": "infra", "rel": "realizes"},
+        {"from": "cloud", "to": "infra", "rel": "realizes"},
+        {"from": "infra", "to": "blob", "rel": "dependency", "label": "creates"},
+        {"from": "infra", "to": "bus", "rel": "dependency", "label": "creates"}],
+       "notes": [{"attachTo": "infra", "text": "one method per product kind"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Products must be used together and come from one vendor, platform or environment.",
+        "You swap an entire stack, such as local versus cloud, with one decision.",
+        "Clients should be unable to mix incompatible products."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Only one product kind varies; a Factory Method or a `Supplier` is lighter.",
+        "New product kinds appear often, since each one edits every factory."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Product kinds that differ in capability force lowest-common-denominator interfaces.",
+        "Leaking a concrete product type to the client re-introduces the coupling.",
+        "Forgetting that every new family must implement all methods."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A factory interface whose products have no relationship to each other.",
+        "Factory-of-factories chains with one implementation each."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Dependency injection containers pick the family through configuration, replacing hand-written selection.",
+        "A record of suppliers can stand in for a factory interface of two or three products."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "factory-method", "relation": "oftenConfused", "difference": "Each abstract-factory method is usually implemented as a factory method. The difference is scope: Factory Method defers one creation, Abstract Factory guarantees a coherent family."},
+      {"ref": "builder", "relation": "alternative", "difference": "Builder constructs one complex product step by step and hands it back at the end. Abstract Factory returns several simple products immediately, each on request."},
+      {"ref": "prototype", "relation": "combines", "difference": "A concrete factory can hold prototypes and clone them instead of calling constructors, so a family is configured rather than subclassed."},
+      {"ref": "singleton", "relation": "combines", "difference": "A concrete factory is usually stateless or shared, so it is often held as one instance per application or container."},
+      {"ref": "dependency-injection", "relation": "alternative", "difference": "A container can wire a whole family from configuration. Abstract Factory is the explicit, code-level version of the same decision."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.sql.Connection", "detail": "Creates the matching `Statement`, `PreparedStatement` and `CallableStatement` for one database driver."},
+      {"where": "JDK", "name": "javax.xml.parsers.DocumentBuilderFactory", "detail": "`newInstance()` locates a provider; the factory then configures and produces parsers from that same implementation."},
+      {"where": "JDK", "name": "javax.xml.stream.XMLInputFactory", "detail": "Creates readers of several kinds (`createXMLStreamReader`, `createXMLEventReader`) from one provider."},
+      {"where": "Jakarta Messaging", "name": "jakarta.jms.Session", "detail": "Creates producers, consumers, messages and queues that all belong to the same JMS provider."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "interface Theme {",
+      "    Button button();",
+      "    Checkbox checkbox();",
+      "    Dialog dialog();",
+      "}",
+      "final class DarkTheme implements Theme {",
+      "    public Button button() { return new DarkButton(); }",
+      "    public Checkbox checkbox() { return new DarkCheckbox(); }",
+      "    public Dialog dialog() { return new DarkDialog(); }",
+      "}"],
+     "options": [
+      {"ref": "abstract-factory", "correct": true, "why": "One interface creates several related products, and each implementation returns a consistent matching set."},
+      {"ref": "factory-method", "why": "That would be one overridable creation step inside an algorithm; here three product kinds are produced as a family."},
+      {"ref": "builder", "why": "Nothing is assembled step by step into one object; each method returns a separate finished product."},
+      {"ref": "strategy", "why": "The methods create objects rather than encapsulate an algorithm the caller runs."}],
+     "compile": {"template": [
+      "interface Button {} interface Checkbox {} interface Dialog {}",
+      "class DarkButton implements Button {} class DarkCheckbox implements Checkbox {} class DarkDialog implements Dialog {}",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A reporting tool must run against either a PostgreSQL or an Oracle stack. Each stack needs its own query dialect, connection pool and migration runner, and mixing a Postgres dialect with an Oracle pool is a known source of bugs.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "abstract-factory", "correct": true, "why": "Several related products must come from the same family, and the choice of stack is made once."},
+      {"ref": "factory-method", "why": "It creates one product at a time and cannot enforce that the dialect, pool and runner match."},
+      {"ref": "builder", "why": "The problem is not assembling one complex object but keeping several separate objects compatible."},
+      {"ref": "adapter", "why": "Adapters translate an existing interface; they do not guarantee that created objects belong together."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Abstract Factory pattern.",
+     "lines": [
+      "final class Uploader {",
+      "    private final Infra infra;",
+      "",
+      "    Uploader(Infra infra) { this.infra = infra; }",
+      "",
+      "    String upload(String key, String body) {",
+      "        BlobStore store = infra.blobs();",
+      "        EventBus bus = new SnsBus();",
+      "        String where = store.put(key, body);",
+      "        return bus.publish(\"uploaded\", where);",
+      "    }",
+      "}"],
+     "flawLines": [8],
+     "explanation": "The client builds `SnsBus` itself, so with `LocalInfra` it pairs local storage with a cloud bus. Ask the factory: `infra.events()`.",
+     "compile": {"template": [
+      "interface BlobStore { String put(String k, String b); }",
+      "interface EventBus { String publish(String t, String m); }",
+      "interface Infra { BlobStore blobs(); EventBus events(); }",
+      "class SnsBus implements EventBus { public String publish(String t, String m) { return m; } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the startup code so that each line only uses what came before.",
+     "blocks": [
+      ["String env = System.getProperty(\"env\", \"dev\");"],
+      ["Infra infra = factories.get(env);"],
+      ["Uploader uploader = new Uploader(infra);"],
+      ["String result = uploader.upload(\"q3.csv\", body);"]],
+     "explanation": "Read the environment, choose the factory from it, give that factory to the client, then use the client. The client never sees the environment name.",
+     "compile": {"template": [
+      "import java.util.Map;",
+      "interface Infra {}",
+      "final class Uploader { Uploader(Infra i) {} String upload(String k, String b) { return k; } }",
+      "class Snippet { void run(Map<String, Infra> factories, String body) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Abstract Factory in your own words: what does it guarantee, and what does it make expensive?",
+     "modelAnswer": [
+      {"type": "p", "text": "An abstract factory has one creation method per product kind, and each concrete factory returns a matching family. The client holds only the factory, so it cannot mix products from different families. The price is rigidity: a new product kind means changing every factory."}],
+     "keyPoints": [
+      "One factory interface, one method per product kind",
+      "Concrete factories return a consistent family",
+      "The client depends only on abstractions and cannot mix families",
+      "Adding a product kind edits every factory",
+      "Single product variation calls for Factory Method instead"]}
+  ]
+}

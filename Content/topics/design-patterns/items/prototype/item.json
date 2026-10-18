@@ -1,0 +1,147 @@
+{
+  "id": "prototype",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Create new objects by copying a configured instance instead of building each one from scratch."},
+      {"type": "p", "text": "A **prototype** knows how to produce an independent **copy** of itself. Clients keep a registry of ready-made instances and clone the one they need, so they depend on the copy contract, not on concrete classes. The decisive question is always how deep the copy goes."},
+      {"type": "bullets", "items": [
+        "**Varies:** the configured template, chosen by key at runtime.",
+        "**Stays stable:** the code that asks for a new instance.",
+        "**Hard part:** deep versus shallow copies of mutable state."]},
+      {"type": "callout", "tone": "warning", "text": "In Java prefer a copy constructor or explicit `copy()` over `Cloneable`. The `clone()` contract is fragile and bypasses constructors."}
+    ]},
+    {"role": "implementation", "file": "Prototype.java",
+     "expectedOutput": "orc hp=30 [slash]\norc hp=30 [slash, rage]\norc hp=30 [slash]\ntrue",
+     "walkthrough": [
+      {"region": "contract", "note": "A one-method copy contract. The generic parameter makes `copy()` return the concrete type without casts."},
+      {"region": "unit", "note": "`copy()` goes through a private copy constructor that clones the mutable list. This is a deep copy: the new unit owns its own `abilities`."},
+      {"region": "registry", "note": "The registry holds configured templates under a key. Nobody mutates these instances; they exist only to be copied."},
+      {"region": "spawn", "note": "Each spawn copies the template, then customizes the copy. The second unit gets an extra ability."},
+      {"region": "check", "note": "The template and the first copy are unchanged by the second copy's `learn`, and the copies are distinct objects. Aliasing the list would have failed this."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Cloning configured scenarios in a trading-system test suite."},
+      {"type": "p", "text": "Building a realistic `Portfolio` takes dozens of positions, limits and market data fixtures. A test base holds a few canonical portfolios and each test copies one, then nudges a position or limit. The copy is deep, so parallel tests cannot corrupt the shared template, and test setup drops from twenty lines to two."},
+      {"type": "code", "language": "java", "lines": [
+        "Portfolio base = fixtures.get(\"balanced-eu\");",
+        "Portfolio p = base.copy();",
+        "p.position(\"SAP\").setQuantity(0);",
+        "assertThat(risk.check(p)).isEmpty();"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: expensive setup is paid once, and every caller starts from an isolated, known state."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "col": 0.5, "row": 0,
+         "members": ["- registry: Map<String,Unit>"]},
+        {"id": "proto", "name": "Prototype<T>", "kind": "interface", "role": "Prototype", "col": 0.5, "row": 1,
+         "members": ["+ copy(): T"]},
+        {"id": "unit", "name": "Unit", "kind": "class", "role": "ConcretePrototype", "col": 0.5, "row": 2,
+         "members": ["- name, hp", "- abilities: List", "+ copy(): Unit"]}],
+       "edges": [
+        {"from": "client", "to": "proto", "rel": "association", "label": "copies"},
+        {"from": "unit", "to": "proto", "rel": "realizes"}],
+       "notes": [{"attachTo": "unit", "text": "copy() clones mutable parts"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Construction is costly or needs many steps, and variants differ slightly.",
+        "The set of templates is chosen or loaded at runtime.",
+        "You want isolated copies of a configured object, such as test fixtures."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Objects are cheap and immutable; just share or construct them.",
+        "The object graph has cycles or external resources that cannot be copied."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "A shallow copy aliasing a mutable list or map leaks changes between copies.",
+        "`Cloneable` skips constructors, so final fields and invariants can break.",
+        "Subclasses forgetting to override `copy()` return the parent type."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "Cloning an object only to immediately overwrite every field.",
+        "Deep-copying large graphs on every request instead of sharing immutables."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Records plus a `withX` method give copy-with-change for immutable values, with no cloning at all.",
+        "Serialization-based deep copy is slow and brittle; write explicit copy constructors."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "factory-method", "relation": "alternative", "difference": "Factory Method needs a creator hierarchy to decide which class to build. Prototype needs none: the configured instance is the template."},
+      {"ref": "abstract-factory", "relation": "combines", "difference": "A concrete abstract factory can store prototypes and copy them to produce its family, avoiding a subclass per variant."},
+      {"ref": "builder", "relation": "alternative", "difference": "Builder starts from defaults and assembles values. Prototype starts from an already assembled instance and adjusts it; `toBuilder()` merges both."},
+      {"ref": "flyweight", "relation": "oftenConfused", "difference": "Prototype makes independent copies. Flyweight shares one immutable instance among many users instead of copying it."},
+      {"ref": "memento", "relation": "lookAlike", "difference": "Both snapshot state. A memento exists to restore its originator later; a prototype exists to become a new, separate object."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "Object.clone / Cloneable", "detail": "The built-in copy mechanism: a field-by-field shallow copy, widely regarded as awkward to use correctly."},
+      {"where": "JDK", "name": "java.util.ArrayList#clone", "detail": "Returns a shallow copy; the elements themselves are not copied."},
+      {"where": "Spring", "name": "@Scope(\"prototype\")", "detail": "The container creates a fresh bean instance for each injection or lookup. The name echoes the pattern, though it constructs rather than copies."},
+      {"where": "Protocol Buffers", "name": "Message#toBuilder", "detail": "Starts a new message from an existing one, so you change a few fields and rebuild."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Template {",
+      "    private final String title;",
+      "    private final List<String> sections;",
+      "",
+      "    Template(Template other) {",
+      "        this.title = other.title;",
+      "        this.sections = new ArrayList<>(other.sections);",
+      "    }",
+      "",
+      "    Template copy() { return new Template(this); }",
+      "}"],
+     "options": [
+      {"ref": "prototype", "correct": true, "why": "The class creates independent instances of itself by copying its own state, including the mutable list."},
+      {"ref": "builder", "why": "No step-by-step assembly or validated `build()` appears; the new object starts from an existing one."},
+      {"ref": "memento", "why": "A memento stores state to restore the original later; this copy is a new, usable object."},
+      {"ref": "flyweight", "why": "Flyweight shares one instance. Here every call deliberately produces a separate one."}],
+     "compile": {"template": [
+      "import java.util.*;",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A game spawns hundreds of enemies per level. Each enemy type is loaded from data and needs a pre-configured behavior tree and an inventory that every instance must modify independently.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "prototype", "correct": true, "why": "Configured templates are loaded at runtime and each spawn needs an independent deep copy."},
+      {"ref": "flyweight", "why": "Sharing works for immutable state only; each enemy has an inventory it must change on its own."},
+      {"ref": "abstract-factory", "why": "A class per enemy type would hard-code what data already describes, and no family consistency is required."},
+      {"ref": "singleton", "why": "Exactly one instance per type is the opposite of what is needed: hundreds of separate ones."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Prototype pattern.",
+     "lines": [
+      "final class Unit {",
+      "    private final String name;",
+      "    private final List<String> abilities;",
+      "",
+      "    Unit(String name, List<String> abilities) {",
+      "        this.name = name;",
+      "        this.abilities = abilities;",
+      "    }",
+      "",
+      "    Unit copy() { return new Unit(name, abilities); }",
+      "}"],
+     "flawLines": [10],
+     "explanation": "The copy shares the same `abilities` list, so changing one unit changes the template and every other copy. Pass `new ArrayList<>(abilities)`.",
+     "compile": {"template": ["import java.util.*;", "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the steps to spawn a customized unit from a registry.",
+     "blocks": [
+      ["Unit template = prototypes.get(\"orc\");"],
+      ["Unit unit = template.copy();"],
+      ["unit.learn(\"rage\");"],
+      ["level.add(unit);"]],
+     "explanation": "Look up the template, copy it, customize only the copy so the template stays pristine, then use the customized object.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "class Unit { Unit copy() { return new Unit(); } Unit learn(String s) { return this; } }",
+      "class Snippet { void run(Map<String, Unit> prototypes, List<Unit> level) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Prototype in your own words: why copy, and what is the main risk?",
+     "modelAnswer": [
+      {"type": "p", "text": "Prototype creates new objects by copying a configured instance, which avoids repeated expensive setup and removes the need for a class per variant. The main risk is the depth of the copy: a shallow copy shares mutable state, so changes leak between copies."}],
+     "keyPoints": [
+      "Clients copy a configured template instead of constructing",
+      "Useful for costly setup and runtime-defined variants",
+      "Shallow copies alias mutable state and leak changes",
+      "Prefer copy constructors over `Cloneable`",
+      "Immutable data needs `withX`, not cloning"]}
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "id": "visitor",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Add new operations to a class hierarchy without changing its classes, by moving each operation into a separate visitor."},
+      {"type": "p", "text": "Each element has one `accept(visitor)` method that calls back the visitor method for its own type. That is **double dispatch**: the operation depends on both the visitor and the element's runtime class, which Java's single dispatch cannot do on its own."},
+      {"type": "bullets", "items": [
+        "**Varies:** the operation (evaluate, print, type-check).",
+        "**Stays stable:** the set of element types.",
+        "**Cost:** adding an element type forces every visitor to change."]},
+      {"type": "callout", "tone": "warning", "text": "Visitor makes new operations cheap and new element types expensive. Use it only when the hierarchy is stable and the operations keep growing."}
+    ]},
+    {"role": "implementation", "file": "Visitor.java",
+     "expectedOutput": "(2 + 3) * 4 = 20",
+     "walkthrough": [
+      {"region": "visitor", "note": "One `visit` method per element type, generic in the result `R`. This interface is the complete list of element types the operations must handle."},
+      {"region": "elements", "note": "Each element's `accept` calls the method for its own type, passing `this`. The static type of `this` is exact there, so the right overload runs."},
+      {"region": "eval", "note": "An operation is one class. Recursion goes through `accept(this)`, never `instanceof`, so every node dispatches on its real type."},
+      {"region": "show", "note": "A second operation is added without touching `Expr`, `Num`, `Add` or `Mul`. Each visitor chooses its own result type."},
+      {"region": "client", "note": "The client builds one tree and runs two unrelated operations over it. The sealed `Expr` lets the compiler know the closed set."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Static analysis passes over a compiler's syntax tree."},
+      {"type": "p", "text": "A compiler has maybe 40 stable node types, but its passes keep growing: name resolution, type checking, constant folding, lint rules, code generation, each maintained by a different team. Putting every pass inside the node classes makes the nodes unreadable. One visitor per pass keeps each algorithm in one file, and a new lint rule is a new class with no merge conflicts in the tree definition."},
+      {"type": "code", "language": "java", "lines": [
+        "interface NodeVisitor<R> {",
+        "    R visitCall(CallNode n);",
+        "    R visitLiteral(LiteralNode n);",
+        "    R visitAssign(AssignNode n);",
+        "}",
+        "unit.accept(new UnusedVariableLint(reporter));"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: each pass is a self-contained class, tested alone, and the node classes stay small."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "visitor", "name": "Visitor<R>", "kind": "interface", "role": "Visitor", "col": 0, "row": 0,
+         "members": ["+ visitNum(Num): R", "+ visitAdd(Add): R"]},
+        {"id": "eval", "name": "Eval", "kind": "class", "role": "ConcreteVisitor", "col": 0, "row": 1,
+         "members": ["+ visitNum(Num)", "+ visitAdd(Add)"]},
+        {"id": "expr", "name": "Expr", "kind": "interface", "role": "Element", "col": 1, "row": 0,
+         "members": ["+ accept(Visitor<R>): R"]},
+        {"id": "num", "name": "Num", "kind": "record", "role": "ConcreteElement", "col": 1, "row": 1,
+         "members": ["+ accept(v)"]},
+        {"id": "add", "name": "Add", "kind": "record", "role": "ConcreteElement", "col": 1, "row": 2,
+         "members": ["+ accept(v)"]}],
+       "edges": [
+        {"from": "eval", "to": "visitor", "rel": "realizes"},
+        {"from": "num", "to": "expr", "rel": "realizes"},
+        {"from": "add", "to": "expr", "rel": "realizes"},
+        {"from": "expr", "to": "visitor", "rel": "dependency", "label": "accept"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "add", "name": "Add", "role": "Element"},
+        {"id": "eval", "name": "Eval", "role": "Visitor"}, {"id": "num", "name": "Num", "role": "Element"}],
+       "messages": [
+        {"from": "client", "to": "add", "label": "accept(eval)", "style": "call"},
+        {"from": "add", "to": "eval", "label": "visitAdd(this)", "style": "call"},
+        {"from": "eval", "to": "num", "label": "left.accept(this)", "style": "call"},
+        {"from": "num", "to": "eval", "label": "visitNum(this)", "style": "call"},
+        {"from": "eval", "to": "client", "label": "result", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "The element types are stable but operations keep being added.",
+        "An operation needs per-type logic across many unrelated classes.",
+        "You want an operation's code in one place instead of spread over the hierarchy."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "New element types appear often: every visitor must change.",
+        "The hierarchy is small; a sealed type with a `switch` is lighter."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Visitors need access to element internals, which pressures encapsulation.",
+        "Recursion with `instanceof` instead of `accept` silently skips dispatch.",
+        "Traversal logic duplicated in every visitor; centralize it or use a base visitor."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A visitor for a hierarchy with two subtypes.",
+        "Visitors that only ever return `void` and mutate shared state."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Sealed interfaces with `switch` pattern matching give the same open-operations axis with no `accept` boilerplate and exhaustiveness checks.",
+        "Classic Visitor still wins across module boundaries, where the library owns the hierarchy."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "composite", "relation": "combines", "difference": "Composite builds the tree; Visitor adds operations over it. The two are used together so often that a visitor usually owns the traversal."},
+      {"ref": "iterator", "relation": "alternative", "difference": "An iterator hands you elements one by one of a uniform type. A visitor handles each concrete type differently and can return results while traversing."},
+      {"ref": "interpreter", "relation": "alternative", "difference": "Interpreter puts the operation inside each node, so adding an operation edits every class. Visitor externalizes it, trading that for the cost of adding node types."},
+      {"ref": "ocp", "relation": "combines", "difference": "Visitor is open for new operations and closed for new element types. It applies the open-closed principle along one axis only."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.nio.file.FileVisitor", "detail": "Passed to `Files.walkFileTree`; `SimpleFileVisitor` supplies defaults for `visitFile`, `preVisitDirectory` and the rest."},
+      {"where": "JDK", "name": "javax.lang.model.element.ElementVisitor", "detail": "Annotation processors visit the program model with it; `SimpleElementVisitor14` is a ready base class."},
+      {"where": "ASM", "name": "ClassVisitor", "detail": "Reads and rewrites bytecode through `visitMethod`, `visitField` and related callbacks."},
+      {"where": "ANTLR", "name": "ParseTreeVisitor", "detail": "Generated visitors give one `visitRule` method per grammar rule, to walk the parse tree."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "interface Shape { <R> R apply(Op<R> op); }",
+      "interface Op<R> { R onCircle(Circle c); R onRect(Rect r); }",
+      "",
+      "record Circle(double radius) implements Shape {",
+      "    public <R> R apply(Op<R> op) { return op.onCircle(this); }",
+      "}",
+      "record Rect(double w, double h) implements Shape {",
+      "    public <R> R apply(Op<R> op) { return op.onRect(this); }",
+      "}"],
+     "options": [
+      {"ref": "visitor", "correct": true, "why": "Each shape calls back the method for its own type, so an operation is chosen by both the op and the shape's class."},
+      {"ref": "strategy", "why": "A strategy is a single interchangeable algorithm; here the interface has one method per element type."},
+      {"ref": "state", "why": "Nothing changes which object handles later calls; the shapes are immutable data."},
+      {"ref": "composite", "why": "There are no children or recursive structure, only a double-dispatch hook."}],
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A document model has 12 stable node types. Over the next year, different teams will add spell-check, HTML export, PDF export, accessibility audit and word count. Nobody expects new node types.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "visitor", "correct": true, "why": "A stable hierarchy with a growing set of operations: each new operation is one class and no node changes."},
+      {"ref": "interpreter", "why": "Each operation would be a method added to all 12 node classes, owned by the model team."},
+      {"ref": "template-method", "why": "It varies steps of one algorithm; these are unrelated operations over the same structure."},
+      {"ref": "strategy", "why": "A strategy swaps one algorithm and cannot dispatch on the type of each node it meets."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Visitor pattern.",
+     "lines": [
+      "final class Eval implements Visitor<Integer> {",
+      "    public Integer visitNum(Num n) { return n.value(); }",
+      "",
+      "    public Integer visitAdd(Add a) {",
+      "        int l = a.left() instanceof Num n ? n.value() : 0;",
+      "        int r = a.right().accept(this);",
+      "        return l + r;",
+      "    }",
+      "",
+      "    public Integer visitMul(Mul m) {",
+      "        return m.left().accept(this) * m.right().accept(this);",
+      "    }",
+      "}"],
+     "flawLines": [5],
+     "explanation": "The left child is inspected with `instanceof`, so a nested `Add` or `Mul` evaluates to 0. Recurse through `a.left().accept(this)` so every node dispatches on its real type.",
+     "compile": {"template": [
+      "interface Visitor<R> { R visitNum(Num n); R visitAdd(Add a); R visitMul(Mul m); }",
+      "interface Expr { <R> R accept(Visitor<R> v); }",
+      "record Num(int value) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitNum(this); } }",
+      "record Add(Expr left, Expr right) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitAdd(this); } }",
+      "record Mul(Expr left, Expr right) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitMul(this); } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the lines so that each uses only what exists.",
+     "blocks": [
+      ["Expr two = new Num(2);"],
+      ["Expr sum = new Add(two, new Num(3));"],
+      ["Expr product = new Mul(sum, new Num(4));"],
+      ["int value = product.accept(new Eval());"]],
+     "explanation": "Children must exist before the nodes that hold them, and the operation runs only on the finished root.",
+     "compile": {"template": [
+      "interface Visitor<R> { R visitNum(Num n); R visitAdd(Add a); R visitMul(Mul m); }",
+      "interface Expr { <R> R accept(Visitor<R> v); }",
+      "record Num(int value) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitNum(this); } }",
+      "record Add(Expr left, Expr right) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitAdd(this); } }",
+      "record Mul(Expr left, Expr right) implements Expr { public <R> R accept(Visitor<R> v) { return v.visitMul(this); } }",
+      "final class Eval implements Visitor<Integer> {",
+      "  public Integer visitNum(Num n) { return n.value(); }",
+      "  public Integer visitAdd(Add a) { return a.left().accept(this) + a.right().accept(this); }",
+      "  public Integer visitMul(Mul m) { return m.left().accept(this) * m.right().accept(this); } }",
+      "class Snippet { void run() {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Visitor in your own words: what is double dispatch, and what does the pattern cost?",
+     "modelAnswer": [
+      {"type": "p", "text": "Visitor moves operations out of a hierarchy into visitor classes. Each element's accept calls the visit method for its own type, so the code that runs depends on both the visitor and the element class: double dispatch. New operations are cheap; new element types force every visitor to change."}],
+     "keyPoints": [
+      "accept calls back visitX(this) for the element's own type",
+      "Double dispatch: runtime types of both visitor and element decide",
+      "New operations are one new class; no element changes",
+      "New element types break every existing visitor",
+      "Sealed types and switch patterns are the modern alternative"]}
+  ]
+}

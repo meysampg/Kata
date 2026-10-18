@@ -1,0 +1,175 @@
+{
+  "id": "factory-method",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Move object creation into one overridable or injectable method, so the code that uses the product never names its concrete class."},
+      {"type": "p", "text": "A **creator** declares a **factory method** that returns a product interface and calls it inside its own algorithm. Subclasses (or an injected `Supplier`) decide which concrete product comes back. The creator's logic stays identical for every product."},
+      {"type": "bullets", "items": [
+        "**Varies:** which concrete class is instantiated.",
+        "**Stays stable:** the algorithm that consumes the product.",
+        "**Chosen by:** a subclass, a supplier, or a parameter."]},
+      {"type": "callout", "tone": "info", "text": "Not the same as a static factory such as `List.of`. The GoF pattern is about a polymorphic creation step inside a larger operation."}
+    ]},
+    {"role": "implementation", "file": "FactoryMethod.java",
+     "expectedOutput": "eu,5\nus,7\n{\"eu\":5,\"us\":7}\n{\"eu\":5,\"us\":7}",
+     "walkthrough": [
+      {"region": "product", "note": "The product interface and two concrete products. The creator will only ever see `Sink`, never `CsvSink` or `JsonSink`."},
+      {"region": "creator", "note": "`createSink()` is the factory method. `render` is the stable algorithm that calls it, so it is `final`. `using` shows the same seam filled by a `Supplier`."},
+      {"region": "subclasses", "note": "Each concrete creator overrides one method and returns its product. Adding a format means one new pair of classes."},
+      {"region": "client", "note": "The client holds `Report` references. The same `render` call yields CSV or JSON depending only on the creator it was handed."},
+      {"region": "injected", "note": "When subclassing is heavy, a constructor reference is a complete factory method. This is the form you meet most often in modern code."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A file-ingestion service that supports many vendor formats."},
+      {"type": "p", "text": "Every vendor sends data in its own format, but the job is always the same: open the file, read records, validate, load. An abstract `ImportJob` owns that sequence and declares `createParser(InputStream)`. `AcmeImport` and `GlobexImport` return their own parsers. Tests subclass the job and return a parser that yields canned records, so no real file is needed."},
+      {"type": "code", "language": "java", "lines": [
+        "abstract class ImportJob {",
+        "    protected abstract RecordParser createParser(InputStream in);",
+        "    final void run(Path file) throws IOException {",
+        "        try (var in = Files.newInputStream(file)) {",
+        "            createParser(in).records().forEach(this::load);",
+        "        }",
+        "    }",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: onboarding a vendor never touches the retry, validation or loading code, and the template is tested once."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "report", "name": "Report", "kind": "abstract", "role": "Creator", "col": 0.5, "row": 0,
+         "members": ["# createSink(): Sink", "+ render(totals): String"]},
+        {"id": "csvr", "name": "CsvReport", "kind": "class", "role": "ConcreteCreator", "col": 0, "row": 1,
+         "members": ["# createSink(): Sink"]},
+        {"id": "jsonr", "name": "JsonReport", "kind": "class", "role": "ConcreteCreator", "col": 1, "row": 1,
+         "members": ["# createSink(): Sink"]},
+        {"id": "sink", "name": "Sink", "kind": "interface", "role": "Product", "col": 0.5, "row": 2,
+         "members": ["+ write(name, value)", "+ close(): String"]},
+        {"id": "csv", "name": "CsvSink", "kind": "class", "role": "ConcreteProduct", "col": 0, "row": 3},
+        {"id": "json", "name": "JsonSink", "kind": "class", "role": "ConcreteProduct", "col": 1, "row": 3}],
+       "edges": [
+        {"from": "csvr", "to": "report", "rel": "extends"},
+        {"from": "jsonr", "to": "report", "rel": "extends"},
+        {"from": "report", "to": "sink", "rel": "dependency", "label": "uses"},
+        {"from": "csv", "to": "sink", "rel": "realizes"},
+        {"from": "json", "to": "sink", "rel": "realizes"},
+        {"from": "csvr", "to": "csv", "rel": "dependency", "label": "creates"},
+        {"from": "jsonr", "to": "json", "rel": "dependency", "label": "creates"}],
+       "notes": [{"attachTo": "report", "text": "render() calls createSink()"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "rep", "name": "CsvReport", "role": "ConcreteCreator"},
+        {"id": "sink", "name": "CsvSink", "role": "Product"}],
+       "messages": [
+        {"from": "client", "to": "rep", "label": "render(totals)", "style": "call"},
+        {"from": "rep", "to": "sink", "label": "createSink()", "style": "create"},
+        {"from": "rep", "to": "sink", "label": "write(name, value)", "style": "call"},
+        {"from": "rep", "to": "sink", "label": "close()", "style": "call"},
+        {"from": "sink", "to": "rep", "label": "text", "style": "return"},
+        {"from": "rep", "to": "client", "label": "text", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A framework algorithm must create objects whose type only the user code knows.",
+        "Tests need to substitute a fake product without touching the algorithm.",
+        "Creation needs a name or hook point, such as pooling or logging."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "A plain constructor call is enough and the type will not vary.",
+        "Subclassing just to change one `new` forces a hierarchy on you."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Calling an overridable factory method from a constructor sees a half-initialized subclass.",
+        "A parameterized factory with a `switch` on a string slowly re-creates the coupling.",
+        "Returning `null` instead of failing for unknown input."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A creator hierarchy that mirrors the product hierarchy one to one with no shared algorithm.",
+        "A `FooFactory` with one method and one implementation."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "A `Supplier<T>` or constructor reference replaces most subclass-based creators.",
+        "Sealed interfaces plus a `switch` expression are enough for a closed set of products."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "abstract-factory", "relation": "specializes", "difference": "Abstract Factory is a group of factory methods that must produce a consistent family. Factory Method creates one product and is usually a single hook in a bigger algorithm."},
+      {"ref": "template-method", "relation": "combines", "difference": "A factory method is typically one step inside a Template Method. The template fixes the sequence; the factory method supplies the object."},
+      {"ref": "builder", "relation": "alternative", "difference": "Builder assembles one complex object in steps and validates it at the end. Factory Method only decides which class to instantiate."},
+      {"ref": "prototype", "relation": "alternative", "difference": "Prototype creates by copying a configured instance and needs no creator subclasses. Factory Method creates by calling a constructor chosen polymorphically."},
+      {"ref": "strategy", "relation": "oftenConfused", "difference": "Strategy picks behavior to run. Factory Method picks an object to build, and the object is then used however the creator likes."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.Collection#iterator", "detail": "Each collection decides which `Iterator` implementation to return; callers see only the interface."},
+      {"where": "JDK", "name": "java.util.concurrent.ThreadFactory", "detail": "`ThreadPoolExecutor` calls `newThread(Runnable)` to create workers, so you control naming, daemon status and handlers."},
+      {"where": "JDK", "name": "java.text.NumberFormat.getInstance", "detail": "Returns a locale-appropriate concrete `NumberFormat` without exposing its class."},
+      {"where": "Spring", "name": "FactoryBean<T>", "detail": "A bean whose `getObject()` produces the actual bean the container exposes under its name."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "abstract class Exporter {",
+      "    protected abstract Writer open(Path target) throws IOException;",
+      "",
+      "    final void export(List<String> lines, Path target) throws IOException {",
+      "        try (Writer w = open(target)) {",
+      "            for (String line : lines) w.write(line + \"\\n\");",
+      "        }",
+      "    }",
+      "}",
+      "// PlainExporter returns a FileWriter; GzipExporter wraps it in GZIPOutputStream"],
+     "options": [
+      {"ref": "factory-method", "correct": true, "why": "A fixed algorithm calls an abstract creation method that subclasses implement to supply the concrete `Writer`."},
+      {"ref": "template-method", "why": "It uses the same skeleton, but the varying step here is object creation, which is exactly what Factory Method names."},
+      {"ref": "abstract-factory", "why": "There is one product and one creation method; no family of related products is produced."},
+      {"ref": "decorator", "why": "Gzip wraps a stream, but the snippet's structure is about subclasses choosing what to create, not wrapping."}],
+     "compile": {"template": [
+      "import java.io.*;", "import java.nio.file.*;", "import java.util.List;", "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A message-processing framework runs a fixed loop: poll, decode, handle, acknowledge. Each application needs its own decoder class, which only the application knows how to build, and tests want a fake decoder.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "factory-method", "correct": true, "why": "The loop is fixed and one creation step is deferred to the application, which can be overridden or injected in tests."},
+      {"ref": "abstract-factory", "why": "Only one kind of object is needed. A factory of families adds interfaces with nothing to keep consistent."},
+      {"ref": "prototype", "why": "The decoders are not copies of configured instances; they are constructed fresh by application code."},
+      {"ref": "singleton", "why": "Nothing says there must be exactly one decoder, and a global instance would hurt the tests that need a fake."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that defeats the Factory Method pattern.",
+     "lines": [
+      "abstract class Importer {",
+      "    protected abstract Parser createParser();",
+      "",
+      "    final int run(String data) {",
+      "        Parser parser = new CsvParser();",
+      "        return parser.parse(data).size();",
+      "    }",
+      "}",
+      "final class JsonImporter extends Importer {",
+      "    protected Parser createParser() { return new JsonParser(); }",
+      "}"],
+     "flawLines": [5],
+     "explanation": "`run` instantiates `CsvParser` directly and ignores the factory method, so `JsonImporter` still parses CSV. Call `createParser()` instead.",
+     "compile": {"template": [
+      "import java.util.List;",
+      "interface Parser { List<String> parse(String s); }",
+      "class CsvParser implements Parser { public List<String> parse(String s) { return List.of(s); } }",
+      "class JsonParser implements Parser { public List<String> parse(String s) { return List.of(s); } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the body of a creator's template operation so that each line only uses what came before.",
+     "blocks": [
+      ["Sink sink = createSink();"],
+      ["totals.forEach(sink::write);"],
+      ["String out = sink.close();"],
+      ["return out;"]],
+     "explanation": "Create the product through the factory method, feed it, finish it, return the result. Each step depends on the value produced by the one before.",
+     "compile": {"template": [
+      "import java.util.Map;",
+      "interface Sink { void write(String n, Integer v); String close(); }",
+      "abstract class Creator {",
+      "  abstract Sink createSink();",
+      "  String run(Map<String, Integer> totals) {",
+      "{{code}}", "  }", "}"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Factory Method in your own words: what is deferred, who decides, and how it differs from Abstract Factory.",
+     "modelAnswer": [
+      {"type": "p", "text": "A class runs a fixed algorithm but defers one creation step to an overridable or injected method. Subclasses or a supplier decide the concrete product, and the algorithm only sees the interface. Abstract Factory differs: it groups several creation methods to keep a whole family of products consistent."}],
+     "keyPoints": [
+      "One creation step is deferred inside a larger algorithm",
+      "The creator depends only on the product interface",
+      "Subclass override or an injected `Supplier` picks the class",
+      "Abstract Factory produces consistent families, not one product",
+      "Never call the overridable method from a constructor"]}
+  ]
+}

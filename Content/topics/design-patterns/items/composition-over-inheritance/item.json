@@ -1,0 +1,332 @@
+{
+  "id": "composition-over-inheritance",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Reuse behavior by holding collaborators and delegating to them, rather than extending a class and inheriting its internals."
+        },
+        {
+          "type": "p",
+          "text": "Inheritance couples a subclass to the parent's **implementation**, including the calls the parent makes to its own overridable methods. **Composition** couples you only to a public contract, can change at runtime and lets one object use several behaviors. Inherit only for a true is-a that the parent was designed to support."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Fragile base class:** a parent change breaks children.",
+            "**Forwarding:** the wrapper uses only the declared contract.",
+            "**One parent only:** a class extends once but can hold many collaborators."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Effective Java's advice: design and document for inheritance, or prohibit it. Most classes should be `final` or sealed."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Composition.java",
+      "expectedOutput": "inheritance: 6\ncomposition: 3",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "`CountingSetBefore` extends `HashSet` and counts in `add` and `addAll`. But `HashSet.addAll` already calls `add`, so each element is counted twice."
+        },
+        {
+          "region": "count",
+          "note": "The wrapper holds the set instead of extending it. `addAll` loops over its own `add`, so counting depends only on code we control."
+        },
+        {
+          "region": "forward",
+          "note": "Everything else forwards to `inner`. The class promises the `Set` contract and nothing about how `HashSet` is implemented."
+        },
+        {
+          "region": "client",
+          "note": "Same calls, different answers: inheritance reports 6 for three elements, composition 3. The wrapper also accepts any `Set`, such as a `TreeSet`."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Enemy types in a game."
+        },
+        {
+          "type": "p",
+          "text": "An `Enemy` hierarchy grew `FlyingEnemy`, `FireEnemy` and `FlyingFireEnemy`, and designers then asked for ice-breathing flyers that can be frozen. Behaviors were extracted into `Movement` and `Attack` components held by a single `Enemy`. A new enemy is configuration, not a class, and a frozen enemy swaps its movement at runtime."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "record Enemy(String name, Movement move, Attack attack) {}",
+            "",
+            "var dragon = new Enemy(\"dragon\", new Fly(8), new Breath(FIRE));",
+            "var frozen = new Enemy(dragon.name(), new Stuck(), dragon.attack());"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: N movements and M attacks cost N + M classes, not N times M."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Behavior varies along several independent axes.",
+            "Behavior must change at runtime.",
+            "The parent is not designed for extension or lives in another library."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "There is a genuine, documented is-a in a hierarchy you own, such as an abstract skeleton.",
+            "The interface is wide and hand-written forwarding adds little."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "The self-use problem: a wrapped object that passes `this` bypasses the wrapper.",
+            "Forwarders go stale when the interface gains new `default` methods.",
+            "Sharing a mutable collaborator between several wrappers."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "A wrapper that forwards everything and adds nothing.",
+            "Long delegate chains that hide who does the work."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records, sealed interfaces and lambdas make small collaborators cheap.",
+            "Java has no built-in delegation; IDEs generate the forwarding methods."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "decorator",
+          "relation": "combines",
+          "difference": "Decorator is composition with the same interface: it wraps an object to add behavior while remaining substitutable."
+        },
+        {
+          "ref": "strategy",
+          "relation": "combines",
+          "difference": "A strategy is a swappable collaborator held by composition, the standard replacement for subclass-per-variant."
+        },
+        {
+          "ref": "template-method",
+          "relation": "alternative",
+          "difference": "Template Method reuses an algorithm skeleton through inheritance, fixed at compile time; composition varies it at runtime."
+        },
+        {
+          "ref": "bridge",
+          "relation": "lookAlike",
+          "difference": "Bridge uses composition to split abstraction from implementation so both hierarchies vary independently."
+        },
+        {
+          "ref": "lsp",
+          "relation": "combines",
+          "difference": "Avoiding implementation inheritance avoids most substitutability traps that LSP describes."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "Thread with Runnable",
+          "detail": "Pass a `Runnable` to `Thread` instead of subclassing it; the task is composed in."
+        },
+        {
+          "where": "JDK",
+          "name": "java.io BufferedInputStream",
+          "detail": "Wraps any `InputStream` and adds buffering; it holds the stream rather than extending a specific one."
+        },
+        {
+          "where": "JDK",
+          "name": "Collections.synchronizedList",
+          "detail": "Returns a wrapper that forwards to the given list under a lock, adding behavior by composition."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.Stack",
+          "detail": "Extends `Vector`, exposing indexed access that breaks stack discipline: a widely cited inheritance mistake."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which guideline does this class most clearly ignore?",
+      "lines": [
+        "class AuditedList<E> extends ArrayList<E> {",
+        "    @Override",
+        "    public boolean add(E e) {",
+        "        log(\"add \" + e);",
+        "        return super.add(e);",
+        "    }",
+        "    private void log(String s) { System.out.println(s); }",
+        "}",
+        "// addAll, set, addFirst... all remain unaudited"
+      ],
+      "options": [
+        {
+          "ref": "composition-over-inheritance",
+          "correct": true,
+          "why": "It extends a concrete collection to bolt on behavior, inheriting a large surface it cannot fully control."
+        },
+        {
+          "ref": "lsp",
+          "why": "`AuditedList` still behaves as a list; the issue is brittle reuse, not substitutability."
+        },
+        {
+          "ref": "isp",
+          "why": "`ArrayList` is not a fat interface that this class is forced to implement."
+        },
+        {
+          "ref": "srp",
+          "why": "The class has one purpose; its flaw is how it reuses `ArrayList`."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "@SuppressWarnings(\"serial\")",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "You need an HTTP client with retries and metrics today, and caching and tracing next quarter, in varying combinations per service. A colleague proposes `RetryingMetricsHttpClient extends BaseHttpClient`.",
+      "prompt": "Which approach fits best?",
+      "options": [
+        {
+          "ref": "composition-over-inheritance",
+          "correct": true,
+          "why": "Wrap one `HttpClient` in small decorators (retry, metrics, cache) and combine them per service; no combinatorial subclasses."
+        },
+        {
+          "ref": "lsp",
+          "why": "Subclasses can stay substitutable, but the number of combinations still explodes."
+        },
+        {
+          "ref": "srp",
+          "why": "Separating concerns helps, but SRP alone does not say how to combine them."
+        },
+        {
+          "ref": "dip",
+          "why": "Depending on an interface is good, but it does not solve the combination problem."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that couples the class to an implementation.",
+      "lines": [
+        "final class UserCache extends HashMap<String, User> {",
+        "    private final int capacity;",
+        "",
+        "    UserCache(int capacity) { this.capacity = capacity; }",
+        "",
+        "    User find(String id) { return get(id); }",
+        "",
+        "    void remember(User u) {",
+        "        if (size() < capacity) put(u.id(), u);",
+        "    }",
+        "",
+        "    void evictInactive() { values().removeIf(u -> !u.active()); }",
+        "}"
+      ],
+      "flawLines": [
+        1
+      ],
+      "explanation": "A cache has a map; it is not one. Extending exposes `put`, `putAll` and `clear`, so callers bypass the capacity rule. Hold a `Map` in a private field and expose only `find`, `remember` and `evict`.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "record User(String id, boolean active) {}",
+          "@SuppressWarnings(\"serial\")",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the use of the counting set so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var inner = new HashSet<String>();"
+        ],
+        [
+          "var set = new CountingSet<>(inner);"
+        ],
+        [
+          "set.addAll(List.of(\"a\", \"b\", \"c\"));"
+        ],
+        [
+          "System.out.println(set.added());"
+        ]
+      ],
+      "explanation": "Build the delegate, wrap it, perform the operation, then read the counter the wrapper maintained.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "class CountingSet<E> { CountingSet(Set<E> s) {} void addAll(Collection<E> c) {} int added() { return 0; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain 'composition over inheritance' in your own words. Why did the `HashSet.addAll` double count happen?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Inheritance ties a subclass to the parent's implementation, including self-calls between its methods. HashSet.addAll calls add, so a subclass counting in both counts each element twice. Holding a Set and forwarding depends only on its contract, avoids that coupling, and lets behavior be combined or swapped at runtime."
+        }
+      ],
+      "keyPoints": [
+        "Inheritance couples to implementation, composition to contract",
+        "Self-use of overridable methods causes double counting",
+        "Wrapper forwards and controls its own paths",
+        "Composition allows runtime swapping and multiple behaviors",
+        "Inherit only for designed-for-extension is-a"
+      ]
+    }
+  ]
+}

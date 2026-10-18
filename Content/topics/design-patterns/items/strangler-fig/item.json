@@ -1,0 +1,164 @@
+{
+  "id": "strangler-fig",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Replace a legacy system incrementally by routing one slice of traffic at a time to new code behind a facade."},
+      {"type": "p", "text": "Put a routing **facade** in front of the legacy system. Build one capability in the new system, switch its route, watch it, and repeat. The legacy system shrinks until nothing routes to it and it can be switched off. Like the fig that grows around a host tree, the new system never needs a big-bang cutover."},
+      {"type": "bullets", "items": [
+        "**Slice:** a path, a feature or a customer segment.",
+        "**Switch:** by route rule, percentage or flag, reversible instantly.",
+        "**Finish:** delete the legacy code and the routing rule."]},
+      {"type": "callout", "tone": "warning", "text": "The migration only pays off if it ends. An unretired legacy system plus a new one doubles the maintenance surface."}
+    ]},
+    {"role": "implementation", "file": "StranglerFig.java",
+     "expectedOutput": "alice: modern /invoices/1\nbob: modern /invoices/1\ncarol: modern /invoices/1\ndave: legacy /invoices/1\nmodern /customers/9\nlegacy /reports/q3",
+     "walkthrough": [
+      {"region": "facade", "note": "The facade is itself a `Backend`, so clients are unaffected. Each migrated prefix has a rollout percentage; anything unmatched falls through to legacy."},
+      {"region": "backends", "note": "Both systems sit behind one interface. Here they are lambdas; in reality they are two deployments reached over the network."},
+      {"region": "rules", "note": "The routing table is the migration plan: customers fully moved, invoices at 50 percent. Raising a number moves more traffic, lowering it is an instant rollback."},
+      {"region": "traffic", "note": "The bucket is a stable hash of the user id, so each user always lands on the same side, avoiding flip-flopping between systems."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Retiring a ten-year-old monolithic order system."},
+      {"type": "p", "text": "A gateway rule table sits in front of the monolith. The team extracts customer profiles first and routes `/customers/**` to the new service. Invoices move next: 5 percent of users, then 25, 50 and 100 while error rate and p99 latency are compared against the monolith. A shadow mode replays requests to both and diffs the responses. When a path hits 100 percent for a release cycle, its monolith code is deleted."},
+      {"type": "code", "language": "java", "lines": [
+        "var facade = new StranglerFacade(monolith, orders)",
+        "    .migrate(\"/customers\", 100)   // done",
+        "    .migrate(\"/invoices\", 25)     // canary",
+        "    ;                            // /reports stays legacy"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: each step is small, observable and reversible, so the migration ships continuously instead of as one risky launch."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "backend", "name": "Backend", "kind": "interface", "role": "Facade contract", "col": 0.5, "row": 0,
+         "members": ["+ handle(user, path)"]},
+        {"id": "facade", "name": "StranglerFacade", "kind": "class", "role": "Facade", "col": 0.5, "row": 1,
+         "members": ["- migrated: Map", "+ handle(user, path)"]},
+        {"id": "legacy", "name": "Legacy", "kind": "class", "role": "LegacySystem", "col": 0, "row": 2,
+         "members": ["+ handle(user, path)"]},
+        {"id": "modern", "name": "Modern", "kind": "class", "role": "NewSystem", "col": 1, "row": 2,
+         "members": ["+ handle(user, path)"]}],
+       "edges": [
+        {"from": "facade", "to": "backend", "rel": "realizes"},
+        {"from": "legacy", "to": "backend", "rel": "realizes"},
+        {"from": "modern", "to": "backend", "rel": "realizes"},
+        {"from": "facade", "to": "legacy", "rel": "association", "label": "default"},
+        {"from": "facade", "to": "modern", "rel": "association", "label": "migrated"}],
+       "notes": [{"attachTo": "facade", "text": "routing table = migration plan"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "c", "name": "Client"}, {"id": "f", "name": "Facade", "role": "Facade"},
+        {"id": "l", "name": "Legacy", "role": "LegacySystem"}, {"id": "m", "name": "Modern", "role": "NewSystem"}],
+       "messages": [
+        {"from": "c", "to": "f", "label": "GET /reports", "style": "call"},
+        {"from": "f", "to": "l", "label": "not migrated", "style": "call"},
+        {"from": "l", "to": "f", "label": "response", "style": "return"},
+        {"from": "f", "to": "c", "label": "response", "style": "return"},
+        {"from": "c", "to": "f", "label": "GET /customers", "style": "call"},
+        {"from": "f", "to": "m", "label": "migrated", "style": "call"},
+        {"from": "m", "to": "f", "label": "response", "style": "return"},
+        {"from": "f", "to": "c", "label": "response", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "The legacy system is too big or risky to rewrite in one go.",
+        "You can intercept traffic at a seam: HTTP, queue or UI route.",
+        "Business must keep running throughout."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "The system is small enough to rewrite and cut over in a sprint.",
+        "No clean seam exists, so every slice drags in shared database writes."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Two systems writing the same data need synchronization, or one must own it per slice.",
+        "Never decommissioning legacy: the end state becomes two systems.",
+        "Inconsistent per-user routing causes flickering behavior; hash on a stable key."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A facade that translates every payload, becoming a third system.",
+        "Strangling a system that would be cheaper to leave alone."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Route rules fit well as records in a sealed hierarchy, loaded from configuration.",
+        "Spring Cloud Gateway predicates express the route table without custom code."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "facade", "relation": "combines", "difference": "The strangler's router is a facade over two backends, with the difference that its routing decisions change over time and the facade is meant to be removed or simplified."},
+      {"ref": "api-gateway", "relation": "combines", "difference": "An existing gateway is the natural place to hold migration routes. The gateway is permanent; the strangler routing rules are temporary."},
+      {"ref": "adapter", "relation": "oftenConfused", "difference": "An adapter permanently translates between interfaces. A strangler routes between implementations of the same interface, then goes away."},
+      {"ref": "proxy", "relation": "lookAlike", "difference": "The facade is a proxy in front of two systems, choosing between them per request rather than guarding one."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Spring Cloud Gateway", "name": "Route predicates", "detail": "`Path` and `Weight` predicates route matching traffic to the new service while everything else proxies to the legacy one."},
+      {"where": "Istio", "name": "VirtualService weighted routes", "detail": "`route.weight` splits traffic between legacy and new versions of a destination, adjustable without redeploying clients."},
+      {"where": "AWS", "name": "ALB weighted target groups", "detail": "A listener rule forwards a percentage of requests to a target group fronting the new implementation."},
+      {"where": "NGINX", "name": "location with proxy_pass", "detail": "Per-path `location` blocks send migrated routes to the new upstream and the default to the old one."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "String handle(String user, String path) {",
+      "    boolean moved = path.startsWith(\"/customers\")",
+      "        || path.startsWith(\"/invoices\")",
+      "            && Math.floorMod(user.hashCode(), 100) < invoiceShare;",
+      "    return moved",
+      "        ? newPlatform.handle(user, path)",
+      "        : oldPlatform.handle(user, path);",
+      "}"],
+     "options": [
+      {"ref": "strangler-fig", "correct": true, "why": "A routing layer sends migrated paths and a growing user share to the new system and everything else to the old one."},
+      {"ref": "strategy", "why": "A strategy is selected by the client to vary an algorithm; here a facade moves live traffic between two whole systems."},
+      {"ref": "adapter", "why": "Nothing converts an interface; both targets have the same one."},
+      {"ref": "chain-of-responsibility", "why": "There is no chain of handlers passing a request along; one condition picks a target."}],
+     "compile": {"template": [
+      "interface Platform { String handle(String user, String path); }",
+      "class Holder { Platform newPlatform; Platform oldPlatform; int invoiceShare = 25;",
+      "{{code}}", "}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A ten-year-old order system has no tests and runs the business. The company wants to move to a new platform without a risky cutover. Traffic enters through one HTTP layer, and different features can move at different times.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "strangler-fig", "correct": true, "why": "Route feature by feature through the existing HTTP seam, keeping each step small and reversible until legacy has no traffic."},
+      {"ref": "adapter", "why": "Adapting the old API forever keeps legacy alive instead of retiring it."},
+      {"ref": "sidecar", "why": "A sidecar adds capabilities to a service; it does not migrate functionality between systems."},
+      {"ref": "saga", "why": "That coordinates a distributed transaction; it plays no role in swapping implementations."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that makes the rollout unreliable.",
+     "lines": [
+      "String handle(String user, String path) {",
+      "    int bucket = ThreadLocalRandom.current().nextInt(100);",
+      "    if (path.startsWith(\"/invoices\") && bucket < share) {",
+      "        return newPlatform.handle(user, path);",
+      "    }",
+      "    return oldPlatform.handle(user, path);",
+      "}"],
+     "flawLines": [2],
+     "explanation": "A random bucket sends the same user to different systems on consecutive requests, producing inconsistent data and flicker. Derive the bucket from a stable key, such as `floorMod(user.hashCode(), 100)`.",
+     "compile": {"template": [
+      "import java.util.concurrent.ThreadLocalRandom;",
+      "interface Platform { String handle(String user, String path); }",
+      "class Holder { Platform newPlatform; Platform oldPlatform; int share = 25;",
+      "{{code}}", "}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order one strangler step, from first to last.",
+     "blocks": [
+      ["Platform replacement = new InvoiceService(db);"],
+      ["facade.migrate(\"/invoices\", 5);"],
+      ["facade.migrate(\"/invoices\", 50);"],
+      ["facade.migrate(\"/invoices\", 100);"],
+      ["legacy.removeInvoices();"]],
+     "explanation": "Build the replacement, send a small canary share, widen it as metrics hold, reach full traffic, and only then delete the legacy code.",
+     "compile": {"template": [
+      "interface Platform { String handle(String user, String path); }",
+      "class InvoiceService implements Platform { InvoiceService(Object db) {} public String handle(String u, String p) { return p; } }",
+      "class Facade { Facade migrate(String prefix, int percent) { return this; } }",
+      "class Legacy { void removeInvoices() {} }",
+      "class Snippet { Object db; Facade facade; Legacy legacy;",
+      "  void run() {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain the Strangler Fig pattern: how traffic moves, what makes each step safe, and how the migration ends.",
+     "modelAnswer": [
+      {"type": "p", "text": "A routing facade sits in front of the legacy system. You rebuild one capability at a time and shift its traffic by path or percentage, watching metrics, with instant rollback by lowering the share. When nothing routes to legacy, you delete it and the temporary routes."}],
+     "keyPoints": [
+      "Routing facade in front of legacy and new systems",
+      "Migrate one slice at a time by path, percentage or flag",
+      "Each step is observable and reversible",
+      "Stable routing keys avoid per-request flip-flopping",
+      "It must end: decommission legacy and remove the routes"]}
+  ]
+}

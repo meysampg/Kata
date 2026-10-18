@@ -1,0 +1,432 @@
+{
+  "id": "specification",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Capture a business rule as a small object that answers yes or no for a candidate, and combine rules with and, or and not."
+        },
+        {
+          "type": "p",
+          "text": "A **specification** has one question: `isSatisfiedBy(candidate)`. Simple rules are named and unit-tested alone. **Combinators** build complex rules from them, so `eligible = adult.and(solvent).and(notDefaulted.not())` reads like the requirement. The same rule can validate, filter and select."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Leaf specs:** one condition each.",
+            "**Composite specs:** and, or, not.",
+            "**Uses:** validation, selection, construction criteria."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "In Java, a specification is a `Predicate` with domain names. Write a dedicated type when rules need names, reuse or translation to queries."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Specification.java",
+      "expectedOutput": "ana: true\nbo: false\ncy: false\ndi: false",
+      "walkthrough": [
+        {
+          "region": "spec",
+          "note": "The interface has one abstract method; `and`, `or` and `not` are default methods returning new specs. Composition is closed: combining specs yields a spec."
+        },
+        {
+          "region": "rules",
+          "note": "Each leaf rule is a tiny record with one condition and a name from the business vocabulary. Parameters live in the record."
+        },
+        {
+          "region": "compose",
+          "note": "Rules combine into the requirement exactly as a product owner would phrase it. None of the leaves changed."
+        },
+        {
+          "region": "use",
+          "note": "The composed rule is applied to each applicant. The caller sees a single `isSatisfiedBy` and doesn't care how complex the rule is."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Promotion eligibility rules edited by the marketing team."
+        },
+        {
+          "type": "p",
+          "text": "Campaigns say: customers who spent over 200 in the last year, are not in a blocked region, and either joined before 2024 or have a referral. Each condition is a specification with its own test. A campaign is assembled from configuration, and the same specification both filters the mailing list and checks eligibility at checkout."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "Spec<Customer> vip = new SpentOver(200)",
+            "    .and(new InRegion(BLOCKED).not())",
+            "    .and(new JoinedBefore(2024).or(new HasReferral()));",
+            "mailing.filter(vip);"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: marketing changes a campaign by recombining tested rules, and mailing and checkout can't disagree."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "spec",
+              "name": "Spec<T>",
+              "kind": "interface",
+              "role": "Specification",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ isSatisfiedBy(c)",
+                "+ and(other)",
+                "+ or(other)",
+                "+ not()"
+              ]
+            },
+            {
+              "id": "age",
+              "name": "AtLeastAge",
+              "kind": "record",
+              "role": "Leaf spec",
+              "col": 0,
+              "row": 1,
+              "members": [
+                "+ years"
+              ]
+            },
+            {
+              "id": "inc",
+              "name": "MinIncome",
+              "kind": "record",
+              "role": "Leaf spec",
+              "col": 1,
+              "row": 1,
+              "members": [
+                "+ amount"
+              ]
+            },
+            {
+              "id": "def",
+              "name": "HasDefaulted",
+              "kind": "record",
+              "role": "Leaf spec",
+              "col": 0,
+              "row": 2
+            },
+            {
+              "id": "app",
+              "name": "Applicant",
+              "kind": "record",
+              "role": "Candidate",
+              "col": 1,
+              "row": 2,
+              "members": [
+                "+ age, income",
+                "+ defaulted"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "age",
+              "to": "spec",
+              "rel": "realizes"
+            },
+            {
+              "from": "inc",
+              "to": "spec",
+              "rel": "realizes"
+            },
+            {
+              "from": "def",
+              "to": "spec",
+              "rel": "realizes"
+            },
+            {
+              "from": "spec",
+              "to": "app",
+              "rel": "dependency",
+              "label": "tests"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "spec",
+              "text": "and/or/not return new specs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Rules are numerous, change often, and are combined in many ways.",
+            "One rule must serve validation, filtering and query building.",
+            "Business experts need rules named in the domain's vocabulary."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "There are two fixed conditions: an `if` is clearer.",
+            "A plain `Predicate` with a lambda already says it well."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Rules that perform I/O inside `isSatisfiedBy`, making them slow and untestable.",
+            "In-memory filtering of huge sets when the rule should become a database query.",
+            "Deep combinator chains that hide a rule's meaning; name the combined spec."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Specs wrapping single trivial comparisons that appear once.",
+            "A generic spec framework before any rule is duplicated."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "`java.util.function.Predicate` already has `and`, `or` and `negate`.",
+            "Sealed interfaces plus records make an inspectable rule tree that can be translated to SQL."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "strategy",
+          "relation": "lookAlike",
+          "difference": "Both are small interchangeable objects with one method. A strategy computes a result to use; a specification returns a boolean and is designed to be combined."
+        },
+        {
+          "ref": "composite",
+          "relation": "combines",
+          "difference": "Composite specs are a Composite: and, or and not treat single and combined rules uniformly."
+        },
+        {
+          "ref": "interpreter",
+          "relation": "alternative",
+          "difference": "Interpreter models a rule language with its own grammar and parser. A specification is a lighter, code-level rule combinator."
+        },
+        {
+          "ref": "chain-of-responsibility",
+          "relation": "alternative",
+          "difference": "A chain lets the first handler that accepts act. A specification composes all conditions into one verdict."
+        },
+        {
+          "ref": "repository",
+          "relation": "combines",
+          "difference": "A repository can accept a specification as its query criteria, so the rule drives both memory and database filtering."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "Spring Data JPA",
+          "name": "org.springframework.data.jpa.domain.Specification",
+          "detail": "Composable `where`, `and`, `or`, `not` predicates executed via `JpaSpecificationExecutor`."
+        },
+        {
+          "where": "Jakarta Persistence",
+          "name": "CriteriaBuilder and Predicate",
+          "detail": "The Criteria API builds composable, type-safe conditions that become SQL."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.function.Predicate",
+          "detail": "Provides `and`, `or`, `negate`; the lightweight form of a specification."
+        },
+        {
+          "where": "Guava",
+          "name": "com.google.common.base.Predicates",
+          "detail": "Static `and`, `or`, `not` combinators for predicates."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "interface Rule<T> {",
+        "    boolean test(T t);",
+        "    default Rule<T> and(Rule<T> o) { return t -> test(t) && o.test(t); }",
+        "    default Rule<T> not() { return t -> !test(t); }",
+        "}",
+        "record Expired(Instant now) implements Rule<Coupon> {",
+        "    public boolean test(Coupon c) { return c.endsAt().isBefore(now); }",
+        "}",
+        "record MinSpend(int amount) implements Rule<Coupon> {",
+        "    public boolean test(Coupon c) { return c.minSpend() <= amount; }",
+        "}",
+        "Rule<Coupon> usable = new Expired(now).not().and(new MinSpend(50));"
+      ],
+      "options": [
+        {
+          "ref": "specification",
+          "correct": true,
+          "why": "Named boolean rules that combine with and/not into one verdict about a candidate."
+        },
+        {
+          "ref": "strategy",
+          "why": "Strategies compute a value for the caller; these exist to be composed into a yes-or-no answer."
+        },
+        {
+          "ref": "chain-of-responsibility",
+          "why": "Nothing passes the request along; all rules are combined into a single condition."
+        },
+        {
+          "ref": "composite",
+          "why": "Combination is present, but the decisive trait is the boolean rule-over-candidate role."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.time.Instant;",
+          "record Coupon(Instant endsAt, int minSpend) {}",
+          "class Snippet { static void run(Instant now) {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "Product owners keep changing loan-eligibility rules and combining them differently per market. The same rules must reject bad applications and select candidates for a retention mailing.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "specification",
+          "correct": true,
+          "why": "Named, testable rules combined with and/or/not and reused for validation and selection."
+        },
+        {
+          "ref": "strategy",
+          "why": "Strategy picks one algorithm; it doesn't compose several conditions into one verdict."
+        },
+        {
+          "ref": "chain-of-responsibility",
+          "why": "A chain stops at the first handler rather than combining all rules, and doesn't serve selection."
+        },
+        {
+          "ref": "state",
+          "why": "Nothing changes behavior over a lifecycle; the problem is combining independent conditions."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Specification pattern.",
+      "lines": [
+        "@FunctionalInterface",
+        "interface Spec<T> {",
+        "    boolean isSatisfiedBy(T candidate);",
+        "",
+        "    default Spec<T> and(Spec<T> other) {",
+        "        return c -> isSatisfiedBy(c) || other.isSatisfiedBy(c);",
+        "    }",
+        "    default Spec<T> not() {",
+        "        return c -> !isSatisfiedBy(c);",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        6
+      ],
+      "explanation": "`and` uses `||`, so it behaves like `or` and accepts candidates that fail one rule. Combine with `&&`.",
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "Spec<Applicant> adult = new AtLeastAge(18);",
+          "Spec<Applicant> solvent = new MinIncome(30_000);"
+        ],
+        [
+          "Spec<Applicant> eligible = adult.and(solvent);"
+        ],
+        [
+          "Applicant ana = new Applicant(\"ana\", 34, 52_000, false);",
+          "boolean ok = eligible.isSatisfiedBy(ana);"
+        ],
+        [
+          "System.out.println(ok);"
+        ]
+      ],
+      "explanation": "Leaf rules come first, then the combination that depends on them, then the evaluation that needs both the combined rule and a candidate.",
+      "compile": {
+        "template": [
+          "interface Spec<T> { boolean isSatisfiedBy(T t); default Spec<T> and(Spec<T> o) { return t -> isSatisfiedBy(t) && o.isSatisfiedBy(t); } }",
+          "record Applicant(String n, int a, int i, boolean d) {}",
+          "record AtLeastAge(int y) implements Spec<Applicant> { public boolean isSatisfiedBy(Applicant a) { return a.a() >= y; } }",
+          "record MinIncome(int m) implements Spec<Applicant> { public boolean isSatisfiedBy(Applicant a) { return a.i() >= m; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Specification pattern: what a spec is, how rules combine, and when a plain Predicate is enough.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A specification is an object that decides whether a candidate satisfies one business rule. Small named specs combine through and, or and not into larger rules, and can be reused for validation, filtering and query building. A plain Predicate is enough when rules are few, unshared and need no names or translation to queries."
+        }
+      ],
+      "keyPoints": [
+        "One question: isSatisfiedBy(candidate)",
+        "Named leaf rules, each tested alone",
+        "and/or/not return new specs",
+        "Reused for validation, filtering and queries",
+        "Predicate suffices for simple, local rules"
+      ]
+    }
+  ]
+}

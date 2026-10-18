@@ -1,0 +1,422 @@
+{
+  "id": "dto",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Move data across a boundary in a simple object shaped for that boundary, not in your domain object."
+        },
+        {
+          "type": "p",
+          "text": "A **DTO** has fields and no behavior. It exists so that a remote call, a screen or a message gets exactly the data it needs in a stable shape. An **assembler** or mapper converts between DTOs and domain objects at the edge, keeping internals, secrets and lazy associations from leaking."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Shape:** one DTO per use case or contract.",
+            "**Content:** primitives, strings, nested DTOs, no entities.",
+            "**Direction:** request DTOs in, response DTOs out."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "A Java record is a natural DTO: immutable, equality by value, and a compact constructor for boundary validation."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Dto.java",
+      "expectedOutput": "UserSummary[id=7, displayName=Ada Lovelace, admin=false]\nrejected: email",
+      "walkthrough": [
+        {
+          "region": "entity",
+          "note": "The domain object has private state, including a password hash and roles. It must never cross the API boundary as is."
+        },
+        {
+          "region": "dtos",
+          "note": "Two records: an outbound summary with only what the client needs, and an inbound request that validates at construction."
+        },
+        {
+          "region": "mapper",
+          "note": "The assembler is the only code that knows both shapes. It converts the entity to the summary and a request into a new entity."
+        },
+        {
+          "region": "flow",
+          "note": "The boundary code deals only in DTOs; the entity is created from the request and summarized for output."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A public REST API over a legacy orders schema."
+        },
+        {
+          "type": "p",
+          "text": "The database has 40 columns per order, internal status codes and lazy-loaded relations. The public contract exposes `OrderResponse` with id, status text, line items and totals, versioned as `v1` and `v2`. A mapper isolates the legacy schema; renaming a column or adding an internal flag leaves `v1` clients untouched."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "record OrderResponseV1(",
+            "    String id, String status, Money total,",
+            "    List<LineDto> lines) {}",
+            "OrderResponseV1 body = OrderMapper.v1(order);"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: the API contract evolves on its own schedule, and internal fields or lazy proxies can't leak into JSON."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "req",
+              "name": "RegisterRequest",
+              "kind": "record",
+              "role": "DTO in",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ firstName",
+                "+ lastName",
+                "+ email"
+              ]
+            },
+            {
+              "id": "sum",
+              "name": "UserSummary",
+              "kind": "record",
+              "role": "DTO out",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ id",
+                "+ displayName",
+                "+ admin"
+              ]
+            },
+            {
+              "id": "map",
+              "name": "UserMapper",
+              "kind": "class",
+              "role": "Assembler",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ toSummary(User)",
+                "+ toEntity(id, req)"
+              ]
+            },
+            {
+              "id": "user",
+              "name": "User",
+              "kind": "class",
+              "role": "Domain entity",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "- passwordHash",
+                "- roles"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "map",
+              "to": "req",
+              "rel": "dependency",
+              "label": "reads"
+            },
+            {
+              "from": "map",
+              "to": "sum",
+              "rel": "dependency",
+              "label": "creates"
+            },
+            {
+              "from": "map",
+              "to": "user",
+              "rel": "dependency",
+              "label": "reads, creates"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "sum",
+              "text": "no behavior, no secrets"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "You expose an API whose contract must outlive the domain model.",
+            "One call should return data from several aggregates in a single round trip.",
+            "Entities hold secrets, lazy associations or cycles."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Layers are in the same process and the entity is already the right shape.",
+            "A DTO would be a field-for-field copy of an entity with no boundary reason."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Behavior added to DTOs, which turns them into a second domain model.",
+            "Mapping code scattered across controllers instead of one assembler.",
+            "Reusing one DTO for requests and responses, coupling both directions."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Copies of the same fields at every layer: entity, model, dto, view, resource.",
+            "Mappers with `null` checks for every field because no one owns the contract."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records replace most hand-written DTO classes.",
+            "Sealed interfaces model a versioned payload that has several variants."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "data-mapper",
+          "relation": "combines",
+          "difference": "A data mapper moves data between entities and the database. A DTO assembler does the same between entities and the API. Different edges, same discipline."
+        },
+        {
+          "ref": "facade",
+          "relation": "combines",
+          "difference": "A facade exposes a coarse-grained service API and typically returns DTOs so callers never see domain internals."
+        },
+        {
+          "ref": "memento",
+          "relation": "lookAlike",
+          "difference": "Both snapshot state in a plain object. A memento is opaque and exists to restore its originator; a DTO is readable and exists to inform another party."
+        },
+        {
+          "ref": "immutable-object",
+          "relation": "combines",
+          "difference": "DTOs are best immutable so they can be shared across threads and cached safely."
+        },
+        {
+          "ref": "repository",
+          "relation": "oftenConfused",
+          "difference": "A repository returns domain aggregates to the domain. DTOs are produced after it, at the outer boundary, not by it."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "Records (JEP 395)",
+          "detail": "Final since Java 16: concise immutable carriers well suited to DTOs."
+        },
+        {
+          "where": "MapStruct",
+          "name": "@Mapper",
+          "detail": "Generates entity-to-DTO mapping code at compile time."
+        },
+        {
+          "where": "Spring Data",
+          "name": "Interface-based projections",
+          "detail": "Repositories can return a projection type containing only the requested properties."
+        },
+        {
+          "where": "Protocol Buffers",
+          "name": "Generated message classes",
+          "detail": "Schema-defined, versionable transfer objects shared across services and languages."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "record OrderPayload(long id, String customerName, String total, List<String> lines) {",
+        "",
+        "    static OrderPayload from(Order o) {",
+        "        return new OrderPayload(",
+        "            o.id(),",
+        "            o.customer().name(),",
+        "            o.total().format(),",
+        "            o.lines().stream().map(Line::label).toList());",
+        "    }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "dto",
+          "correct": true,
+          "why": "An immutable, behavior-free carrier shaped for a consumer, with a conversion from the domain object."
+        },
+        {
+          "ref": "memento",
+          "why": "A memento captures state to restore the originator later; this one is a readable projection for someone else."
+        },
+        {
+          "ref": "data-mapper",
+          "why": "The mapper's job is database persistence; this converts a domain object to a transfer shape."
+        },
+        {
+          "ref": "active-record",
+          "why": "There is no persistence logic: the object can't save or load itself."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.List;",
+          "record Customer(String name) {}",
+          "record Money() { String format() { return \"\"; } }",
+          "record Line() { String label() { return \"\"; } }",
+          "record Order(long id, Customer customer, Money total, List<Line> lines) {}",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A mobile client calls your service. The `Account` entity has a password hash, lazy-loaded transactions, and internal fields that change monthly. The mobile contract must stay stable across versions.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "dto",
+          "correct": true,
+          "why": "A versioned response shape insulates clients from entity changes and keeps secrets and proxies out of the payload."
+        },
+        {
+          "ref": "data-mapper",
+          "why": "It maps objects to tables, solving persistence rather than the API contract."
+        },
+        {
+          "ref": "facade",
+          "why": "A facade simplifies the call, but you'd still need a defined response shape."
+        },
+        {
+          "ref": "repository",
+          "why": "A repository returns entities to the domain; it doesn't decide what the client sees."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the DTO pattern.",
+      "lines": [
+        "record UserSummary(long id, String displayName, String email) {",
+        "    UserSummary {",
+        "        if (email == null) throw new IllegalArgumentException(\"email\");",
+        "    }",
+        "",
+        "    User load(UserRepository repo) { return repo.find(id); }",
+        "",
+        "    static UserSummary from(User u) {",
+        "        return new UserSummary(u.id(), u.name(), u.email());",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        6
+      ],
+      "explanation": "A DTO that reaches back into a repository carries behavior and a dependency across the boundary. Keep it a pure data carrier; load entities in the service.",
+      "compile": {
+        "template": [
+          "record User(long id, String name, String email) {}",
+          "interface UserRepository { User find(long id); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "var request = new RegisterRequest(\"Ada\", \"Lovelace\", \"ada@x.org\");"
+        ],
+        [
+          "User user = UserMapper.toEntity(7, request);"
+        ],
+        [
+          "UserSummary out = UserMapper.toSummary(user);"
+        ],
+        [
+          "System.out.println(out);"
+        ]
+      ],
+      "explanation": "The inbound DTO comes first and is mapped into an entity, which is then mapped to the outbound DTO that is finally emitted.",
+      "compile": {
+        "template": [
+          "record RegisterRequest(String a, String b, String c) {}",
+          "record User() {}",
+          "record UserSummary() {}",
+          "class UserMapper { static User toEntity(long id, RegisterRequest r) { return new User(); } static UserSummary toSummary(User u) { return new UserSummary(); } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain DTOs: what they carry, where they are created, and why not expose entities directly.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A DTO is a plain, ideally immutable object that carries data across a boundary in a shape defined for that boundary. A mapper at the edge converts between DTOs and domain objects. Exposing entities leaks secrets, lazy proxies and internal structure, and couples the public contract to your model."
+        }
+      ],
+      "keyPoints": [
+        "Plain data carrier with no behavior",
+        "Shaped for the boundary or use case",
+        "Mapper converts at the edge",
+        "Entities leak secrets and lazy state",
+        "Records are the idiomatic Java form"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,413 @@
+{
+  "id": "dip",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "High-level policy should not depend on low-level details. Both should depend on abstractions that the policy owns."
+        },
+        {
+          "type": "p",
+          "text": "The rule inverts twice. Source dependencies point at an **abstraction**, and that abstraction is **owned by the consumer**: `OrderService` defines `Notifier` in terms of what orders need, and SMTP adapts to it. That is what lets the business core build and test without infrastructure."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Not the same as DI:** DIP is the design rule; injection is one way to satisfy it.",
+            "**Ownership matters:** an interface that mirrors the vendor API is not inversion.",
+            "**Boundary:** invert at module and layer seams, not around every `new`."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "`new ArrayList<>()` in a method does not violate DIP. Depending on a slow, external or unstable detail does."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Dip.java",
+      "expectedOutput": "SMTP ada\nSMTP ada: Order confirmed\ntest double saw [grace/Order confirmed]",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "The high-level `OrderServiceBefore` constructs `SmtpClient` itself. Policy now depends on a detail and cannot run without it."
+        },
+        {
+          "region": "abstraction",
+          "note": "The abstraction is shaped by what orders need to say, not by SMTP. It lives with the high-level code."
+        },
+        {
+          "region": "highlevel",
+          "note": "`OrderService` depends only on `Notifier`. Its source no longer mentions SMTP, so it compiles and tests without infrastructure."
+        },
+        {
+          "region": "details",
+          "note": "The details now point inward: both the SMTP adapter and a recording test double implement the abstraction."
+        },
+        {
+          "region": "wiring",
+          "note": "Composition happens at the edge. Production passes the SMTP notifier; a test passes the recorder and asserts on what it saw."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A trading engine that must run live and in backtests."
+        },
+        {
+          "type": "p",
+          "text": "A strategy engine called a vendor's WebSocket client directly, so strategies could only be tested against the live market. The core now declares `MarketData` with the two operations it needs. A `VendorFeed` adapter implements it in production and a `CsvReplay` in backtests. The same engine produces both results, and switching vendors touches one adapter."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "interface MarketData { Quote latest(Symbol s); }",
+            "",
+            "Engine live = new Engine(new VendorFeed(client));",
+            "Engine backtest = new Engine(new CsvReplay(path));"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: backtests are deterministic, and a vendor change never reaches the trading logic."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "orders",
+              "name": "OrderService",
+              "kind": "class",
+              "role": "HighLevel",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "- notifier: Notifier",
+                "+ place(customer)"
+              ]
+            },
+            {
+              "id": "notifier",
+              "name": "Notifier",
+              "kind": "interface",
+              "role": "Abstraction",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ notify(customer, msg)"
+              ]
+            },
+            {
+              "id": "smtp",
+              "name": "SmtpNotifier",
+              "kind": "class",
+              "role": "LowLevel",
+              "col": 0,
+              "row": 2,
+              "members": [
+                "+ notify(customer, msg)"
+              ]
+            },
+            {
+              "id": "fake",
+              "name": "RecordingNotifier",
+              "kind": "class",
+              "role": "LowLevel",
+              "col": 1,
+              "row": 2,
+              "members": [
+                "+ notify(customer, msg)"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "orders",
+              "to": "notifier",
+              "rel": "association",
+              "label": "uses"
+            },
+            {
+              "from": "smtp",
+              "to": "notifier",
+              "rel": "realizes"
+            },
+            {
+              "from": "fake",
+              "to": "notifier",
+              "rel": "realizes"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "notifier",
+              "text": "owned by the high-level side"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Core logic must be tested without network, disk or clock.",
+            "An infrastructure choice such as vendor or database may change.",
+            "Several environments need different implementations."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "The dependency is a stable platform type such as `String`, `List` or `Instant`.",
+            "The script is tiny and wiring costs more than the coupling."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "An interface shaped like the vendor API leaks the detail it should hide.",
+            "Placing the abstraction in the infrastructure module: the arrow does not invert.",
+            "A Service Locator hides dependencies instead of inverting them."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "`FooService` plus `FooServiceImpl` for every class.",
+            "Mocking every collaborator so tests restate the implementation."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Constructor injection with `final` fields satisfies DIP with no container.",
+            "JPMS `provides ... with` lets a module supply an implementation of another module's service."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "dependency-injection",
+          "relation": "combines",
+          "difference": "DIP says who owns the abstraction; injection is the mechanism that hands the implementation in."
+        },
+        {
+          "ref": "service-locator",
+          "relation": "alternative",
+          "difference": "A locator also decouples from the concrete class but hides dependencies inside method bodies and makes them harder to see and test."
+        },
+        {
+          "ref": "hexagonal",
+          "relation": "specializes",
+          "difference": "Ports and adapters is DIP applied to a whole architecture: the domain owns the ports, infrastructure adapts."
+        },
+        {
+          "ref": "adapter",
+          "relation": "combines",
+          "difference": "The low-level detail is usually wrapped in an adapter that implements the high-level abstraction."
+        },
+        {
+          "ref": "program-to-interface",
+          "relation": "lookAlike",
+          "difference": "Programming to an interface is the local habit; DIP adds that the consumer owns the interface and the arrow flips."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.sql.Connection and javax.sql.DataSource",
+          "detail": "Application code depends on the JDBC abstraction; each vendor driver implements it."
+        },
+        {
+          "where": "SLF4J",
+          "name": "org.slf4j.Logger",
+          "detail": "Libraries log through the facade; Logback or Log4j 2 bind behind it."
+        },
+        {
+          "where": "Jakarta Persistence",
+          "name": "jakarta.persistence.EntityManager",
+          "detail": "Business code uses the API; Hibernate or EclipseLink implement it as the provider."
+        },
+        {
+          "where": "Spring Framework",
+          "name": "Constructor injection in the ApplicationContext",
+          "detail": "Beans declare abstractions they need; the container supplies implementations."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this class most clearly violate?",
+      "lines": [
+        "final class ReportJob {",
+        "    private final PostgresClient db = new PostgresClient(\"prod-db:5432\");",
+        "    private final SmtpClient mail = new SmtpClient(\"smtp.corp\");",
+        "",
+        "    void run() {",
+        "        mail.send(\"ops@corp\", db.query(\"select count(*) from orders\"));",
+        "    }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "dip",
+          "correct": true,
+          "why": "The high-level job constructs and depends on concrete infrastructure instead of abstractions it owns."
+        },
+        {
+          "ref": "ocp",
+          "why": "Adding behavior is not the issue; the issue is hard-wired details."
+        },
+        {
+          "ref": "srp",
+          "why": "The job has one purpose; the problem is who it constructs, not what it does."
+        },
+        {
+          "ref": "isp",
+          "why": "There are no interfaces here at all, so none can be too wide."
+        }
+      ],
+      "compile": {
+        "template": [
+          "class PostgresClient { PostgresClient(String h) {} String query(String q) { return \"\"; } }",
+          "class SmtpClient { SmtpClient(String h) {} void send(String to, String b) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "Your domain module imports `com.vendor.s3.S3Client` and calls it directly in 60 classes. Switching to another object store next year would touch all of them, and unit tests need a MinIO container.",
+      "prompt": "Which principle should guide the redesign?",
+      "options": [
+        {
+          "ref": "dip",
+          "correct": true,
+          "why": "Define a `BlobStore` abstraction in the domain module and make the S3 code implement it, so the domain no longer knows the vendor."
+        },
+        {
+          "ref": "ocp",
+          "why": "Extension points would not remove the vendor import from the domain."
+        },
+        {
+          "ref": "srp",
+          "why": "Splitting classes would not change what they depend on."
+        },
+        {
+          "ref": "composition-over-inheritance",
+          "why": "The coupling is to a concrete service, not to a parent class."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that bypasses the injected abstraction.",
+      "lines": [
+        "interface Mailer { void send(String to, String body); }",
+        "",
+        "final class SignupService {",
+        "    private final Mailer mailer;",
+        "",
+        "    SignupService(Mailer mailer) { this.mailer = mailer; }",
+        "",
+        "    void register(String email) {",
+        "        new SmtpMailer(\"smtp.corp\").send(email, \"Welcome\");",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "The service takes a `Mailer` but ignores it and builds a concrete `SmtpMailer`, so it stays coupled to SMTP and cannot be tested in isolation. Use the injected `mailer`.",
+      "compile": {
+        "template": [
+          "class SmtpMailer implements Mailer { SmtpMailer(String host) {} public void send(String t, String b) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the test so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var fake = new RecordingNotifier();"
+        ],
+        [
+          "var service = new OrderService(fake);"
+        ],
+        [
+          "service.place(\"grace\");"
+        ],
+        [
+          "System.out.println(fake.sent);"
+        ]
+      ],
+      "explanation": "Create the test double, inject it, trigger the behavior, then inspect what the double recorded.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "interface Notifier { void notify(String c, String m); }",
+          "final class RecordingNotifier implements Notifier { final List<String> sent = new ArrayList<>(); public void notify(String c, String m) { sent.add(c); } }",
+          "final class OrderService { OrderService(Notifier n) {} void place(String c) {} }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Dependency Inversion Principle in your own words. What is inverted, and how is it different from dependency injection?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "High-level policy and low-level details both depend on an abstraction, and the policy owns that abstraction, so source dependencies point toward the business core instead of away from it. Dependency injection is only a mechanism for supplying the implementation; DIP is the rule about direction and ownership."
+        }
+      ],
+      "keyPoints": [
+        "Both sides depend on an abstraction",
+        "The consumer owns the abstraction",
+        "Source dependency arrow is inverted",
+        "DI is a mechanism, not the principle",
+        "Invert at seams, not around every new"
+      ]
+    }
+  ]
+}

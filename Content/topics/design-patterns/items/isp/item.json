@@ -1,0 +1,319 @@
+{
+  "id": "isp",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Clients should not be forced to depend on methods they do not use; define narrow interfaces per client role."
+        },
+        {
+          "type": "p",
+          "text": "A fat interface couples every client to every method: a change to `fax` recompiles and retests print-only code, and implementers must stub operations they cannot support. Split by **role** as the client sees it, then let one class implement several **role interfaces** when it really does several things."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Cut line:** what a client calls, not what an implementer offers.",
+            "**Symptoms:** stubs that throw, mocks with fifteen stubbed methods, unrelated imports.",
+            "**Result:** small interfaces, often one method, that lambdas can implement."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "ISP is LSP's preventive medicine: a narrow interface leaves nothing for an implementer to fake."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Isp.java",
+      "expectedOutput": "before: scan() unsupported\nbasic: [Q3 report]\nprint Q3 report\nlambda Q3 report\nfax memo to 555-0100",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "One `Machine` interface bundles three capabilities. A printer-only device must implement `scan` and `fax` by throwing."
+        },
+        {
+          "region": "roles",
+          "note": "Role interfaces, cut by what a client calls. Each has one method, so each is also a valid lambda target."
+        },
+        {
+          "region": "impls",
+          "note": "Implementers choose the roles they really support. `BasicPrinter` is only a `Printer`; `OfficeMachine` is all three."
+        },
+        {
+          "region": "clients",
+          "note": "`ReportJob` asks only for `Printer`. It runs against a basic printer, an office machine or a lambda, and can never call `fax`."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "One user-store interface serving a dashboard and a batch importer."
+        },
+        {
+          "type": "p",
+          "text": "A `UserStore` interface had fourteen methods. The read-only dashboard depended on all of them, so tests mocked writes it never made, and a read replica could not implement the interface at all. It was split into `UserReader` and `UserWriter`. The primary store implements both, the replica only the reader, and the dashboard is wired to `UserReader`."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "interface UserReader {",
+            "    Optional<User> byId(UserId id);",
+            "    List<User> search(Query q);",
+            "}",
+            "interface UserWriter { void save(User u); }",
+            "",
+            "final class Dashboard { Dashboard(UserReader users) { ... } }",
+            "final class PgStore implements UserReader, UserWriter { ... }"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: the dashboard cannot write, replicas fit the type system, and mocks shrink to two methods."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "An implementer must throw or no-op for some inherited methods.",
+            "Clients use disjoint subsets of one interface.",
+            "Mocks or fakes are large."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Roles always change and are used together: splitting adds names, not decoupling.",
+            "A published interface has many implementers: splitting later breaks them."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Interface-per-method with no role meaning, such as `Doer` or `Getter`.",
+            "A client needing five role interfaces often signals an SRP problem.",
+            "Intersection bounds like `<T extends A & B>` spreading through APIs."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Functional interfaces are ISP at its limit: one method, any lambda.",
+            "`default` methods evolve an interface without breaking implementers, but do not shrink what clients see."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "srp",
+          "relation": "lookAlike",
+          "difference": "SRP shapes classes by reasons to change; ISP shapes interfaces by what each client calls."
+        },
+        {
+          "ref": "lsp",
+          "relation": "combines",
+          "difference": "Narrow interfaces leave no method an implementer must fake, which keeps subtypes substitutable."
+        },
+        {
+          "ref": "adapter",
+          "relation": "alternative",
+          "difference": "When a fat third-party interface cannot be split, adapt it to the narrow role your client needs."
+        },
+        {
+          "ref": "facade",
+          "relation": "oftenConfused",
+          "difference": "A facade simplifies a subsystem for callers by hiding it; ISP narrows an existing interface to a client's needs."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.function",
+          "detail": "`Supplier`, `Function`, `Predicate` and friends are one-method role interfaces."
+        },
+        {
+          "where": "JDK",
+          "name": "ReadableByteChannel, WritableByteChannel, ByteChannel",
+          "detail": "`java.nio.channels` separates read and write roles; `ByteChannel` combines them."
+        },
+        {
+          "where": "JDK",
+          "name": "java.io.Closeable and Flushable",
+          "detail": "Independent capabilities that a class can add separately, rather than one stream mega-interface."
+        },
+        {
+          "where": "Spring Data",
+          "name": "CrudRepository, ListCrudRepository, PagingAndSortingRepository",
+          "detail": "Repository capabilities are separate interfaces that you extend selectively."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this design most clearly violate?",
+      "lines": [
+        "interface Storage {",
+        "    byte[] read(String key);",
+        "    void write(String key, byte[] value);",
+        "    void backup(java.nio.file.Path target);",
+        "}",
+        "final class Thumbnailer {",
+        "    private final Storage storage;     // only ever calls read()",
+        "    Thumbnailer(Storage storage) { this.storage = storage; }",
+        "    byte[] thumb(String key) { return storage.read(key); }",
+        "}",
+        "// MemoryCache implements Storage; its backup() throws"
+      ],
+      "options": [
+        {
+          "ref": "isp",
+          "correct": true,
+          "why": "Thumbnailer is forced to depend on `write` and `backup`, and implementers must fake them."
+        },
+        {
+          "ref": "lsp",
+          "why": "The throwing `backup` looks like LSP, but it is a symptom; the cause is the fat interface."
+        },
+        {
+          "ref": "srp",
+          "why": "SRP is about a class's reasons to change; here a client is coupled to methods it never calls."
+        },
+        {
+          "ref": "dip",
+          "why": "Depending on an interface is the right direction; the interface itself is too broad."
+        }
+      ],
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A `NotificationSender` interface declares `sendEmail`, `sendSms` and `sendPush`. The SMS vendor adapter throws for the other two, and the invoice job, which only sends email, needs three stubbed methods in every test.",
+      "prompt": "What is the right fix?",
+      "options": [
+        {
+          "ref": "isp",
+          "correct": true,
+          "why": "Split into `EmailSender`, `SmsSender` and `PushSender`. Each adapter and client then depends only on its role."
+        },
+        {
+          "ref": "lsp",
+          "why": "Making adapters return silently would only hide the broken promise; the interface still forces it."
+        },
+        {
+          "ref": "srp",
+          "why": "The adapter has a single job already; the shared interface is what is too wide."
+        },
+        {
+          "ref": "dip",
+          "why": "The jobs already depend on an interface; its shape is the problem."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that asks for more than the class needs.",
+      "lines": [
+        "interface Reader { String read(String key); }",
+        "interface Writer { void write(String key, String v); }",
+        "interface ReadWriter extends Reader, Writer { }",
+        "",
+        "final class Report {",
+        "    private final Reader store;",
+        "",
+        "    Report(ReadWriter store) { this.store = store; }",
+        "    String title() { return store.read(\"title\").toUpperCase(); }",
+        "}"
+      ],
+      "flawLines": [
+        8
+      ],
+      "explanation": "The constructor asks for a `ReadWriter` although `Report` only reads, so callers must supply write access and tests must fake it. Accept `Reader`.",
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the wiring so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var basic = new BasicPrinter();"
+        ],
+        [
+          "var job = new ReportJob(basic);"
+        ],
+        [
+          "job.run();"
+        ],
+        [
+          "System.out.println(basic.out);"
+        ]
+      ],
+      "explanation": "Create the device, hand it to the job as a `Printer`, run the job, then inspect what the device recorded.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "interface Printer { void print(String d); }",
+          "final class BasicPrinter implements Printer { final List<String> out = new ArrayList<>(); public void print(String d) { out.add(d); } }",
+          "final class ReportJob { ReportJob(Printer p) {} void run() {} }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Interface Segregation Principle in your own words, and how it relates to throwing `UnsupportedOperationException`.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Clients should depend only on the methods they call, so interfaces are cut by client role rather than by implementer capability. A fat interface forces implementers to stub unsupported methods, usually by throwing UnsupportedOperationException, which is an LSP violation in disguise. Several small role interfaces fix both."
+        }
+      ],
+      "keyPoints": [
+        "Cut interfaces by the client's role",
+        "Fat interfaces force stubs and wide mocks",
+        "Throwing stubs signal an ISP/LSP problem",
+        "A class may implement many role interfaces",
+        "Single-method interfaces are lambda-friendly"
+      ]
+    }
+  ]
+}

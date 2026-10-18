@@ -1,0 +1,156 @@
+{
+  "id": "bridge",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Separate an abstraction from its implementation so the two hierarchies can vary independently, joined by composition."},
+      {"type": "p", "text": "The **abstraction** holds a reference to an **implementor** interface and delegates the low-level work to it. You can add new abstractions (alerts, digests) and new implementors (email, SMS) without a class for each combination. Two dimensions of variation cost M plus N classes, not M times N."},
+      {"type": "bullets", "items": [
+        "**Varies independently:** what is done, and how or where it is done.",
+        "**Joined by:** a field of the implementor type, set at construction.",
+        "**Prevents:** a subclass explosion from inheriting along two axes."]},
+      {"type": "callout", "tone": "info", "text": "Bridge is a design-time decision. If you are fitting two existing interfaces together after the fact, you want Adapter."}
+    ]},
+    {"role": "implementation", "file": "Bridge.java",
+     "expectedOutput": "email:ann <- ALERT: disk full\nemail:bo <- 2 items: [a, b]\nsms:ann <- ALERT: disk full\nsms:bo <- 2 items: [a, b]",
+     "walkthrough": [
+      {"region": "implementor", "note": "The implementor hierarchy: one narrow `send` primitive and two transports. It knows nothing about what a message means."},
+      {"region": "abstraction", "note": "The abstraction owns a `Channel` and declares the high-level operation. This field is the bridge between the two hierarchies."},
+      {"region": "refined", "note": "Refined abstractions decide what to say and delegate how to send. Neither mentions `Email` or `Sms`."},
+      {"region": "client", "note": "Any message works with any channel. Two abstractions and two implementors give four combinations from four classes, not eight."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Rendering reports on several output targets."},
+      {"type": "p", "text": "A reporting library has report types (`SalesReport`, `AuditReport`) and render targets (PDF, HTML, plain text). Subclassing along both axes gives a class per pair and grows with each new target. With a `Renderer` bridge, reports describe their structure through primitives such as `heading`, `table` and `text`, and each renderer draws them. A new target needs one class and works with every existing report."},
+      {"type": "code", "language": "java", "lines": [
+        "interface Renderer { void heading(String t); void table(Rows r); }",
+        "abstract class Report {",
+        "    protected final Renderer out;",
+        "    abstract void render();",
+        "}",
+        "new SalesReport(new PdfRenderer(file)).render();"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: new report types and new output formats are added independently, with no class per combination."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "abs", "name": "Message", "kind": "abstract", "role": "Abstraction", "col": 0, "row": 0,
+         "members": ["# channel: Channel", "+ deliver(to): String"]},
+        {"id": "alert", "name": "Alert", "kind": "class", "role": "RefinedAbstraction", "col": 0, "row": 1},
+        {"id": "digest", "name": "Digest", "kind": "class", "role": "RefinedAbstraction", "col": 0, "row": 2},
+        {"id": "impl", "name": "Channel", "kind": "interface", "role": "Implementor", "col": 1, "row": 0,
+         "members": ["+ send(to, text): String"]},
+        {"id": "email", "name": "Email", "kind": "record", "role": "ConcreteImplementor", "col": 1, "row": 1},
+        {"id": "sms", "name": "Sms", "kind": "record", "role": "ConcreteImplementor", "col": 1, "row": 2}],
+       "edges": [
+        {"from": "abs", "to": "impl", "rel": "aggregation", "label": "bridge"},
+        {"from": "alert", "to": "abs", "rel": "extends"},
+        {"from": "digest", "to": "abs", "rel": "extends"},
+        {"from": "email", "to": "impl", "rel": "realizes"},
+        {"from": "sms", "to": "impl", "rel": "realizes"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Two independent dimensions of variation would otherwise multiply classes.",
+        "The implementation must be chosen or swapped at runtime.",
+        "You publish an API and want implementations to evolve behind it."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Only one dimension varies; plain inheritance or Strategy suffices.",
+        "The split is speculative and neither side has two variants."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Choosing the wrong split: the implementor interface becomes either too thin or too wide.",
+        "Abstractions casting the implementor to a concrete type.",
+        "Extra indirection that hides simple code."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "An implementor interface with one implementation.",
+        "A bridge introduced before the second axis of variation exists."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Sealed hierarchies and `switch` are simpler for closed sets; Bridge pays off when both sides are open.",
+        "Service providers loaded with `ServiceLoader` are a standard way to supply implementors."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "adapter", "relation": "oftenConfused", "difference": "Adapter retrofits two existing, incompatible interfaces to work together. Bridge is planned up front to let abstraction and implementation evolve separately."},
+      {"ref": "strategy", "relation": "lookAlike", "difference": "Same composition, wider scope. Strategy swaps one algorithm in one class. Bridge splits a whole hierarchy from its implementation hierarchy."},
+      {"ref": "abstract-factory", "relation": "combines", "difference": "An abstract factory can create and configure the implementor a bridge needs, hiding which concrete family is used."},
+      {"ref": "state", "relation": "lookAlike", "difference": "State swaps its delegate over time as the object transitions. Bridge normally fixes the implementor at construction."},
+      {"ref": "composite", "relation": "combines", "difference": "Composite trees of abstractions can share one implementor, so the whole tree renders on the same target."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.sql.Driver and Connection", "detail": "Application code uses the JDBC API (abstraction); each vendor driver (implementor) is registered and chosen by URL."},
+      {"where": "JDK", "name": "java.nio.file.spi.FileSystemProvider", "detail": "`Path` and `Files` delegate to a provider, which is why the same code works on the default file system and on zip file systems."},
+      {"where": "SLF4J", "name": "LoggerFactory and providers", "detail": "The `Logger` API is separate from backends such as Logback, found at runtime via `ServiceLoader`."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "abstract class Shape {",
+      "    protected final Canvas canvas;",
+      "    protected Shape(Canvas canvas) { this.canvas = canvas; }",
+      "    abstract void draw();",
+      "}",
+      "final class Circle extends Shape {",
+      "    Circle(Canvas c) { super(c); }",
+      "    void draw() { canvas.ellipse(0, 0, 10, 10); }",
+      "}",
+      "// Canvas: SvgCanvas, PngCanvas, TerminalCanvas"],
+     "options": [
+      {"ref": "bridge", "correct": true, "why": "Shapes and canvases are two independent hierarchies, linked by a `Canvas` field that shapes delegate drawing to."},
+      {"ref": "adapter", "why": "Nothing is retrofitted; both hierarchies were designed together and no foreign interface is translated."},
+      {"ref": "strategy", "why": "A single algorithm is not being swapped; a whole second hierarchy of renderers is."},
+      {"ref": "decorator", "why": "The canvas is not wrapping the shape or adding behavior with the same interface."}],
+     "compile": {"template": [
+      "interface Canvas { void ellipse(int x, int y, int w, int h); }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A product has three kinds of notification (alert, digest, reminder) and must deliver each by email, SMS or push. New kinds and new channels are both expected within the year, and the current code has a subclass per combination.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "bridge", "correct": true, "why": "Two axes grow independently; splitting them turns nine classes and counting into three plus three."},
+      {"ref": "adapter", "why": "Nothing foreign needs translating. The problem is the design of two growing axes, not an interface mismatch."},
+      {"ref": "strategy", "why": "It could cover the delivery axis, but the notification kinds form their own hierarchy that Bridge keeps separate and extensible."},
+      {"ref": "decorator", "why": "Stacking wrappers would not model choosing a channel and would not remove the subclass-per-pair structure."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Bridge pattern.",
+     "lines": [
+      "abstract class Message {",
+      "    protected final Channel channel;",
+      "    protected Message(Channel channel) { this.channel = channel; }",
+      "    abstract String deliver(String to);",
+      "}",
+      "final class Alert extends Message {",
+      "    Alert(Channel channel) { super(channel); }",
+      "    String deliver(String to) {",
+      "        if (channel instanceof Sms) return channel.send(to, \"ALERT\");",
+      "        return channel.send(to, \"ALERT: disk full\");",
+      "    }",
+      "}"],
+     "flawLines": [9],
+     "explanation": "The abstraction inspects the concrete implementor, so it is coupled to `Sms` and every new channel may force an edit. Put the channel-specific rule inside the channel.",
+     "compile": {"template": [
+      "interface Channel { String send(String to, String text); }",
+      "final class Sms implements Channel { public String send(String to, String t) { return t; } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the code that wires an abstraction to an implementor and uses it.",
+     "blocks": [
+      ["Channel channel = new Sms();"],
+      ["Message alert = new Alert(channel, \"disk full\");"],
+      ["String out = alert.deliver(\"ann\");"],
+      ["System.out.println(out);"]],
+     "explanation": "Create the implementor, hand it to the abstraction at construction, call the high-level operation, then use its result. Each line consumes the previous variable.",
+     "compile": {"template": [
+      "interface Channel { String send(String to, String text); }",
+      "class Sms implements Channel { public String send(String to, String t) { return t; } }",
+      "abstract class Message { abstract String deliver(String to); }",
+      "class Alert extends Message { Alert(Channel c, String p) {} String deliver(String to) { return to; } }",
+      "class Snippet { void run() {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Bridge in your own words: what two things vary, and why not just use inheritance?",
+     "modelAnswer": [
+      {"type": "p", "text": "Bridge splits what an object does from how it is done, into two hierarchies connected by composition. The abstraction delegates to an implementor interface. Inheritance along both axes would need a class per combination; Bridge needs only one per variant on each side."}],
+     "keyPoints": [
+      "Two independent hierarchies joined by a field",
+      "Abstraction delegates primitives to the implementor",
+      "Avoids M times N subclasses; needs M plus N",
+      "Designed up front, unlike Adapter",
+      "Pointless unless both sides truly vary"]}
+  ]
+}

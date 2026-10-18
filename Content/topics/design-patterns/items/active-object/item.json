@@ -1,0 +1,517 @@
+{
+ "id": "active-object",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Give an object its own thread and request queue, so callers invoke it asynchronously and get futures back."
+    },
+    {
+     "type": "p",
+     "text": "Method calls become **requests** placed on a queue. A single **scheduler** thread takes them one at a time and runs them on a plain, unsynchronized **servant**. The caller gets a future immediately and never touches the servant's state."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Concurrency control:** thread confinement, so the servant needs no locks.",
+      "**Caller experience:** an ordinary method that returns a future.",
+      "**Ordering:** requests run in the order they were enqueued."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "The actor model is this idea scaled up: many active objects, each with a mailbox, communicating only by messages."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "ActiveObject.java",
+   "expectedOutput": "1 3 6\ntotal = 406",
+   "walkthrough": [
+    {
+     "region": "servant",
+     "note": "The servant is plain, single-threaded code. It has no locks and no `volatile`, because only one thread ever runs it."
+    },
+    {
+     "region": "active",
+     "note": "The proxy turns a call into a request: a `Runnable` that completes a future. `enqueue` is the only way in, and the queue is the activation queue."
+    },
+    {
+     "region": "loop",
+     "note": "The scheduler thread takes requests in FIFO order and runs each. A poison pill stops it; `close` then joins the thread."
+    },
+    {
+     "region": "async",
+     "note": "Calls return at once with futures. Results arrive in submission order: 1, 3, 6."
+    },
+    {
+     "region": "callers",
+     "note": "Four threads call concurrently, yet no total is lost. `put` on the queue happens-before `take`, and the servant is touched by one thread."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A device driver that allows only one command at a time."
+    },
+    {
+     "type": "p",
+     "text": "A lab-automation service talks to a robotic arm over a serial line. The vendor library is not thread-safe and each command takes seconds. Many HTTP threads want to issue commands. A `RobotArm` active object queues every command, runs them one by one on its own thread, and hands each caller a future for the outcome."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "interface RobotArm {",
+      "    CompletableFuture<Pose> moveTo(Pose target);",
+      "    CompletableFuture<Void> grip(boolean closed);",
+      "}",
+      "",
+      "arm.moveTo(shelf).thenCompose(p -> arm.grip(true));"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the unsafe driver is never shared, request threads never block on hardware, and command order is explicit."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "client",
+       "name": "Client",
+       "kind": "class",
+       "role": "Client",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "+ add(n): Future"
+       ]
+      },
+      {
+       "id": "proxy",
+       "name": "ActiveCounter",
+       "kind": "class",
+       "role": "Proxy",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "+ add(n): Future",
+        "- enqueue(request)"
+       ]
+      },
+      {
+       "id": "future",
+       "name": "CompletableFuture",
+       "kind": "class",
+       "role": "Future",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ get(): T"
+       ]
+      },
+      {
+       "id": "queue",
+       "name": "BlockingQueue",
+       "kind": "interface",
+       "role": "ActivationQueue",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ add(request)",
+        "+ take(): request"
+       ]
+      },
+      {
+       "id": "sched",
+       "name": "Scheduler thread",
+       "kind": "class",
+       "role": "Scheduler",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "- loop()"
+       ]
+      },
+      {
+       "id": "servant",
+       "name": "Counter",
+       "kind": "class",
+       "role": "Servant",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "+ add(n): int"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "client",
+       "to": "proxy",
+       "rel": "dependency",
+       "label": "calls"
+      },
+      {
+       "from": "proxy",
+       "to": "queue",
+       "rel": "dependency",
+       "label": "enqueue"
+      },
+      {
+       "from": "proxy",
+       "to": "future",
+       "rel": "dependency",
+       "label": "returns"
+      },
+      {
+       "from": "sched",
+       "to": "queue",
+       "rel": "dependency",
+       "label": "take"
+      },
+      {
+       "from": "sched",
+       "to": "servant",
+       "rel": "dependency",
+       "label": "invoke"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "servant",
+       "text": "no locks needed"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "proxy",
+       "name": "ActiveCounter",
+       "role": "Proxy"
+      },
+      {
+       "id": "sched",
+       "name": "Scheduler",
+       "role": "Scheduler"
+      },
+      {
+       "id": "servant",
+       "name": "Counter",
+       "role": "Servant"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "proxy",
+       "label": "add(5)",
+       "style": "call"
+      },
+      {
+       "from": "proxy",
+       "to": "sched",
+       "label": "enqueue request",
+       "style": "async"
+      },
+      {
+       "from": "proxy",
+       "to": "client",
+       "label": "future",
+       "style": "return"
+      },
+      {
+       "from": "sched",
+       "to": "servant",
+       "label": "add(5)",
+       "style": "call"
+      },
+      {
+       "from": "servant",
+       "to": "sched",
+       "label": "5",
+       "style": "return"
+      },
+      {
+       "from": "sched",
+       "to": "client",
+       "label": "complete future",
+       "style": "async"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "A non-thread-safe resource must be shared by many callers.",
+      "Callers should not block on slow work.",
+      "You want serialized access without lock reasoning."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Calls are fast and a `synchronized` block or lock is simpler.",
+      "Callers need the result immediately on the same thread."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "An unbounded queue hides overload and grows until memory runs out.",
+      "A request that blocks stalls every request behind it.",
+      "Never touch the servant from outside; one leaking reference breaks confinement."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "One thread per tiny object, which wastes memory and context switches.",
+      "Futures that every caller immediately blocks on."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "`Executors.newSingleThreadExecutor()` plus `CompletableFuture.supplyAsync(task, executor)` is a compact active object.",
+      "A virtual thread draining a queue makes one active object per entity cheap."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "producer-consumer",
+     "relation": "specializes",
+     "difference": "Producer-consumer decouples any producers from any consumers through a queue. An active object is one consumer whose queue carries method requests and returns futures."
+    },
+    {
+     "ref": "thread-pool",
+     "relation": "alternative",
+     "difference": "A pool runs tasks on any worker, so they may overlap. An active object funnels all requests for one servant through exactly one thread, giving mutual exclusion."
+    },
+    {
+     "ref": "future-promise",
+     "relation": "combines",
+     "difference": "The future is how the active object returns results. The pattern adds the queue, the scheduler and the confinement of state."
+    },
+    {
+     "ref": "proxy",
+     "relation": "lookAlike",
+     "difference": "The caller-facing object is a proxy, but it forwards through a queue to another thread instead of delegating directly."
+    },
+    {
+     "ref": "command",
+     "relation": "combines",
+     "difference": "Each queued request is a command object, here a `Runnable` closure, that the scheduler executes later."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Akka",
+     "name": "Actor / ActorRef",
+     "detail": "Each actor has a mailbox and processes one message at a time; `ask` returns a future, as in an active object."
+    },
+    {
+     "where": "JDK",
+     "name": "Executors.newSingleThreadExecutor",
+     "detail": "One thread plus an unbounded queue, with `CompletableFuture.supplyAsync(task, executor)` for the proxy side."
+    },
+    {
+     "where": "Android",
+     "name": "HandlerThread and Handler",
+     "detail": "A looper thread drains a message queue; posted work runs serially on that thread."
+    },
+    {
+     "where": "Swing",
+     "name": "SwingUtilities.invokeLater",
+     "detail": "Requests are queued to the single event dispatch thread, which owns all UI state."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Ledger {",
+    "    private final ExecutorService loop =",
+    "        Executors.newSingleThreadExecutor();",
+    "    private long balance;",
+    "",
+    "    CompletableFuture<Long> deposit(long cents) {",
+    "        return CompletableFuture.supplyAsync(",
+    "            () -> balance += cents, loop);",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "active-object",
+     "correct": true,
+     "why": "State is confined to one thread; method calls become queued requests that return futures."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "A pool spreads independent tasks across workers. Here one thread owns the state, so the calls are serialized on purpose."
+    },
+    {
+     "ref": "future-promise",
+     "why": "Futures are returned, but the defining feature is the single owning thread and request queue."
+    },
+    {
+     "ref": "proxy",
+     "why": "A proxy would delegate on the caller's thread; this hands the work to another thread."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.concurrent.*;",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A vendor SDK for a label printer is not thread-safe and each print takes about 300 ms. Forty request threads need to print labels. They should not block, and prints must happen one at a time in arrival order.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "active-object",
+     "correct": true,
+     "why": "One owning thread runs queued requests in order, and callers receive futures instead of waiting."
+    },
+    {
+     "ref": "read-write-lock",
+     "why": "Every print is a write, so callers would still queue up and block, and the lock gives no ordering guarantee."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "A pool runs tasks in parallel, which would call the unsafe SDK from several threads at once."
+    },
+    {
+     "ref": "immutable-object",
+     "why": "Immutability removes shared mutable state; the printer is inherently stateful and cannot be made immutable."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the pattern.",
+   "lines": [
+    "final class ActiveCounter {",
+    "    private final Counter servant = new Counter();",
+    "    private final ExecutorService loop =",
+    "        Executors.newSingleThreadExecutor();",
+    "",
+    "    CompletableFuture<Integer> add(int n) {",
+    "        return CompletableFuture.supplyAsync(",
+    "            () -> servant.add(n), loop);",
+    "    }",
+    "",
+    "    int peek() { return servant.add(0); }",
+    "}"
+   ],
+   "flawLines": [
+    11
+   ],
+   "explanation": "`peek` runs on the caller's thread, so it races with the scheduler thread on the servant. Route it through the queue too and return a future.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.*;",
+     "final class Counter { private int t; int add(int n) { return t += n; } }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the caller's code so that each line only uses what came before.",
+   "blocks": [
+    [
+     "var counter = new ActiveCounter();"
+    ],
+    [
+     "var first = counter.add(5);",
+     "var second = counter.add(7);"
+    ],
+    [
+     "int total = second.get();"
+    ],
+    [
+     "System.out.println(total + \" \" + first.get());"
+    ]
+   ],
+   "explanation": "Create the object, enqueue requests and keep their futures, wait on a result, then use it. Requests run in enqueue order, so the second future implies the first.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.CompletableFuture;",
+     "final class ActiveCounter { private int t; CompletableFuture<Integer> add(int n) { return CompletableFuture.completedFuture(t += n); } }",
+     "class Snippet { void run() throws Exception {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Active Object in your own words: how does it avoid locks, and how does it differ from a thread pool?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "An active object owns one thread and a queue. Calls become requests on the queue and return futures, and the scheduler thread runs them one at a time on a plain servant. Because only that thread touches the state, no locks are needed. A thread pool instead runs unrelated tasks in parallel on any worker."
+    }
+   ],
+   "keyPoints": [
+    "Calls become queued requests, executed by one thread",
+    "Callers get futures and do not block",
+    "State is confined to the scheduler thread, so no locks",
+    "FIFO order per object",
+    "A pool shares tasks across threads; an active object serializes one servant"
+   ]
+  }
+ ]
+}

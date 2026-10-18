@@ -25,9 +25,9 @@ enum JavaToolchain {
   }()
 }
 
-/// TODO: flip to `true` once all 70 items are authored (P4); until then registry items
-/// without content are tolerated.
-let requireAllItems = false
+/// Every registry item must have content; set to `false` while authoring a new batch so
+/// registry items without content are tolerated.
+let requireAllItems = true
 
 @Suite struct ContentValidationTests {
   @Test func contentDirectoryExists() {

@@ -1,0 +1,434 @@
+{
+ "id": "repository",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Hide storage behind a collection-like interface so domain code asks for objects, not queries."
+    },
+    {
+     "type": "p",
+     "text": "A **repository** exposes `findById`, `add`, `save` and a few intention-revealing queries for one aggregate. The domain depends on that interface only. SQL, an ORM, a document store or a `HashMap` for tests sit behind it, so storage can change without touching business rules."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Speaks:** the domain's language, in terms of aggregates and not tables.",
+      "**Hides:** query language, mapping, connections and caching.",
+      "**One per aggregate root,** not per table."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "A repository is a port in the domain. Its implementation is an adapter that belongs to infrastructure."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Repository.java",
+   "expectedOutput": "ada -> 35\no-2 -> Optional[Order[id=OrderId[value=o-2], customer=bob, totalCents=900]]\no-9 -> Optional.empty",
+   "walkthrough": [
+    {
+     "region": "domain",
+     "note": "Plain domain types with no persistence annotations. The identity is a typed `OrderId`, not a bare `String`."
+    },
+    {
+     "region": "port",
+     "note": "The repository is an interface owned by the domain. Queries are named for business meaning, and absence is `Optional`, never `null`."
+    },
+    {
+     "region": "memory",
+     "note": "One adapter: a `ConcurrentHashMap`. A JDBC or JPA adapter implements the same three methods, and the sort makes results deterministic."
+    },
+    {
+     "region": "service",
+     "note": "The service takes the interface in its constructor. It cannot see SQL, sessions or maps."
+    },
+    {
+     "region": "client",
+     "note": "Wiring happens at the edge. Swapping the adapter changes one line and no domain code."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Appointment booking in a clinic system."
+    },
+    {
+     "type": "p",
+     "text": "The scheduling rules are the valuable part: no double booking, no overlap with a doctor's leave. Rule tests must run in milliseconds, but production stores appointments in PostgreSQL through JPA. The rules talk to `AppointmentRepository.overlapping(doctor, slot)`. Unit tests use an in-memory adapter and a few integration tests run the JPA adapter against a real database."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "interface AppointmentRepository {",
+      "    List<Appointment> overlapping(DoctorId d, TimeSlot s);",
+      "    void add(Appointment a);",
+      "}",
+      "",
+      "var repo = new InMemoryAppointments();",
+      "new Scheduler(repo).book(doctor, slot, patient);"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: scheduling logic is tested without a database, and moving to a new store means writing one adapter."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "svc",
+       "name": "LoyaltyService",
+       "kind": "class",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "- orders: OrderRepository",
+        "+ points(customer): int"
+       ],
+       "role": "Client"
+      },
+      {
+       "id": "repo",
+       "name": "OrderRepository",
+       "kind": "interface",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ findById(id): Optional",
+        "+ findByCustomer(c): List",
+        "+ save(order)"
+       ],
+       "role": "Repository"
+      },
+      {
+       "id": "mem",
+       "name": "InMemoryOrderRepo",
+       "kind": "class",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "- rows: Map"
+       ],
+       "role": "Adapter"
+      },
+      {
+       "id": "jpa",
+       "name": "JpaOrderRepo",
+       "kind": "class",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "- em: EntityManager"
+       ],
+       "role": "Adapter"
+      },
+      {
+       "id": "order",
+       "name": "Order",
+       "kind": "record",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "id, customer, total"
+       ],
+       "role": "Entity"
+      }
+     ],
+     "edges": [
+      {
+       "from": "svc",
+       "to": "repo",
+       "rel": "association",
+       "label": "uses"
+      },
+      {
+       "from": "mem",
+       "to": "repo",
+       "rel": "realizes"
+      },
+      {
+       "from": "jpa",
+       "to": "repo",
+       "rel": "realizes"
+      },
+      {
+       "from": "repo",
+       "to": "order",
+       "rel": "dependency",
+       "label": "returns"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Domain logic must be testable without a database.",
+      "Storage technology may change, or differs per environment.",
+      "Queries repeat across services and deserve one named home."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The app is thin CRUD over tables; the layer adds ceremony.",
+      "A framework repository already is the abstraction and you never swap it."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "A leaky interface that returns query builders, `ResultSet` or `Map` internals.",
+      "Generic `findAll()` on huge tables, or one method per report.",
+      "Repositories per table instead of per aggregate root."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A repository that only forwards to `JpaRepository` with the same methods.",
+      "Dozens of `findByXAndYAndZ` methods; switch to [Specification](kata:specification)."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Spring Data and Jakarta Data generate the implementation from an interface, so you write only the port.",
+      "Return `Optional` for single results and immutable lists or `Stream` for collections."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "data-mapper",
+     "relation": "combines",
+     "difference": "The repository is the collection the domain sees; a mapper does the object-to-row translation inside its implementation."
+    },
+    {
+     "ref": "active-record",
+     "relation": "alternative",
+     "difference": "Active Record puts finders and save on the entity itself, tying it to storage. A repository keeps entities persistence-ignorant."
+    },
+    {
+     "ref": "unit-of-work",
+     "relation": "combines",
+     "difference": "Repositories fetch and register objects; the unit of work decides when changes are flushed together in one transaction."
+    },
+    {
+     "ref": "specification",
+     "relation": "combines",
+     "difference": "Pass a specification to one `find(spec)` method instead of growing the interface with a method per filter."
+    },
+    {
+     "ref": "hexagonal",
+     "relation": "specializes",
+     "difference": "In hexagonal architecture a repository interface is the typical outbound port, and its implementation is a driven adapter."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Spring Data",
+     "name": "CrudRepository / JpaRepository",
+     "detail": "Declare an interface; Spring Data generates the implementation, including derived queries like `findByLastName`."
+    },
+    {
+     "where": "Jakarta EE",
+     "name": "jakarta.data.repository.Repository",
+     "detail": "Jakarta Data marks an interface as a repository with built-in CRUD and query methods."
+    },
+    {
+     "where": "Spring",
+     "name": "@Repository",
+     "detail": "A stereotype that marks the persistence component and translates vendor exceptions into `DataAccessException`."
+    },
+    {
+     "where": "Quarkus",
+     "name": "PanacheRepository",
+     "detail": "Hibernate ORM with Panache repository interface offering `find`, `list` and `persist` for an entity."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "interface Shelf {",
+    "    Optional<Book> byIsbn(String isbn);",
+    "    List<Book> byAuthor(String author);",
+    "    void add(Book book);",
+    "    void remove(String isbn);",
+    "}",
+    "// one implementation talks SQL, another wraps a HashMap for tests"
+   ],
+   "options": [
+    {
+     "ref": "repository",
+     "correct": true,
+     "why": "A collection-like, domain-worded interface over storage, with interchangeable backends."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "A mapper translates between object and row shapes; this interface says nothing about mapping."
+    },
+    {
+     "ref": "active-record",
+     "why": "The entity does not save or find itself; a separate object holds the access."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade simplifies a subsystem's API; this interface exists to abstract where data lives."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Book(String isbn, String author) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A domain service loads and stores `Policy` aggregates. Tests must run without a database, and storage may move from PostgreSQL to DynamoDB next year. Business rules should not mention tables or queries.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "repository",
+     "correct": true,
+     "why": "A domain-owned, collection-like port with swappable adapters hides storage completely."
+    },
+    {
+     "ref": "active-record",
+     "why": "Policies would carry find and save, binding domain rules to a concrete store and forcing a database in tests."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "Mapping is needed somewhere, but a mapper alone gives the domain no storage-agnostic interface to depend on."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade wraps a subsystem; it does not give the domain an abstraction in its own vocabulary."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Repository pattern.",
+   "lines": [
+    "final class UserRepository {",
+    "    private final Map<Long, User> rows = new HashMap<>();",
+    "",
+    "    Optional<User> findById(long id) {",
+    "        return Optional.ofNullable(rows.get(id));",
+    "    }",
+    "",
+    "    Map<Long, User> all() { return rows; }",
+    "",
+    "    void save(User user) { rows.put(user.id(), user); }",
+    "}"
+   ],
+   "flawLines": [
+    8
+   ],
+   "explanation": "Returning the internal map lets callers mutate storage directly and ties them to its shape. Expose intention-revealing queries or an immutable copy such as `List.copyOf(rows.values())`.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record User(long id) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the use case so each line only uses what came before.",
+   "blocks": [
+    [
+     "var id = new OrderId(request.orderId());"
+    ],
+    [
+     "Order order = orders.findById(id).orElseThrow();"
+    ],
+    [
+     "order.cancel();"
+    ],
+    [
+     "orders.save(order);"
+    ],
+    [
+     "audit.record(order.id());"
+    ]
+   ],
+   "explanation": "Build the identity, fetch the aggregate, change it, persist it, then use the persisted result. Each line depends on the previous variable.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record OrderId(String v) {}",
+     "record Request(String orderId) {}",
+     "final class Order { OrderId id() { return null; } void cancel() {} }",
+     "interface Orders { Optional<Order> findById(OrderId id); void save(Order o); }",
+     "interface Audit { void record(OrderId id); }",
+     "class Snippet { void run(Request request, Orders orders, Audit audit) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Repository in your own words: what does it hide, and why is it not just a DAO or a mapper?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A repository gives the domain a collection-like interface for aggregates: find, add, save, in domain vocabulary. It hides storage technology and mapping. The domain owns the interface and infrastructure implements it. A mapper only translates shapes, and a DAO often mirrors tables rather than aggregates."
+    }
+   ],
+   "keyPoints": [
+    "Collection-like interface in domain language",
+    "Hides storage, queries and mapping",
+    "One per aggregate root, owned by the domain",
+    "Implementation is a swappable adapter",
+    "Mapping and transactions are separate concerns"
+   ]
+  }
+ ]
+}

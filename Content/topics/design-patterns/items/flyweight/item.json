@@ -1,0 +1,455 @@
+{
+ "id": "flyweight",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Share the immutable part of many similar objects so it is stored once, and pass the varying part in from outside."
+    },
+    {
+     "type": "p",
+     "text": "A flyweight splits state in two. **Intrinsic** state is identical across objects, immutable, and lives in a shared flyweight. **Extrinsic** state differs per use, so the caller keeps it and passes it in. A **factory** hands out one shared instance per distinct intrinsic value."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Saves:** memory, when objects number in the millions and mostly repeat.",
+      "**Costs:** a lookup per creation and clumsier APIs.",
+      "**Requires:** shared parts to be immutable."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Flyweight is a measured optimization, not a default. Profile first: on the JVM, a lighter data layout often saves more."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Flyweight.java",
+   "expectedOutput": "6 trees, 2 shared types\ntrue\npine@30,15",
+   "walkthrough": [
+    {
+     "region": "flyweight",
+     "note": "The flyweight holds only intrinsic state, here species and color. As a record it is immutable and has value equality, which the pool relies on."
+    },
+    {
+     "region": "factory",
+     "note": "The factory guarantees one canonical instance per value. `computeIfAbsent` makes creation atomic, so concurrent callers still share."
+    },
+    {
+     "region": "context",
+     "note": "A `Tree` stores only extrinsic state (position) plus a reference to the shared type. Its `draw` passes the extrinsic values in."
+    },
+    {
+     "region": "client",
+     "note": "Six trees are created from two species. Each asks the factory instead of calling `new TreeType`."
+    },
+    {
+     "region": "check",
+     "note": "Only two flyweights exist, and trees 0 and 2 hold the very same object (`==` is true), while each tree still draws at its own position."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A time-series database ingesting millions of points per second."
+    },
+    {
+     "type": "p",
+     "text": "Every point carries a metric name and a set of tags such as `host`, `region` and `service`, but there are only a few thousand distinct combinations. Storing the strings with each point would cost gigabytes. Each distinct combination becomes a shared immutable `SeriesKey`, interned on ingest, and a data point holds just the key reference, a timestamp and a value."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "record SeriesKey(String metric, Map<String, String> tags) {}",
+      "record Point(SeriesKey series, long ts, double value) {}",
+      "",
+      "SeriesKey key = interner.intern(parse(line)); // shared"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: memory scales with the number of distinct series, not with the number of points, and key comparison becomes an identity check."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "factory",
+       "name": "TreeTypes",
+       "kind": "class",
+       "role": "FlyweightFactory",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "- POOL: Map",
+        "+ of(species, color)"
+       ]
+      },
+      {
+       "id": "type",
+       "name": "TreeType",
+       "kind": "record",
+       "role": "Flyweight",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "species, color",
+        "+ draw(x, y)"
+       ]
+      },
+      {
+       "id": "tree",
+       "name": "Tree",
+       "kind": "record",
+       "role": "Context",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "x, y (extrinsic)",
+        "+ draw()"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "factory",
+       "to": "type",
+       "rel": "aggregation",
+       "label": "pool"
+      },
+      {
+       "from": "tree",
+       "to": "type",
+       "rel": "aggregation",
+       "label": "type"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "type",
+       "text": "immutable, shared"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "factory",
+       "name": "TreeTypes",
+       "role": "FlyweightFactory"
+      },
+      {
+       "id": "type",
+       "name": "TreeType",
+       "role": "Flyweight"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "factory",
+       "label": "of(\"oak\", \"green\")",
+       "style": "call"
+      },
+      {
+       "from": "factory",
+       "to": "type",
+       "label": "new TreeType(...)",
+       "style": "create"
+      },
+      {
+       "from": "factory",
+       "to": "client",
+       "label": "shared instance",
+       "style": "return"
+      },
+      {
+       "from": "client",
+       "to": "factory",
+       "label": "of(\"oak\", \"green\")",
+       "style": "call"
+      },
+      {
+       "from": "factory",
+       "to": "client",
+       "label": "same instance",
+       "style": "return"
+      },
+      {
+       "from": "client",
+       "to": "type",
+       "label": "draw(x, y)",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Millions of objects share a large, immutable part and a profile shows memory pressure.",
+      "Distinct intrinsic values are few compared with the object count."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Most objects are unique, so there is little to share.",
+      "The shared part is small; the lookup costs more than it saves."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Mutable intrinsic state: one caller's change appears in every user.",
+      "A strong pool never releases entries; use weak references if the key space is open.",
+      "Extrinsic state threaded through every call makes APIs awkward."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Pooling tiny objects the JIT could scalar-replace.",
+      "A global static pool hidden in domain code."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Records give immutable value types that suit flyweights.",
+      "`String` deduplication in G1 shares character arrays without code changes."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "singleton",
+     "relation": "oftenConfused",
+     "difference": "A singleton is exactly one instance globally. Flyweight keeps one instance per distinct value, and many of them."
+    },
+    {
+     "ref": "composite",
+     "relation": "combines",
+     "difference": "Immutable leaf nodes of a composite, such as glyphs in a document tree, are natural flyweights."
+    },
+    {
+     "ref": "factory-method",
+     "relation": "combines",
+     "difference": "The flyweight factory is a keyed creation method that returns existing instances before building new ones."
+    },
+    {
+     "ref": "prototype",
+     "relation": "alternative",
+     "difference": "Prototype copies an object to avoid expensive construction. Flyweight avoids having many copies at all by sharing one."
+    },
+    {
+     "ref": "proxy",
+     "relation": "oftenConfused",
+     "difference": "A proxy stands in for one specific object, often to defer or guard access. A flyweight is shared among many users."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "Integer.valueOf",
+     "detail": "Caches boxed values from -128 to 127, so `valueOf(100) == valueOf(100)`; `Character.valueOf` caches 0 to 127."
+    },
+    {
+     "where": "JDK",
+     "name": "String.intern",
+     "detail": "Returns a canonical instance from the JVM string pool for each distinct character sequence."
+    },
+    {
+     "where": "Guava",
+     "name": "Interners.newWeakInterner",
+     "detail": "A pool of canonical instances held by weak references, so unused entries can be collected."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Currencies {",
+    "    private static final Map<String, Currency> CACHE =",
+    "        new ConcurrentHashMap<>();",
+    "",
+    "    static Currency of(String code) {",
+    "        return CACHE.computeIfAbsent(code, Currency::new);",
+    "    }",
+    "}",
+    "",
+    "record Price(long cents, Currency currency) {} // millions of these"
+   ],
+   "options": [
+    {
+     "ref": "flyweight",
+     "correct": true,
+     "why": "One immutable `Currency` per distinct code is shared by millions of `Price` objects, which hold only their own amount."
+    },
+    {
+     "ref": "singleton",
+     "why": "A singleton has one instance in total. Here there is one instance per distinct code."
+    },
+    {
+     "ref": "factory-method",
+     "why": "There is a creation method, but its point is returning shared instances to save memory, not choosing a subclass."
+    },
+    {
+     "ref": "prototype",
+     "why": "Nothing is cloned; existing instances are looked up and reused."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.Map;",
+     "import java.util.concurrent.ConcurrentHashMap;",
+     "record Currency(String code) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A spreadsheet viewer loads sheets with five million cells. Each cell has a style (font, fill, borders) drawn from about forty distinct combinations, plus its own value and position. Memory is the bottleneck.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "flyweight",
+     "correct": true,
+     "why": "Forty immutable shared styles replace five million copies; value and position stay per cell."
+    },
+    {
+     "ref": "prototype",
+     "why": "Cloning a style per cell is exactly what multiplies memory here."
+    },
+    {
+     "ref": "singleton",
+     "why": "There are forty styles, not one, so a single shared instance cannot work."
+    },
+    {
+     "ref": "proxy",
+     "why": "Loading cells lazily defers cost, but each loaded cell would still carry its own style copy."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Flyweight pattern.",
+   "lines": [
+    "final class Style { // shared across cells",
+    "    private final String font;",
+    "    private boolean selected;",
+    "",
+    "    Style(String font) { this.font = font; }",
+    "",
+    "    void select(boolean on) { selected = on; }",
+    "",
+    "    String draw(String text) {",
+    "        return (selected ? \"*\" : \"\") + font + \":\" + text;",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    3
+   ],
+   "explanation": "Per-cell state lives in a shared object, so selecting one cell highlights every cell that shares the style. Keep `selected` outside and pass it in: `draw(text, selected)`.",
+   "compile": {
+    "template": [
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that each one only uses what came before.",
+   "blocks": [
+    [
+     "Map<String, Style> pool = new HashMap<>();",
+     "String key = cell.font();"
+    ],
+    [
+     "Style style = pool.computeIfAbsent(key, Style::new);"
+    ],
+    [
+     "String out = style.draw(cell.text(), cell.col());"
+    ],
+    [
+     "screen.add(out);"
+    ]
+   ],
+   "explanation": "The lookup key and pool exist first, then the shared instance is fetched or created. Only then can the extrinsic values from the cell be passed to it.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Style(String font) { String draw(String t, int c) { return font + t + c; } }",
+     "record Cell(String font, String text, int col) {}",
+     "class Snippet { void run(Cell cell, List<String> screen) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Flyweight in your own words: what is intrinsic versus extrinsic state, and who creates the flyweights?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Flyweight saves memory by sharing. Intrinsic state is identical across many objects and immutable, so it lives in one shared flyweight. Extrinsic state differs per use and is kept by the caller and passed in. A factory returns the existing flyweight for each distinct intrinsic value, so clients never call the constructor directly."
+    }
+   ],
+   "keyPoints": [
+    "Intrinsic state is shared, immutable, and stored once",
+    "Extrinsic state is held by the caller and passed in",
+    "A factory pools instances per distinct value",
+    "It is a memory optimization; measure first",
+    "Not a singleton: many flyweights, one per value"
+   ]
+  }
+ ]
+}

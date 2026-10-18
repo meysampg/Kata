@@ -1,0 +1,165 @@
+{
+  "id": "sidecar",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Run a helper process beside each service instance to provide cross-cutting capabilities without changing the service."},
+      {"type": "p", "text": "The **sidecar** shares the service's host or pod, lifecycle and network namespace, but it is a separate process, often in another language. It intercepts or complements the service's traffic to add TLS, retries, metrics, log shipping or config reload, so every service gets them uniformly."},
+      {"type": "bullets", "items": [
+        "**Co-located:** deployed and scaled with the service instance.",
+        "**Isolated:** its own process, resources and release cadence.",
+        "**Language-neutral:** the same capability for Java, Go and Python services."]},
+      {"type": "callout", "tone": "info", "text": "The in-process sample shows the seam only: the sidecar wraps the app behind the same interface. In production the hop is a real localhost or pod-network connection."}
+    ]},
+    {"role": "implementation", "file": "Sidecar.java",
+     "expectedOutput": "200 order:42\n401 denied\n200 order:7\nlog: [/orders/42 200, /orders/9 401, /orders/7 200]\nmetrics: {200=2, 401=1}",
+     "walkthrough": [
+      {"region": "port", "note": "The seam is one interface. The app is reachable only through it, which is what lets a sidecar interpose without the app knowing."},
+      {"region": "app", "note": "Business logic only. No authentication, no access log, no metrics. It trusts that whatever reaches it was already vetted."},
+      {"region": "sidecar", "note": "The sidecar implements the same interface and wraps the app: it checks the token, forwards allowed calls, then records the access log and status counters for every call."},
+      {"region": "deploy", "note": "Deployment pairs them: callers talk to the sidecar, which owns the only reference to the app. In Kubernetes this is two containers in one pod."},
+      {"region": "traffic", "note": "Denied calls never reach the app, yet they are still logged and counted. Capabilities arrive without a line changed in `OrderApp`."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Uniform mTLS and metrics across a polyglot fleet."},
+      {"type": "p", "text": "A platform has 200 services in Java, Go and Python, and security demands mutual TLS with rotated certificates plus consistent request metrics. Implementing that in three client libraries means three upgrade campaigns. Instead each pod gets an Envoy sidecar. The service speaks plain HTTP to localhost, and the proxy handles certificates, retries, and emits uniform metrics."},
+      {"type": "code", "language": "java", "lines": [
+        "// the service knows nothing about TLS or retries",
+        "HttpRequest req = HttpRequest.newBuilder(",
+        "    URI.create(\"http://localhost:15001/payments/charge\"))",
+        "    .POST(body).build();",
+        "client.send(req, BodyHandlers.ofString());"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: a certificate or retry policy change is one proxy rollout, not a rebuild of 200 services in three languages."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "handler", "name": "Handler", "kind": "interface", "role": "Port", "col": 0.5, "row": 0,
+         "members": ["+ handle(request)"]},
+        {"id": "sidecar", "name": "Sidecar", "kind": "class", "role": "Sidecar", "col": 0, "row": 1,
+         "members": ["- app: Handler", "+ handle(request)"]},
+        {"id": "app", "name": "OrderApp", "kind": "class", "role": "Service", "col": 1, "row": 1,
+         "members": ["+ handle(request)"]}],
+       "edges": [
+        {"from": "sidecar", "to": "handler", "rel": "realizes"},
+        {"from": "app", "to": "handler", "rel": "realizes"},
+        {"from": "sidecar", "to": "app", "rel": "association", "label": "forwards to"}],
+       "notes": [{"attachTo": "sidecar", "text": "auth, logs, metrics, retries"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "caller", "name": "Caller"}, {"id": "sc", "name": "Sidecar", "role": "Sidecar"},
+        {"id": "app", "name": "OrderApp", "role": "Service"}],
+       "messages": [
+        {"from": "caller", "to": "sc", "label": "request + token", "style": "call"},
+        {"from": "sc", "to": "app", "label": "handle(request)", "style": "call"},
+        {"from": "app", "to": "sc", "label": "response", "style": "return"},
+        {"from": "sc", "to": "caller", "label": "response + metrics", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Many services in several languages need the same networking or operational capability.",
+        "The capability should upgrade independently of the service.",
+        "A failing helper must not crash the service's process."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "A handful of services in one language: a shared library is simpler and faster.",
+        "Latency budgets are microseconds: each hop adds a localhost round trip."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Every pod pays the sidecar's memory and CPU; at scale that is real cost.",
+        "Startup and shutdown ordering: the app can start before its proxy is ready.",
+        "A sidecar upgrade means restarting pods, unless it supports hot restart."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A sidecar that holds business logic or shares the app's state.",
+        "One sidecar per concern, so a pod runs five helper containers."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Plain `java.net.http.HttpClient` toward localhost is enough; leave TLS, retries and discovery to the proxy.",
+        "Expose `/health` and `/metrics` endpoints and let sidecars probe and scrape them, instead of embedding agents."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "ambassador", "relation": "specializes", "difference": "An ambassador is a sidecar focused on outbound calls to one remote resource, such as a sharded cache. A general sidecar also covers inbound traffic and operational concerns."},
+      {"ref": "decorator", "relation": "lookAlike", "difference": "Decorator wraps an object inside one process and language. A sidecar wraps a service across a process boundary, with its own lifecycle and failure modes."},
+      {"ref": "proxy", "relation": "lookAlike", "difference": "A sidecar is usually implemented as a proxy, but it is defined by deployment: co-located, per instance, and handling cross-cutting concerns for its host."},
+      {"ref": "api-gateway", "relation": "oftenConfused", "difference": "A gateway is one shared edge component for external clients. Sidecars are per instance and carry service-to-service traffic."},
+      {"ref": "circuit-breaker", "relation": "combines", "difference": "Resilience policies such as retries, timeouts and breakers are commonly delivered by the sidecar instead of in-app libraries."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Istio", "name": "Envoy sidecar injection", "detail": "Namespaces labeled for injection get an `istio-proxy` container added to each pod, which handles mTLS, routing and telemetry."},
+      {"where": "Linkerd", "name": "linkerd2-proxy", "detail": "A Rust micro-proxy injected into each pod as the service-mesh data plane."},
+      {"where": "Kubernetes", "name": "Native sidecar containers", "detail": "An `initContainers` entry with `restartPolicy: Always` starts before the app and runs for the pod's life."},
+      {"where": "Dapr", "name": "daprd", "detail": "A sidecar that exposes HTTP and gRPC APIs for state, pub/sub and service invocation to the app on localhost."},
+      {"where": "Fluent Bit", "name": "Log-shipping sidecar", "detail": "A common deployment tails the app's log volume and forwards it, so the app only writes files."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this deployment?",
+     "lines": [
+      "spec:",
+      "  containers:",
+      "  - name: orders",
+      "    image: shop/orders:1.8",
+      "    ports: [{containerPort: 8080}]",
+      "  - name: proxy",
+      "    image: envoyproxy/envoy:v1.30",
+      "    ports: [{containerPort: 8443}]",
+      "    volumeMounts: [{name: certs, mountPath: /etc/certs}]",
+      "# traffic enters on 8443, is TLS-terminated, then forwarded to localhost:8080"],
+     "options": [
+      {"ref": "sidecar", "correct": true, "why": "A helper container shares the pod with the service and handles its TLS and traffic; the app is unchanged."},
+      {"ref": "api-gateway", "why": "A gateway is one shared edge component for many services; this proxy exists once per service instance."},
+      {"ref": "adapter", "why": "The proxy does not convert one interface to another; it adds a capability around the same interface."},
+      {"ref": "decorator", "why": "Decorator wraps within one process. This is a separate container with its own image and lifecycle."}]},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A company runs 150 services in Java, Go and Python. Security requires mutual TLS with rotated certificates and consistent request metrics, and the platform team cannot coordinate rebuilds of every service for each change.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "sidecar", "correct": true, "why": "A per-instance proxy delivers mTLS and metrics uniformly across languages and upgrades independently of the services."},
+      {"ref": "api-gateway", "why": "A gateway covers north-south traffic at the edge; it does not secure service-to-service calls."},
+      {"ref": "decorator", "why": "An in-process decorator would need a version per language and a rebuild of every service."},
+      {"ref": "strangler-fig", "why": "That pattern replaces legacy systems incrementally; it does not add cross-cutting capabilities."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the sidecar idea.",
+     "lines": [
+      "final class AuthSidecar implements Handler {",
+      "    private final OrderApp app;",
+      "",
+      "    AuthSidecar(OrderApp app) { this.app = app; }",
+      "",
+      "    public Response handle(Request r) {",
+      "        if (!valid(r.token())) return Response.denied();",
+      "        app.markAuthenticated(r.user());",
+      "        return app.handle(r);",
+      "    }",
+      "",
+      "    private boolean valid(String t) { return !t.isEmpty(); }",
+      "}"],
+     "flawLines": [8],
+     "explanation": "The sidecar reaches into the app's internal state, so the two are coupled and the sidecar can't be swapped or deployed alone. Pass identity through the request, such as a header, and keep the app contract unchanged.",
+     "compile": {"template": [
+      "interface Handler { Response handle(Request r); }",
+      "record Request(String token, String user) {}",
+      "record Response(int status) { static Response denied() { return new Response(401); } }",
+      "class OrderApp implements Handler { void markAuthenticated(String user) {} public Response handle(Request r) { return new Response(200); } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the sidecar's handling of one inbound call.",
+     "blocks": [
+      ["String token = request.headers().getOrDefault(\"token\", \"\");"],
+      ["if (!tokens.contains(token)) return new Response(401, \"denied\");"],
+      ["Response res = app.handle(request);"],
+      ["metrics.merge(res.status(), 1, Integer::sum);"],
+      ["return res;"]],
+     "explanation": "Read the credential, reject early so the app is never called, forward allowed requests, record the outcome from the response, then return it.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "interface Handler { Response handle(Request r); }",
+      "record Request(Map<String, String> headers) {}",
+      "record Response(int status, String body) {}",
+      "class Snippet { Handler app; Set<String> tokens; Map<Integer, Integer> metrics = new TreeMap<>();",
+      "  Response handle(Request request) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain the Sidecar pattern: what it is, why it is a separate process, and the cost.",
+     "modelAnswer": [
+      {"type": "p", "text": "A sidecar is a helper process deployed with each service instance, sharing its lifecycle and network. It supplies TLS, retries, metrics or log shipping uniformly across languages and upgrades independently. The costs are per-instance resource use, an extra network hop and startup ordering concerns."}],
+     "keyPoints": [
+      "Helper process co-located with each service instance",
+      "Cross-cutting capability without changing the service",
+      "Language-neutral and independently upgradable",
+      "Costs: per-pod resources, extra hop, startup ordering",
+      "A shared library is simpler for one language"]}
+  ]
+}

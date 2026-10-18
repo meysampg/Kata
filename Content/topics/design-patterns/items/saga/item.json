@@ -1,0 +1,171 @@
+{
+  "id": "saga",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Replace a distributed transaction with a sequence of local transactions, each paired with a compensation that undoes it."},
+      {"type": "p", "text": "No single ACID transaction spans services, so a **saga** runs one local transaction per service. If step N fails, the saga executes the **compensating actions** for steps N-1 down to 1. Intermediate states are visible to others, so a saga gives atomicity of outcome but not isolation."},
+      {"type": "bullets", "items": [
+        "**Orchestration:** a coordinator tells each participant what to do.",
+        "**Choreography:** participants react to each other's events.",
+        "**Compensation:** a semantic undo (refund), not a rollback."]},
+      {"type": "callout", "tone": "warning", "text": "Compensations can fail too, and some steps can't be undone (an email sent). Order steps so irreversible ones come last."}
+    ]},
+    {"role": "implementation", "file": "Saga.java",
+     "expectedOutput": "true [do reserve, do hold-points, do charge, do ship] stock=4 held=10\nfalse [do reserve, do hold-points, fail charge, undo hold-points, undo reserve] stock=5 held=0",
+     "walkthrough": [
+      {"region": "step", "note": "A step pairs a forward action with its compensation. Defining both together makes it harder to add an action nobody knows how to undo."},
+      {"region": "orchestrator", "note": "The orchestrator runs steps in order and pushes each success onto a stack. On failure it pops the stack, so compensations run in reverse order of completion."},
+      {"region": "definition", "note": "The workflow is data: reserve stock, hold points, charge the card, ship. The irreversible shipment is last. A declined card throws inside `charge`."},
+      {"region": "run", "note": "Run one: everything succeeds. Run two: the charge fails, the points hold and the reservation are undone in reverse order, and state returns to the start."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Booking a trip across flight, hotel and payment services."},
+      {"type": "p", "text": "Each service owns its database, so there is no shared transaction. The booking orchestrator reserves a seat, then a room, then charges the card. If the card is declined, it cancels the room and releases the seat. Each compensation is idempotent and retried until it succeeds, and the saga's state is persisted after each step so a restarted orchestrator resumes where it stopped."},
+      {"type": "code", "language": "java", "lines": [
+        "new Saga(List.of(",
+        "    new Step(\"seat\",  () -> flights.hold(trip), () -> flights.release(trip)),",
+        "    new Step(\"room\",  () -> hotels.hold(trip),  () -> hotels.release(trip)),",
+        "    new Step(\"charge\", () -> payments.charge(trip), () -> payments.refund(trip))",
+        ")).run();"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: a failure at any point leaves every service consistent again, without locks held across the network."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "saga", "name": "Saga", "kind": "class", "role": "Orchestrator", "col": 0.5, "row": 0,
+         "members": ["- steps: List<Step>", "+ run(): boolean"]},
+        {"id": "step", "name": "Step", "kind": "record", "role": "LocalTransaction", "col": 0.5, "row": 1,
+         "members": ["+ action: Runnable", "+ compensation: Runnable"]},
+        {"id": "inv", "name": "InventoryService", "kind": "class", "role": "Participant", "col": 0, "row": 2,
+         "members": ["+ reserve()", "+ release()"]},
+        {"id": "pay", "name": "PaymentService", "kind": "class", "role": "Participant", "col": 1, "row": 2,
+         "members": ["+ charge()", "+ refund()"]}],
+       "edges": [
+        {"from": "saga", "to": "step", "rel": "composition", "label": "steps"},
+        {"from": "step", "to": "inv", "rel": "dependency", "label": "calls"},
+        {"from": "step", "to": "pay", "rel": "dependency", "label": "calls"}],
+       "notes": [{"attachTo": "step", "text": "every action has an undo"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "o", "name": "Orchestrator", "role": "Orchestrator"},
+        {"id": "i", "name": "Inventory", "role": "Participant"}, {"id": "p", "name": "Payment", "role": "Participant"}],
+       "messages": [
+        {"from": "o", "to": "i", "label": "reserve", "style": "call"},
+        {"from": "i", "to": "o", "label": "ok", "style": "return"},
+        {"from": "o", "to": "p", "label": "charge", "style": "call"},
+        {"from": "p", "to": "o", "label": "declined", "style": "return"},
+        {"from": "o", "to": "i", "label": "release (compensate)", "style": "call"},
+        {"from": "i", "to": "o", "label": "ok", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A business process spans services that own their data.",
+        "Locks or two-phase commit across services are impractical.",
+        "Every step has a meaningful business-level undo."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "One database can run the work in a local ACID transaction.",
+        "Steps need strict isolation, such as exact balances visible to all."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Dirty reads: other requests see intermediate state until compensation runs.",
+        "Every step and compensation must be idempotent and retryable.",
+        "Orchestrator state must be durable, or a crash strands the saga half done."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A saga for two steps in the same service and database.",
+        "Choreographed sagas across many services nobody can trace end to end."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Records and sealed events model saga steps and state cleanly.",
+        "Durable-execution engines such as Temporal persist progress for you."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "command", "relation": "combines", "difference": "Each step is a command with an undo. A saga adds the failure policy: on error it runs the undos in reverse order."},
+      {"ref": "unit-of-work", "relation": "alternative", "difference": "A unit of work gives ACID atomicity in one database. A saga offers eventual atomicity across services, using compensations instead of rollback."},
+      {"ref": "transactional-outbox", "relation": "combines", "difference": "Each saga step must update its data and send its next message atomically, which is what the outbox provides."},
+      {"ref": "idempotent-consumer", "relation": "combines", "difference": "Messages and compensations can be redelivered, so each participant must apply them at most once in effect."},
+      {"ref": "state", "relation": "lookAlike", "difference": "A saga's progress is a state machine, but State models one object's behavior. A saga coordinates several services and their undo."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Axon Framework", "name": "@Saga and @SagaEventHandler", "detail": "Saga classes with `@StartSaga` and `@EndSaga` react to events and dispatch commands, with persisted association values."},
+      {"where": "Temporal", "name": "io.temporal.workflow.Saga", "detail": "Java SDK helper that registers compensations as the workflow proceeds and runs them in reverse on failure."},
+      {"where": "Eventuate Tram", "name": "Sagas", "detail": "Orchestration-based saga framework for Java microservices, built on a transactional messaging layer."},
+      {"where": "AWS Step Functions", "name": "Catch and Retry states", "detail": "A state machine routes failures to compensating states, the standard way to implement orchestrated sagas on AWS."},
+      {"where": "Camunda", "name": "BPMN compensation events", "detail": "Compensation boundary events and handlers undo completed activities when a process is cancelled or fails."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "boolean book(Trip trip) {",
+      "    Deque<Runnable> undo = new ArrayDeque<>();",
+      "    try {",
+      "        flights.hold(trip);  undo.push(() -> flights.release(trip));",
+      "        hotels.hold(trip);   undo.push(() -> hotels.release(trip));",
+      "        payments.charge(trip);",
+      "        return true;",
+      "    } catch (RuntimeException e) {",
+      "        undo.forEach(Runnable::run);",
+      "        return false;",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "saga", "correct": true, "why": "Local steps across services each register a compensation, and a failure runs them in reverse order."},
+      {"ref": "command", "why": "Commands with undo are used here, but the idea is the cross-service failure workflow, not request objects."},
+      {"ref": "unit-of-work", "why": "A unit of work commits or rolls back changes in one data store; these calls span independent services."},
+      {"ref": "chain-of-responsibility", "why": "No handler decides whether to pass along a request; every step always runs in a fixed order."}],
+     "compile": {"template": [
+      "import java.util.ArrayDeque;", "import java.util.Deque;",
+      "record Trip(String id) {}",
+      "interface Svc { void hold(Trip t); void release(Trip t); void charge(Trip t); }",
+      "class Holder { Svc flights; Svc hotels; Svc payments;",
+      "{{code}}", "}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "Placing an order must reserve stock in the inventory service, charge the payment service and create a shipment, each with its own database. If payment fails, the stock reservation must not stay held. Two-phase commit is not offered by the services.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "saga", "correct": true, "why": "Local transactions with compensations, such as releasing the reservation, restore consistency without a distributed transaction."},
+      {"ref": "unit-of-work", "why": "It needs one transactional resource; here three independent databases are involved."},
+      {"ref": "circuit-breaker", "why": "It stops calling a failing service but does not undo what earlier services already did."},
+      {"ref": "retry-backoff", "why": "A declined payment will not succeed on retry; the earlier steps need compensating."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the compensation logic.",
+     "lines": [
+      "boolean run() {",
+      "    Deque<Step> done = new ArrayDeque<>();",
+      "    for (Step step : steps) {",
+      "        try {",
+      "            step.action().run();",
+      "            done.addLast(step);",
+      "        } catch (RuntimeException e) {",
+      "            while (!done.isEmpty()) done.pop().compensation().run();",
+      "            return false;",
+      "        }",
+      "    }",
+      "    return true;",
+      "}"],
+     "flawLines": [6],
+     "explanation": "`addLast` puts the newest step at the tail while `pop` takes from the head, so compensations would run in forward order. Use `push` so the most recent step is undone first.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "record Step(String name, Runnable action, Runnable compensation) {}",
+      "class Holder { List<Step> steps;",
+      "{{code}}", "}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the failure handling of one saga run.",
+     "blocks": [
+      ["Deque<Step> done = new ArrayDeque<>();"],
+      ["step.action().run();", "done.push(step);"],
+      ["// payment declined: the action throws"],
+      ["Step undo = done.pop();", "undo.compensation().run();"]],
+     "explanation": "Track completed steps first, record each success after its action, hit the failure, and only then pop completed steps newest-first to compensate.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "record Step(String name, Runnable action, Runnable compensation) {}",
+      "class Snippet { void run(Step step) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain a Saga: why it exists, how failure is handled, and what it cannot give you.",
+     "modelAnswer": [
+      {"type": "p", "text": "A saga splits a cross-service operation into local transactions, each with a compensating action. On failure, completed steps are compensated in reverse order, restoring consistency without distributed locks. It can't provide isolation: other requests may see intermediate states, and compensations must be idempotent."}],
+     "keyPoints": [
+      "Sequence of local transactions across services",
+      "Each step has a compensation, a semantic undo",
+      "On failure run compensations in reverse order",
+      "No isolation: intermediate states are visible",
+      "Steps and compensations must be idempotent and durable"]}
+  ]
+}

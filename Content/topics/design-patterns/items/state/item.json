@@ -1,0 +1,173 @@
+{
+  "id": "state",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Let an object change its behavior when its internal state changes, by delegating each event to a state object."},
+      {"type": "p", "text": "A **context** holds a reference to its current **state**. Every event is forwarded to that object, which either handles it, rejects it, or returns the next state. The legal transitions live in the states, so the context carries no `switch` on a status field."},
+      {"type": "bullets", "items": [
+        "**Varies:** behavior per lifecycle phase, and which events are legal.",
+        "**Stays stable:** the context's public API.",
+        "**Chosen by:** the machine itself, as events arrive."]},
+      {"type": "callout", "tone": "info", "text": "Per-state data (a receipt, a tracking id) belongs in the state object. Fields that are meaningful in only some phases stop being nullable."}
+    ]},
+    {"role": "implementation", "file": "State.java",
+     "expectedOutput": "Paid[receipt=R-1]\nShipped[tracking=TRK-9]\ncancel not allowed in Shipped[tracking=TRK-9]",
+     "walkthrough": [
+      {"region": "state", "note": "A sealed interface with a default for every event: reject. Each state overrides only the events it allows, so an illegal transition is the default, not an omission."},
+      {"region": "concrete", "note": "Concrete states are records. Each returns the successor state, and `Paid` and `Shipped` carry data that exists only in that phase."},
+      {"region": "context", "note": "The context only forwards the event and stores the result: `state = state.pay(...)`. No status enum, no `switch`."},
+      {"region": "client", "note": "The client sees one `Order`. `cancel()` after shipping fails because `Shipped` never overrode it, with no check in `Order`."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Subscription billing lifecycle in a SaaS product."},
+      {"type": "p", "text": "A subscription is trialing, active, past due, suspended or cancelled. Each phase answers the same events differently: a failed charge during trial does nothing, in active it starts a grace period, in past due it suspends the account. Scattered `if (status == ...)` checks drifted apart across services. One state object per phase now owns its rules, and the transition table is readable in one place."},
+      {"type": "code", "language": "java", "lines": [
+        "sealed interface Sub permits Trialing, Active, PastDue, Suspended {",
+        "    default Sub chargeFailed(Clock c) { return this; }",
+        "}",
+        "record Active(Plan plan) implements Sub {",
+        "    public Sub chargeFailed(Clock c) { return new PastDue(plan, c.now()); }",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: adding a Paused phase touches that class and its neighbors' successors. The sealed hierarchy makes the compiler list every switch you must revisit."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "order", "name": "Order", "kind": "class", "role": "Context", "col": 0.5, "row": 0,
+         "members": ["- state: State", "+ pay(receipt)", "+ cancel()"]},
+        {"id": "state", "name": "State", "kind": "interface", "role": "State", "col": 0.5, "row": 1,
+         "members": ["+ pay(receipt): State", "+ cancel(): State"]},
+        {"id": "draft", "name": "Draft", "kind": "record", "role": "ConcreteState", "col": 0, "row": 2,
+         "members": ["+ pay(receipt)"]},
+        {"id": "paid", "name": "Paid", "kind": "record", "role": "ConcreteState", "col": 1, "row": 2,
+         "members": ["+ ship(tracking)"]}],
+       "edges": [
+        {"from": "order", "to": "state", "rel": "aggregation", "label": "state"},
+        {"from": "draft", "to": "state", "rel": "realizes"},
+        {"from": "paid", "to": "state", "rel": "realizes"},
+        {"from": "draft", "to": "paid", "rel": "dependency", "label": "creates"}],
+       "notes": [{"attachTo": "state", "text": "returns the next state"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "order", "name": "Order", "role": "Context"},
+        {"id": "draft", "name": "Draft", "role": "State"}, {"id": "paid", "name": "Paid", "role": "State"}],
+       "messages": [
+        {"from": "client", "to": "order", "label": "pay(\"R-1\")", "style": "call"},
+        {"from": "order", "to": "draft", "label": "pay(\"R-1\")", "style": "call"},
+        {"from": "draft", "to": "paid", "label": "new Paid", "style": "create"},
+        {"from": "draft", "to": "order", "label": "Paid", "style": "return"},
+        {"from": "client", "to": "order", "label": "ship(\"TRK-9\")", "style": "call"},
+        {"from": "order", "to": "paid", "label": "ship(\"TRK-9\")", "style": "call"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Behavior depends on a lifecycle phase and many methods branch on a status field.",
+        "Some data or operations are valid in only some phases.",
+        "Illegal transitions must fail loudly and in one place."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Two or three states with trivial rules: an enum and a `switch` is clearer.",
+        "Transitions are configuration, edited by non-programmers: use a table-driven machine."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "The context bypassing the state to set the next one, which voids the guards.",
+        "Mutable state objects shared by several contexts.",
+        "Transitions scattered over classes until nobody can draw the machine."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A class per state where each differs by one constant.",
+        "States that all delegate back to the context for every decision."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Sealed interfaces and records make states exhaustive, immutable and data-carrying.",
+        "For a pure function of (state, event), a `switch` over sealed types can replace the objects."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "strategy", "relation": "lookAlike", "difference": "Same shape, different intent. A strategy is chosen from outside and independent of its siblings. A state replaces itself in response to events and names its successors."},
+      {"ref": "flyweight", "relation": "combines", "difference": "States without data can be shared singletons, so one flyweight instance serves every context in that phase."},
+      {"ref": "observer", "relation": "combines", "difference": "Observers are how outsiders learn that the machine moved, without the states knowing who is listening."},
+      {"ref": "command", "relation": "combines", "difference": "Events are often modeled as commands queued to the context, which also gives an audit trail and replay."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Spring", "name": "Spring Statemachine", "detail": "`StateMachine<S, E>` configures states and transitions declaratively, with guards and actions per transition."},
+      {"where": "Netty", "name": "ReplayingDecoder", "detail": "Generic over a state type: `state()` and `checkpoint(S)` select which part of a frame the decoder parses next."},
+      {"where": "AWS", "name": "Step Functions", "detail": "State machines declared in Amazon States Language: each state decides what runs and which state follows."},
+      {"where": "Kubernetes", "name": "Pod phase", "detail": "A pod moves through `Pending`, `Running`, `Succeeded` or `Failed`; the kubelet reacts differently in each phase."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Door {",
+      "    private Latch latch = new Locked();",
+      "",
+      "    void unlock(String key) { latch = latch.unlock(key); }",
+      "    void push()             { latch = latch.push(); }",
+      "    void close()            { latch = latch.close(); }",
+      "}",
+      "// Locked, Closed and Open each implement Latch",
+      "// and return the Latch that follows the event"],
+     "options": [
+      {"ref": "state", "correct": true, "why": "The context forwards each event to its current object, which returns the successor the context stores."},
+      {"ref": "strategy", "why": "A strategy is injected from outside and never replaces itself; here each latch picks the next one."},
+      {"ref": "memento", "why": "Nothing captures a snapshot for later restore; the objects drive live behavior."},
+      {"ref": "command", "why": "The events are not objects that can be queued or undone; they are plain method calls."}],
+     "compile": {"template": [
+      "interface Latch { Latch unlock(String key); Latch push(); Latch close(); }",
+      "class Locked implements Latch {",
+      "  public Latch unlock(String key) { return this; }",
+      "  public Latch push() { return this; }",
+      "  public Latch close() { return this; } }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A video upload goes through uploading, transcoding, published and failed. A retry is allowed only after failure, a delete only after publish, and each phase stores different data: a temp path, a job id, a CDN url.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "state", "correct": true, "why": "Behavior and legal events depend on the phase, and each phase owns its data and its successors."},
+      {"ref": "strategy", "why": "There is no algorithm chosen from outside; the upload moves itself from phase to phase."},
+      {"ref": "template-method", "why": "A fixed skeleton with swappable steps does not model one object changing which events it accepts."},
+      {"ref": "chain-of-responsibility", "why": "Requests are not offered to a sequence of handlers; one object must remember where it is."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the State pattern.",
+     "lines": [
+      "final class Order {",
+      "    private State state = new Draft();",
+      "",
+      "    void pay(String receipt) { state = state.pay(receipt); }",
+      "",
+      "    void ship(String tracking) { state = state.ship(tracking); }",
+      "",
+      "    void cancel() { state = new Cancelled(); }",
+      "",
+      "    State state() { return state; }",
+      "}"],
+     "flawLines": [8],
+     "explanation": "The context sets the next state itself, so a shipped order can be cancelled and the states' guards are bypassed. Forward the event: `state = state.cancel();`.",
+     "compile": {"template": [
+      "interface State {",
+      "  default State pay(String r) { return this; }",
+      "  default State ship(String t) { return this; }",
+      "  default State cancel() { return this; } }",
+      "record Draft() implements State {}",
+      "record Cancelled() implements State {}",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the calls so that no event is rejected by the current state.",
+     "blocks": [
+      ["var order = new Order();"],
+      ["order.pay(\"R-1\");"],
+      ["order.ship(\"TRK-9\");"],
+      ["System.out.println(order.state());"]],
+     "explanation": "A new order starts in Draft. Only Draft accepts pay, only Paid accepts ship, and printing reads the state those calls produced.",
+     "compile": {"template": [
+      "final class Order {",
+      "  private String s = \"DRAFT\";",
+      "  void pay(String r) { if (!s.equals(\"DRAFT\")) throw new IllegalStateException(); s = \"PAID\"; }",
+      "  void ship(String t) { if (!s.equals(\"PAID\")) throw new IllegalStateException(); s = \"SHIPPED\"; }",
+      "  String state() { return s; } }",
+      "class Snippet { void run() {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain State in your own words: who decides the next state, and how it differs from Strategy.",
+     "modelAnswer": [
+      {"type": "p", "text": "State moves the behavior that depends on a lifecycle phase into one object per phase. The context forwards each event to its current state, which handles it or returns the successor. Strategy has the same shape, but its strategies are chosen from outside and never replace themselves."}],
+     "keyPoints": [
+      "One object per phase; the context delegates every event",
+      "The state returns or sets the next state, so transitions live in the states",
+      "Illegal events are rejected by default, not by checks in the context",
+      "Strategy is picked by the client and does not transition",
+      "Per-phase data lives in the state object"]}
+  ]
+}

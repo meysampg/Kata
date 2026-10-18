@@ -1,0 +1,420 @@
+{
+  "id": "dependency-injection",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Give an object its collaborators from outside, usually through the constructor, instead of letting it create or look them up."
+        },
+        {
+          "type": "p",
+          "text": "A class declares what it needs as constructor parameters typed by **interface**. A single **composition root**, usually `main` or a container, creates the objects and connects them. The class stays ignorant of concrete implementations and lifetimes, so tests pass fakes and configuration swaps real ones."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Constructor injection:** required, immutable, visible.",
+            "**Setter or field injection:** optional, mutable, easy to forget.",
+            "**Container:** automates the wiring, never required."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Dependency injection is a technique and needs no framework. A container only automates the composition root."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "DependencyInjection.java",
+      "expectedOutput": "ana: A-1 overdue\nsent 1\nsent 2 [ana, bo]",
+      "walkthrough": [
+        {
+          "region": "contract",
+          "note": "The consumer depends on a small interface that it defines in its own vocabulary, not on an SMTP or HTTP class."
+        },
+        {
+          "region": "consumer",
+          "note": "Collaborators arrive through the constructor and are null-checked. Time itself is injected as a `Clock`, so overdue logic is deterministic."
+        },
+        {
+          "region": "root",
+          "note": "The composition root builds the object graph with production-style collaborators: a fixed clock and a console mailer."
+        },
+        {
+          "region": "test",
+          "note": "A test wires the same class differently: a later clock and a capturing mailer. Nothing inside `InvoiceReminder` changed."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Testing a payment service against a fake gateway."
+        },
+        {
+          "type": "p",
+          "text": "`PaymentService` needs a gateway, an idempotency store and a clock. In production a container injects an HTTP gateway client; in tests the constructor receives a scripted fake that fails twice, then succeeds. Retry logic, timeouts and expiry are tested in milliseconds without network or sleeping."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "var gateway = new ScriptedGateway(FAIL, FAIL, OK);",
+            "var clock = Clock.fixed(T0, ZoneOffset.UTC);",
+            "var svc = new PaymentService(gateway, store, clock);",
+            "assertEquals(PAID, svc.charge(order).status());"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: failure paths that are hard to provoke in integration environments become ordinary unit tests."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "main",
+              "name": "Main",
+              "kind": "class",
+              "role": "Composition root",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ main(args)"
+              ]
+            },
+            {
+              "id": "rem",
+              "name": "InvoiceReminder",
+              "kind": "class",
+              "role": "Client",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "- clock: Clock",
+                "- mailer: Mailer",
+                "+ remind(invoices)"
+              ]
+            },
+            {
+              "id": "mailer",
+              "name": "Mailer",
+              "kind": "interface",
+              "role": "Dependency",
+              "col": 0,
+              "row": 2,
+              "members": [
+                "+ send(to, body)"
+              ]
+            },
+            {
+              "id": "clock",
+              "name": "Clock",
+              "kind": "class",
+              "role": "Dependency",
+              "col": 1,
+              "row": 2,
+              "members": [
+                "+ instant()"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "main",
+              "to": "rem",
+              "rel": "dependency",
+              "label": "creates, injects"
+            },
+            {
+              "from": "rem",
+              "to": "mailer",
+              "rel": "aggregation"
+            },
+            {
+              "from": "rem",
+              "to": "clock",
+              "rel": "aggregation"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "rem",
+              "text": "never calls new on a collaborator"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "A class has collaborators that tests must replace: time, network, storage.",
+            "Several environments need different implementations.",
+            "You want dependencies visible in the constructor signature."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "A value is a trivial pure helper: a plain `static` call or `new` is clearer.",
+            "Wiring is a one-line obvious choice and nothing is ever replaced."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Constructors with eight or more parameters usually signal a class doing too much.",
+            "Injecting the container itself, which turns DI into a [Service Locator](kata:service-locator).",
+            "Circular dependencies hidden by setter injection."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "An interface and a factory for every class with exactly one implementation.",
+            "Wiring spread across annotations, XML and code, so no one can see the graph."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "`java.time.Clock` is the standard injectable clock.",
+            "Constructor injection with records or `final` fields makes required collaborators immutable."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "service-locator",
+          "relation": "alternative",
+          "difference": "With a locator the class asks a global registry for its dependencies, hiding them. With DI they are pushed in and visible in the constructor."
+        },
+        {
+          "ref": "dip",
+          "relation": "combines",
+          "difference": "The Dependency Inversion Principle says depend on abstractions; DI is the common mechanism that supplies the concrete one."
+        },
+        {
+          "ref": "abstract-factory",
+          "relation": "alternative",
+          "difference": "A factory creates collaborators on demand inside the class. Injection hands them in ready, and the class never builds them."
+        },
+        {
+          "ref": "strategy",
+          "relation": "oftenConfused",
+          "difference": "Injecting a strategy is DI, but DI also supplies collaborators that are not interchangeable algorithms, like a clock or a repository."
+        },
+        {
+          "ref": "singleton",
+          "relation": "combines",
+          "difference": "Containers manage lifetime, so a singleton scope replaces hand-written global `getInstance()` with an injected shared instance."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "Spring",
+          "name": "ApplicationContext and constructor injection",
+          "detail": "The container resolves constructor parameters by type; `@Autowired` is optional on a single constructor."
+        },
+        {
+          "where": "Jakarta EE",
+          "name": "jakarta.inject.Inject (CDI)",
+          "detail": "Standard annotation for injection points, resolved by a CDI container."
+        },
+        {
+          "where": "Google",
+          "name": "Guice Injector and Dagger",
+          "detail": "Guice wires at runtime from modules; Dagger generates the wiring at compile time."
+        },
+        {
+          "where": "JDK",
+          "name": "java.time.Clock",
+          "detail": "Abstract class designed as an injectable time source, with `Clock.fixed` for tests."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Reporter {",
+        "    private final Clock clock;",
+        "    private final Sink sink;",
+        "",
+        "    Reporter(Clock clock, Sink sink) {",
+        "        this.clock = clock;",
+        "        this.sink = sink;",
+        "    }",
+        "",
+        "    void run() { sink.write(clock.instant().toString()); }",
+        "}",
+        "// elsewhere: new Reporter(Clock.systemUTC(), new FileSink(path))"
+      ],
+      "options": [
+        {
+          "ref": "dependency-injection",
+          "correct": true,
+          "why": "Collaborators come in through the constructor as interfaces; one outer place chooses the implementations."
+        },
+        {
+          "ref": "service-locator",
+          "why": "Nothing is looked up from a registry; the dependencies are explicit constructor parameters."
+        },
+        {
+          "ref": "strategy",
+          "why": "`Clock` and `Sink` are collaborators of different kinds, not interchangeable algorithms for one decision."
+        },
+        {
+          "ref": "abstract-factory",
+          "why": "The class doesn't create anything, and no factory family appears."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.time.Clock;",
+          "interface Sink { void write(String s); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "`ReportJob` opens its own JDBC connection and builds an HTTP client in the constructor. Tests hit real services, and the staging environment needs a different mail server than production.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "dependency-injection",
+          "correct": true,
+          "why": "Pass the connection source and clients in as interfaces; tests and environments differ only in the composition root."
+        },
+        {
+          "ref": "service-locator",
+          "why": "A registry still hides the needs and fails at runtime if something is missing."
+        },
+        {
+          "ref": "singleton",
+          "why": "A global instance would make tests share state and still wouldn't let staging differ."
+        },
+        {
+          "ref": "factory-method",
+          "why": "A subclass overriding a creation method would couple environment choice to inheritance."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Dependency Injection pattern.",
+      "lines": [
+        "final class InvoiceReminder {",
+        "    private final Clock clock;",
+        "    private final Mailer mailer;",
+        "",
+        "    InvoiceReminder(Clock clock) {",
+        "        this.clock = clock;",
+        "        this.mailer = new SmtpMailer(\"smtp.internal\");",
+        "    }",
+        "",
+        "    void remind(String customer) {",
+        "        mailer.send(customer, \"Due \" + LocalDate.now(clock));",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        7
+      ],
+      "explanation": "The class builds its own mailer, so tests can't replace it and the host is hardcoded. Accept a `Mailer` in the constructor and construct `SmtpMailer` at the composition root.",
+      "compile": {
+        "template": [
+          "import java.time.*;",
+          "interface Mailer { void send(String to, String body); }",
+          "class SmtpMailer implements Mailer { SmtpMailer(String host) {} public void send(String to, String body) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "Clock clock = Clock.systemUTC();",
+          "Mailer mailer = new SmtpMailer(\"smtp.internal\");"
+        ],
+        [
+          "var job = new InvoiceReminder(clock, mailer);"
+        ],
+        [
+          "int sent = job.remind(invoices);"
+        ],
+        [
+          "System.out.println(sent);"
+        ]
+      ],
+      "explanation": "The root builds leaves first, then passes them into the object that needs them, and only then runs the work.",
+      "compile": {
+        "template": [
+          "import java.time.Clock;",
+          "import java.util.List;",
+          "interface Mailer {}",
+          "class SmtpMailer implements Mailer { SmtpMailer(String h) {} }",
+          "class InvoiceReminder { InvoiceReminder(Clock c, Mailer m) {} int remind(List<String> l) { return 0; } }",
+          "class Snippet { void run(List<String> invoices) {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain dependency injection: who creates dependencies, where, and how it differs from a service locator.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A class declares its collaborators as constructor parameters and never creates or finds them itself. One composition root builds the graph and chooses implementations. Unlike a service locator, the dependencies are explicit in the type signature, missing ones fail at compile or startup, and tests simply pass fakes."
+        }
+      ],
+      "keyPoints": [
+        "Collaborators are passed in, usually via constructor",
+        "One composition root wires the graph",
+        "Dependencies are visible in the signature",
+        "Locator hides them and fails at runtime",
+        "A container is optional automation"
+      ]
+    }
+  ]
+}

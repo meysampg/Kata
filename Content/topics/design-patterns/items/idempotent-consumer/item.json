@@ -1,0 +1,507 @@
+{
+ "id": "idempotent-consumer",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Make handling a message twice have the same effect as handling it once, by recognizing messages already processed."
+    },
+    {
+     "type": "p",
+     "text": "Brokers give **at-least-once** delivery: acks get lost, consumers crash after working, producers publish twice. The consumer therefore records each message's unique id and skips ids it has seen. The record of the id and the business effect must commit **atomically**, or a crash between them brings back duplicates or loses work."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Key:** a stable id from the producer, not one generated on receipt.",
+      "**Store:** processed ids, in the same database as the effect when possible.",
+      "**Retention:** ids can expire once redelivery is impossible."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Exactly-once delivery does not exist across a network. What you build is at-least-once delivery plus idempotent processing."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "IdempotentConsumer.java",
+   "expectedOutput": "m1 applied\nm2 applied\nm1 duplicate\nm3 applied\nm2 duplicate\n{alice=750, bob=300}",
+   "walkthrough": [
+    {
+     "region": "message",
+     "note": "The producer assigns `messageId`. Deduplicating on content or on a receive-time id would treat legitimate repeats as duplicates, or duplicates as new."
+    },
+    {
+     "region": "handle",
+     "note": "Check, apply, mark, as one unit. In a database this is one transaction, ideally with a unique constraint on the id as the real guard."
+    },
+    {
+     "region": "deliveries",
+     "note": "A scripted broker delivers `m1` again after a lost ack and `m2` twice. Both repeats are acknowledged and skipped, so balances count each deposit once."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Crediting loyalty points from order events."
+    },
+    {
+     "type": "p",
+     "text": "An orders service publishes `OrderPaid` events to Kafka. The loyalty service consumes them and adds points. A rebalance replays the last few hundred events. Without protection, customers receive double points. The consumer inserts the event id into a `processed_event` table with a unique constraint in the same transaction that updates the points. A replayed event hits the constraint, the transaction rolls back, and the message is acknowledged."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "@Transactional",
+      "void on(OrderPaid e) {",
+      "    if (!processed.insertIfAbsent(e.eventId())) return;",
+      "    points.add(e.customerId(), e.amount() / 100);",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: replays, retries and producer duplicates become harmless, so the system can safely favor at-least-once delivery."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "cons",
+       "name": "Consumer",
+       "kind": "class",
+       "role": "Receiver",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ handle(msg): boolean"
+       ]
+      },
+      {
+       "id": "seen",
+       "name": "ProcessedStore",
+       "kind": "interface",
+       "role": "Dedup record",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ contains(id)",
+        "+ add(id)"
+       ]
+      },
+      {
+       "id": "fx",
+       "name": "Business effect",
+       "kind": "class",
+       "role": "Side effect",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ apply(msg)"
+       ]
+      },
+      {
+       "id": "msg",
+       "name": "Message",
+       "kind": "record",
+       "role": "Message",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "+ messageId: String"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "cons",
+       "to": "seen",
+       "rel": "association",
+       "label": "checks, marks"
+      },
+      {
+       "from": "cons",
+       "to": "fx",
+       "rel": "association",
+       "label": "applies"
+      },
+      {
+       "from": "cons",
+       "to": "msg",
+       "rel": "dependency",
+       "label": "reads id"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "cons",
+       "text": "check, effect, mark: one transaction"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "broker",
+       "name": "Broker"
+      },
+      {
+       "id": "cons",
+       "name": "Consumer"
+      },
+      {
+       "id": "store",
+       "name": "Store"
+      }
+     ],
+     "messages": [
+      {
+       "from": "broker",
+       "to": "cons",
+       "label": "deliver(m1)",
+       "style": "call"
+      },
+      {
+       "from": "cons",
+       "to": "store",
+       "label": "seen(m1)?",
+       "style": "call"
+      },
+      {
+       "from": "store",
+       "to": "cons",
+       "label": "no",
+       "style": "return"
+      },
+      {
+       "from": "cons",
+       "to": "store",
+       "label": "apply + mark(m1), commit",
+       "style": "call"
+      },
+      {
+       "from": "cons",
+       "to": "broker",
+       "label": "ack lost",
+       "style": "async"
+      },
+      {
+       "from": "broker",
+       "to": "cons",
+       "label": "redeliver(m1)",
+       "style": "call"
+      },
+      {
+       "from": "cons",
+       "to": "store",
+       "label": "seen(m1)?",
+       "style": "call"
+      },
+      {
+       "from": "store",
+       "to": "cons",
+       "label": "yes: skip",
+       "style": "return"
+      },
+      {
+       "from": "cons",
+       "to": "broker",
+       "label": "ack",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Delivery is at-least-once, as with most brokers and webhooks.",
+      "The effect is not naturally idempotent, like incrementing a balance.",
+      "Producers or retries can publish the same event twice."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The operation is already idempotent, such as setting a field to a value.",
+      "Ids are unavailable and cannot be added upstream."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Marking the id outside the effect's transaction, so a crash between them loses or repeats work.",
+      "Using an id generated on receipt, which differs for each delivery.",
+      "Expiring ids sooner than the broker's redelivery window.",
+      "Ordering assumptions: dedup does not fix out-of-order delivery."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A dedup table in front of handlers that are idempotent by construction.",
+      "Separate Redis dedup cache with no transactional link to the database it guards."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Prefer a database unique constraint as the final guard; an in-memory set protects only one process.",
+        "`ConcurrentHashMap.newKeySet().add(id)` checks and records atomically, but only within one JVM."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "transactional-outbox",
+     "relation": "combines",
+     "difference": "The outbox gives reliable at-least-once publishing on the producer side. The idempotent consumer absorbs the duplicates it produces."
+    },
+    {
+     "ref": "retry-backoff",
+     "relation": "combines",
+     "difference": "Retries cause duplicate deliveries by design. Idempotence on the receiving end is what makes retrying safe."
+    },
+    {
+     "ref": "competing-consumers",
+     "relation": "combines",
+     "difference": "With several consumers on one queue, the same message can reach two of them; the shared dedup store decides which one acts."
+    },
+    {
+     "ref": "saga",
+     "relation": "combines",
+     "difference": "Saga steps and compensations are retried, so each participant must handle repeated commands idempotently."
+    },
+    {
+     "ref": "cache-aside",
+     "relation": "oftenConfused",
+     "difference": "A dedup store looks like a cache of seen ids, but it is authoritative: losing an entry causes a double effect, not just a slower read."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Kafka",
+     "name": "enable.idempotence",
+     "detail": "The producer setting dedups broker-side retries per partition; consumers still need their own deduplication for end-to-end effects."
+    },
+    {
+     "where": "Stripe API",
+     "name": "Idempotency-Key header",
+     "detail": "Repeating a POST with the same key returns the original result instead of charging twice."
+    },
+    {
+     "where": "Amazon SQS",
+     "name": "FIFO MessageDeduplicationId",
+     "detail": "Duplicates with the same id within a five-minute window are not delivered again."
+    },
+    {
+     "where": "Spring Integration",
+     "name": "IdempotentReceiverInterceptor",
+     "detail": "Marks duplicates by a key from a `MetadataStore` and routes or discards them."
+    },
+    {
+     "where": "Apache Camel",
+     "name": "Idempotent Consumer EIP",
+     "detail": "`idempotentConsumer(expression, repository)` skips messages whose key the repository has seen."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "@Transactional",
+    "public void on(PaymentCaptured e) {",
+    "    boolean fresh = seenEvents.add(e.eventId());",
+    "    if (!fresh) {",
+    "        return;",
+    "    }",
+    "    ledger.credit(e.account(), e.cents());",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "idempotent-consumer",
+     "correct": true,
+     "why": "The handler records the message id and skips ids it already saw, inside the same transaction as the effect."
+    },
+    {
+     "ref": "transactional-outbox",
+     "why": "Nothing is written for later publishing; this code receives and applies an event."
+    },
+    {
+     "ref": "cache-aside",
+     "why": "The id set is authoritative state for correctness, not a disposable copy used to speed up reads."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "Skipping is decided by message identity, not by how many arrived in a time window."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.Set;",
+     "import java.util.HashSet;",
+     "record PaymentCaptured(String eventId, String account, long cents) { }",
+     "@interface Transactional { }",
+     "@interface Tx { }",
+     "class Ledger { void credit(String a, long c) { } }",
+     "class Snippet {",
+     "    Set<String> seenEvents = new HashSet<>();",
+     "    Ledger ledger = new Ledger();",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A payment webhook provider retries any callback that does not return 200 within five seconds. Your handler credits a customer's balance and sometimes answers in six seconds, so the same webhook, with the same event id, arrives two or three times.",
+   "prompt": "Which pattern prevents the double credit?",
+   "options": [
+    {
+     "ref": "idempotent-consumer",
+     "correct": true,
+     "why": "Recording the event id with the credit makes every repeated delivery a no-op."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "It would reject repeats arriving fast, but legitimate distinct events would be rejected too."
+    },
+    {
+     "ref": "retry-backoff",
+     "why": "You are the receiver; the provider already retries, and more retrying does not prevent duplicates."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "Nothing downstream is failing; the duplicates come from the sender's retries."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that makes this consumer unsafe.",
+   "lines": [
+    "void on(Deposit m) {",
+    "    if (processed.contains(m.id())) return;",
+    "    processed.add(m.id());",
+    "    balances.merge(m.account(), m.cents(), Long::sum);",
+    "}",
+    "",
+    "// processed and balances are separate stores",
+    "// process may crash at any point"
+   ],
+   "flawLines": [
+    3
+   ],
+   "explanation": "The id is marked before the effect and in a separate step. A crash between them loses the deposit, because the redelivery is skipped. Mark and effect must commit atomically, in one transaction.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Deposit(String id, String account, long cents) { }",
+     "class Snippet {",
+     "    Set<String> processed = new HashSet<>();",
+     "    Map<String, Long> balances = new HashMap<>();",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the steps of handling one message.",
+   "blocks": [
+    [
+     "begin();"
+    ],
+    [
+     "if (processed.contains(m.id())) { rollback(); return; }"
+    ],
+    [
+     "effect.apply(m);"
+    ],
+    [
+     "processed.add(m.id());"
+    ],
+    [
+     "commit();"
+    ]
+   ],
+   "explanation": "Open the transaction, check for a duplicate, apply the effect, then record the id, so both are committed together or neither is.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Msg(String id) { }",
+     "interface Effect { void apply(Msg m); }",
+     "class Snippet {",
+     "    Set<String> processed = new HashSet<>();",
+     "    Effect effect;",
+     "    void begin() { }",
+     "    void commit() { }",
+     "    void rollback() { }",
+     "    void handle(Msg m) {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Why do consumers need to be idempotent, and what makes the deduplication itself correct?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Networks and brokers deliver at least once: lost acks, retries and redeliveries produce duplicates. The consumer stores the producer-assigned message id and skips seen ids. It is correct only if recording the id and applying the effect commit atomically, ideally with a unique constraint."
+    }
+   ],
+   "keyPoints": [
+    "At-least-once delivery means duplicates",
+    "A producer-assigned stable message id as the key",
+    "Record id and apply effect atomically",
+    "A unique constraint is the real guard",
+    "Retention must cover the redelivery window"
+   ]
+  }
+ ]
+}

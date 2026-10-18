@@ -1,0 +1,534 @@
+{
+  "id": "hexagonal",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Put the application core in the center and talk to everything outside it through ports implemented by adapters."
+        },
+        {
+          "type": "p",
+          "text": "The core defines **ports**: interfaces for what it offers (inbound) and what it needs (outbound). **Adapters** translate between a port and a technology such as HTTP, SQL or a message broker. Dependencies always point inward, so the core compiles and runs with no framework."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Driving adapters:** call the core (REST, CLI, scheduler).",
+            "**Driven adapters:** the core calls them (database, mail, payments).",
+            "**Test seam:** replace any adapter with a fake."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "The same idea is called Ports and Adapters, Onion or Clean Architecture; the details differ but the inward dependency rule is shared."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Hexagonal.java",
+      "expectedOutput": "ana@x.org -> registered\nbad -> invalid\nana@x.org -> duplicate\nmails: [ana@x.org]",
+      "walkthrough": [
+        {
+          "region": "ports",
+          "note": "Three interfaces owned by the core. `RegisterUser` is inbound; `UserStore` and `Mailer` are outbound and describe needs in the core's own words."
+        },
+        {
+          "region": "core",
+          "note": "The use case implements the inbound port and uses only outbound ports. It imports no framework and no adapter."
+        },
+        {
+          "region": "adapters",
+          "note": "Driven adapters implement outbound ports. Here they are in-memory; a JDBC store or SMTP mailer would replace them without touching the core."
+        },
+        {
+          "region": "assembly",
+          "note": "Assembly is the only place that sees both sides, choosing which adapters plug into the core."
+        },
+        {
+          "region": "driver",
+          "note": "A driving adapter turns an outside stimulus into a port call. A REST controller or message listener would play this role."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Ride dispatch that must survive swapping map providers."
+        },
+        {
+          "type": "p",
+          "text": "A dispatch core assigns drivers to riders using ETA and price rules. It asks a `RoutingPort` for travel times and a `DriverLocations` port for positions. One adapter calls a commercial maps API, another replays recorded traffic for tests, a third reads a cache. REST, gRPC and a Kafka listener all drive the same `AssignDriver` port."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "interface RoutingPort { Duration eta(Point a, Point b); }",
+            "// adapters: GoogleMapsRouting, CachedRouting, RecordedRouting",
+            "interface AssignDriver { Assignment assign(RideRequest r); }",
+            "// driving: RestAssign, KafkaAssign"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: changing map vendors or transport protocols never touches dispatch rules, and rules are tested at memory speed."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "http",
+              "name": "HttpAdapter",
+              "kind": "class",
+              "role": "Driving adapter",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ post(email)"
+              ]
+            },
+            {
+              "id": "in",
+              "name": "RegisterUser",
+              "kind": "interface",
+              "role": "Inbound port",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ register(email)"
+              ]
+            },
+            {
+              "id": "core",
+              "name": "Registration",
+              "kind": "class",
+              "role": "Application core",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "- store: UserStore",
+                "- mailer: Mailer"
+              ]
+            },
+            {
+              "id": "store",
+              "name": "UserStore",
+              "kind": "interface",
+              "role": "Outbound port",
+              "col": 0,
+              "row": 3,
+              "members": [
+                "+ exists(email)",
+                "+ add(email)"
+              ]
+            },
+            {
+              "id": "mail",
+              "name": "Mailer",
+              "kind": "interface",
+              "role": "Outbound port",
+              "col": 1,
+              "row": 3,
+              "members": [
+                "+ welcome(email)"
+              ]
+            },
+            {
+              "id": "mem",
+              "name": "MemoryUserStore",
+              "kind": "class",
+              "role": "Driven adapter",
+              "col": 0,
+              "row": 4
+            },
+            {
+              "id": "rec",
+              "name": "RecordingMailer",
+              "kind": "class",
+              "role": "Driven adapter",
+              "col": 1,
+              "row": 4
+            }
+          ],
+          "edges": [
+            {
+              "from": "http",
+              "to": "in",
+              "rel": "association"
+            },
+            {
+              "from": "core",
+              "to": "in",
+              "rel": "realizes"
+            },
+            {
+              "from": "core",
+              "to": "store",
+              "rel": "association"
+            },
+            {
+              "from": "core",
+              "to": "mail",
+              "rel": "association"
+            },
+            {
+              "from": "mem",
+              "to": "store",
+              "rel": "realizes"
+            },
+            {
+              "from": "rec",
+              "to": "mail",
+              "rel": "realizes"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "core",
+              "text": "imports no adapter"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "h",
+              "name": "HttpAdapter",
+              "role": "Driving"
+            },
+            {
+              "id": "c",
+              "name": "Registration",
+              "role": "Core"
+            },
+            {
+              "id": "s",
+              "name": "UserStore",
+              "role": "Port"
+            },
+            {
+              "id": "m",
+              "name": "Mailer",
+              "role": "Port"
+            }
+          ],
+          "messages": [
+            {
+              "from": "h",
+              "to": "c",
+              "label": "register(email)",
+              "style": "call"
+            },
+            {
+              "from": "c",
+              "to": "s",
+              "label": "exists(email)",
+              "style": "call"
+            },
+            {
+              "from": "s",
+              "to": "c",
+              "label": "false",
+              "style": "return"
+            },
+            {
+              "from": "c",
+              "to": "s",
+              "label": "add(email)",
+              "style": "call"
+            },
+            {
+              "from": "c",
+              "to": "m",
+              "label": "welcome(email)",
+              "style": "call"
+            },
+            {
+              "from": "c",
+              "to": "h",
+              "label": "registered",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The domain has real rules worth protecting from framework and vendor churn.",
+            "Several entry points drive the same use cases: REST, CLI, events.",
+            "You want core tests that need no database or network."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "The app is thin CRUD: ports would mirror the framework one to one.",
+            "The team is small and the infrastructure will not change."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Ports shaped like the technology (`SqlPort`) instead of the core's needs.",
+            "Domain objects annotated with persistence or JSON annotations, quietly coupling the core.",
+            "Mapping at every boundary becomes a tax if overdone."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "One interface per class with a single implementation and no second adapter in sight.",
+            "Use cases that only forward to one outbound call."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records and sealed interfaces make small, immutable port messages cheap.",
+            "Java modules can make adapters depend on the core, never the reverse."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "layered-architecture",
+          "relation": "alternative",
+          "difference": "Layering points dependencies down to storage. Hexagonal points them inward and lets the core own the interfaces that infrastructure implements."
+        },
+        {
+          "ref": "dip",
+          "relation": "specializes",
+          "difference": "Hexagonal applies the Dependency Inversion Principle at architectural scale: the core defines abstractions, outer code depends on them."
+        },
+        {
+          "ref": "adapter",
+          "relation": "combines",
+          "difference": "Each driven or driving adapter is a GoF Adapter converting between the core's port and an external API."
+        },
+        {
+          "ref": "repository",
+          "relation": "combines",
+          "difference": "A repository interface is a typical outbound port, expressed in domain terms and implemented by a persistence adapter."
+        },
+        {
+          "ref": "dependency-injection",
+          "relation": "combines",
+          "difference": "Injection wires adapters into the core at the composition root, so the core never builds its own adapters."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "JDBC java.sql.Driver and DataSource",
+          "detail": "Applications code against the JDBC API (port); each vendor driver is an adapter."
+        },
+        {
+          "where": "SLF4J",
+          "name": "org.slf4j.Logger",
+          "detail": "Code logs through the API; Logback, Log4j 2 or `java.util.logging` bindings adapt it."
+        },
+        {
+          "where": "Spring Cloud Stream",
+          "name": "Binder",
+          "detail": "Application logic uses channels; Kafka and RabbitMQ binders adapt the broker."
+        },
+        {
+          "where": "ArchUnit",
+          "name": "Architectures.onionArchitecture()",
+          "detail": "Rule builder that checks domain, application and adapter packages for inward-only dependencies."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "interface PlaceOrder { Receipt place(Cart cart); }",
+        "interface Payments { Receipt charge(Money amount); }",
+        "",
+        "final class OrderCore implements PlaceOrder {",
+        "    private final Payments payments;",
+        "    OrderCore(Payments payments) { this.payments = payments; }",
+        "    public Receipt place(Cart cart) {",
+        "        return payments.charge(cart.total());",
+        "    }",
+        "}",
+        "final class HttpOrders { HttpOrders(PlaceOrder core) { /* ... */ } }",
+        "final class CardGatewayPayments implements Payments {",
+        "    public Receipt charge(Money m) { return new Receipt(); }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "hexagonal",
+          "correct": true,
+          "why": "The core offers one interface, needs another, and adapters sit on both sides, each depending inward."
+        },
+        {
+          "ref": "layered-architecture",
+          "why": "Layering would have the core call a concrete lower layer; here the core owns `Payments` and the outside implements it."
+        },
+        {
+          "ref": "adapter",
+          "why": "`CardGatewayPayments` is an adapter, but the snippet's shape is the whole inward-pointing arrangement, not a single wrapper."
+        },
+        {
+          "ref": "facade",
+          "why": "`OrderCore` hides no subsystem behind a simplified API; it is the domain logic itself."
+        }
+      ],
+      "compile": {
+        "template": [
+          "record Money() {}",
+          "record Receipt() {}",
+          "record Cart() { Money total() { return new Money(); } }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "Your pricing engine must run behind REST today and Kafka next quarter, switch payment providers per market, and be tested without any container. Business rules change weekly.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "hexagonal",
+          "correct": true,
+          "why": "Rules sit in a core with ports; transports and providers are adapters you can swap and fake."
+        },
+        {
+          "ref": "layered-architecture",
+          "why": "Rules would depend on persistence and transport-shaped layers, making swaps and fast tests harder."
+        },
+        {
+          "ref": "mvc",
+          "why": "MVC separates UI roles; it says nothing about swapping providers or driving the core from events."
+        },
+        {
+          "ref": "facade",
+          "why": "A facade simplifies access to a subsystem but doesn't invert dependencies away from vendors."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Hexagonal pattern.",
+      "lines": [
+        "final class Checkout implements PlaceOrder {",
+        "    private final StripeClient stripe = new StripeClient();",
+        "    private final Orders orders;",
+        "",
+        "    Checkout(Orders orders) { this.orders = orders; }",
+        "",
+        "    public Receipt place(Cart cart) {",
+        "        Receipt r = stripe.charge(cart.total());",
+        "        orders.save(cart, r);",
+        "        return r;",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        2
+      ],
+      "explanation": "The core constructs a concrete vendor client, so it depends outward and can't be tested or switched. Depend on a `Payments` port and inject the adapter.",
+      "compile": {
+        "template": [
+          "record Money() {}",
+          "record Receipt() {}",
+          "record Cart() { Money total() { return new Money(); } }",
+          "interface PlaceOrder { Receipt place(Cart c); }",
+          "interface Orders { void save(Cart c, Receipt r); }",
+          "class StripeClient { Receipt charge(Money m) { return new Receipt(); } }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "var store = new MemoryUserStore();",
+          "var mailer = new RecordingMailer();"
+        ],
+        [
+          "RegisterUser app = new Registration(store, mailer);"
+        ],
+        [
+          "String result = app.register(\"ana@x.org\");"
+        ],
+        [
+          "System.out.println(result + \" \" + mailer.sent);"
+        ]
+      ],
+      "explanation": "Create the driven adapters first, hand them to the core through its constructor, then drive the core through its inbound port.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "interface RegisterUser { String register(String e); }",
+          "class MemoryUserStore {}",
+          "class RecordingMailer { List<String> sent = new ArrayList<>(); }",
+          "class Registration implements RegisterUser { Registration(MemoryUserStore s, RecordingMailer m) {} public String register(String e) { return e; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain Hexagonal Architecture: what are ports and adapters, and which way do dependencies point?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "The application core defines ports, interfaces for what it offers and what it needs. Adapters implement or call those ports for a specific technology, such as HTTP or SQL. Every dependency points inward at the core, which has no framework imports. That inverts the layered style and lets you swap or fake any adapter."
+        }
+      ],
+      "keyPoints": [
+        "Core owns the ports",
+        "Inbound ports are driven by adapters, outbound ports are implemented by adapters",
+        "Dependencies point inward only",
+        "Core runs and tests without frameworks",
+        "Contrast: layered depends toward the database"
+      ]
+    }
+  ]
+}

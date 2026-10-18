@@ -1,0 +1,321 @@
+{
+  "id": "tell-dont-ask",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Send objects commands and let them decide; do not pull out their state to make the decision elsewhere."
+        },
+        {
+          "type": "p",
+          "text": "Asking a getter and then branching in the caller moves an object's rules out of the object, so each caller reimplements them. Put behavior beside the data it guards and expose **intent** (`withdraw`) instead of **state** (`getBalance`, `setBalance`). The invariant then lives in one place. The related **Law of Demeter** forbids reaching through chains like `a.b().c().d()`."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Smell:** `if (x.getA() ...) x.setB(...)` in another class.",
+            "**Fix:** move the decision into `x` and name the intent.",
+            "**Limits:** queries for display and reporting are fine."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "It is guidance for domain behavior, not a ban on getters. Records, DTOs and view models are data by design."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "TellDontAsk.java",
+      "expectedOutput": "before: false\nbalance -50\nrejected: insufficient funds",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "`TellerBefore` reads the balance, decides and writes it back. The overdraft rule would be duplicated in every caller that withdraws."
+        },
+        {
+          "region": "after",
+          "note": "`Account` owns the rule and exposes the intent, `withdraw`. The balance has no setter, so the invariant cannot be bypassed."
+        },
+        {
+          "region": "client",
+          "note": "The caller states what it wants and handles the outcome. It cannot get the rule wrong because it never sees the state."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Shipping eligibility in e-commerce."
+        },
+        {
+          "type": "p",
+          "text": "Checkout code asked each `Order` for its items, then each item for its type, and decided eligibility itself in four services. When hazmat rules changed, three of the four were missed. Now the order answers `shippingOptions(carrier)`, and the hazmat rule lives in `Item.shippableBy(carrier)`. Callers never see item types."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "// asking",
+            "if (order.getItems().stream()",
+            "        .anyMatch(i -> i.getType() == HAZMAT)) { ... }",
+            "",
+            "// telling",
+            "List<Option> options = order.shippingOptions(carrier);"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: a rule change is one edit in one class, and no caller can skip it."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The same conditional on an object's state repeats across callers.",
+            "An invariant must always hold, such as a balance or a state transition.",
+            "You see getter chains reaching deep into a structure."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Presentation and serialization need raw data: records and DTOs are fine.",
+            "It would push UI or persistence concerns into the domain just to avoid a getter."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "God objects that absorb every rule and dependency.",
+            "A single `process()` hiding steps the caller should control.",
+            "Hiding queries that tests or reports legitimately need."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Every getter replaced by a method that only delegates.",
+            "Wrapper methods that dodge the dots but leak the same structure."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Keep records as data and put decisions in the aggregate that owns them.",
+            "Pattern matching on a sealed type is deliberate asking, fine for closed, data-oriented models."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "visitor",
+          "relation": "alternative",
+          "difference": "Visitor deliberately exposes structure so new operations can be added from outside, trading encapsulation for extensibility."
+        },
+        {
+          "ref": "command",
+          "relation": "combines",
+          "difference": "A command object is a literal way to tell: you send an intent and the receiver decides how."
+        },
+        {
+          "ref": "state",
+          "relation": "combines",
+          "difference": "State pushes transition decisions into the object, which is Tell, Don't Ask carried to its end."
+        },
+        {
+          "ref": "specification",
+          "relation": "alternative",
+          "difference": "A specification moves a rule into its own object that callers evaluate: still asking, but with the rule in one place."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "Map.merge / compute / computeIfAbsent",
+          "detail": "Tell the map how to combine or create a value instead of `get`, test and `put`."
+        },
+        {
+          "where": "JDK",
+          "name": "Optional.ifPresent / map / orElseGet",
+          "detail": "Hand the follow-up action to the `Optional` rather than checking `isPresent()` and calling `get()`."
+        },
+        {
+          "where": "JDK",
+          "name": "AtomicInteger.updateAndGet",
+          "detail": "Supplies the update function so the decision is atomic, unlike separate `get` and `set`."
+        },
+        {
+          "where": "JDK",
+          "name": "Collection.removeIf",
+          "detail": "Pass the rule to the collection instead of iterating over it and removing from outside."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this code most clearly violate?",
+      "lines": [
+        "if (cart.getItems().size() > 0",
+        "        && cart.getCustomer().getAddress().getCountry().equals(\"DE\")) {",
+        "    cart.setTotal(cart.getTotal() * 119 / 100);",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "tell-dont-ask",
+          "correct": true,
+          "why": "The caller digs through the cart's state and applies a rule that belongs inside it."
+        },
+        {
+          "ref": "srp",
+          "why": "This is a call site, not a class with several reasons to change."
+        },
+        {
+          "ref": "lsp",
+          "why": "No subtype is substituted anywhere here."
+        },
+        {
+          "ref": "isp",
+          "why": "There is no interface that is too wide; the issue is pulling state out."
+        }
+      ],
+      "compile": {
+        "template": [
+          "class Address { String getCountry() { return \"\"; } }",
+          "class Customer { Address getAddress() { return null; } }",
+          "class Cart { java.util.List<Object> getItems() { return null; } Customer getCustomer() { return null; } long getTotal() { return 0; } void setTotal(long t) {} }",
+          "class Snippet { void run(Cart cart) {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "Four services each check `user.getPlan().equals(\"PRO\") && user.getSeats() > limit` before allowing an invite. One service omitted the seats check and over-provisioned a customer.",
+      "prompt": "What is the right fix?",
+      "options": [
+        {
+          "ref": "tell-dont-ask",
+          "correct": true,
+          "why": "Move the rule into `User` (for example `user.invite(email)`), so the decision lives with the data and callers cannot skip it."
+        },
+        {
+          "ref": "srp",
+          "why": "The services are not doing too many things; they are repeating one rule."
+        },
+        {
+          "ref": "ocp",
+          "why": "No switch is growing; the same condition is duplicated."
+        },
+        {
+          "ref": "isp",
+          "why": "The problem is not an interface that is too broad."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that decides outside the object.",
+      "lines": [
+        "final class Order {",
+        "    private boolean paid;",
+        "    private int itemCount;",
+        "    boolean isPaid() { return paid; }",
+        "    boolean isEmpty() { return itemCount == 0; }",
+        "    void ship(Carrier c) { c.pickUp(this); }",
+        "}",
+        "final class Fulfillment {",
+        "    void run(Order order, Carrier c) {",
+        "        if (order.isPaid() && !order.isEmpty()) {",
+        "            order.ship(c);",
+        "        }",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        10
+      ],
+      "explanation": "`Fulfillment` interrogates the order and decides on its behalf, so another caller can ship an unpaid order. Move the guard into `Order.ship` and have it reject invalid states.",
+      "compile": {
+        "template": [
+          "interface Carrier { void pickUp(Order o); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the calls so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var account = new Account(100, 50);"
+        ],
+        [
+          "account.withdraw(150);"
+        ],
+        [
+          "String s = account.statement();"
+        ],
+        [
+          "System.out.println(s);"
+        ]
+      ],
+      "explanation": "Create the account, tell it to withdraw, ask for its statement as a report, then print it.",
+      "compile": {
+        "template": [
+          "final class Account { Account(long b, long o) {} void withdraw(long a) {} String statement() { return \"\"; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain 'Tell, Don't Ask' in your own words. What goes wrong when callers ask and decide, and where is asking acceptable?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Tell objects what you want and let them decide, instead of reading their state and deciding outside. When callers ask, the rule is duplicated, can be skipped, and invariants can be bypassed through setters. Asking is acceptable for queries that display or report data, and for data carriers like records."
+        }
+      ],
+      "keyPoints": [
+        "Expose intent, not state",
+        "Rules live next to the data they guard",
+        "Asking duplicates logic and allows bypass",
+        "Law of Demeter: avoid getter chains",
+        "Queries and DTOs are legitimate exceptions"
+      ]
+    }
+  ]
+}

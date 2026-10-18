@@ -1,0 +1,479 @@
+{
+ "id": "composite",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Compose objects into a tree and give leaves and groups one interface, so clients treat both the same way."
+    },
+    {
+     "type": "p",
+     "text": "A **composite** holds child components and implements the component interface by delegating to them and combining the results. A **leaf** implements it directly. Callers hold a `Node` and never ask whether it is one thing or many; recursion does the traversal."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Varies:** the shape and depth of the tree.",
+      "**Stays stable:** the client code that calls the operation.",
+      "**Typical operations:** size, render, price, evaluate, authorize: anything that folds over children."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "A sealed interface with records for leaves gives you a closed tree that `switch` can match exhaustively."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Composite.java",
+   "expectedOutput": "total = 1200\nproject/ 1200\n  README.md 200\n  src/ 1000\n    Main.java 700\n    Util.java 300\n  docs/ 0",
+   "walkthrough": [
+    {
+     "region": "component",
+     "note": "The component interface is all a client sees. `sealed` closes the hierarchy to exactly a leaf and a composite."
+    },
+    {
+     "region": "leaf",
+     "note": "A leaf does the real work itself: it knows its own size and has no children."
+    },
+    {
+     "region": "composite",
+     "note": "The composite implements the same `size()` by folding over its children. Each child may itself be a `Dir`, so recursion handles any depth."
+    },
+    {
+     "region": "traverse",
+     "note": "Operations outside the tree use a pattern `switch`. Being sealed, it needs no `default`, and a new node type breaks the build here."
+    },
+    {
+     "region": "client",
+     "note": "The client builds a tree and calls `size()` on the root. It never checks whether a node is a file or a directory."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Access rules in an authorization engine."
+    },
+    {
+     "type": "p",
+     "text": "A policy such as 'admin, or an employee on the office network with MFA' is a tree of conditions. Leaves test one fact (`HasRole`, `FromNetwork`, `MfaPassed`); `AllOf`, `AnyOf` and `Not` are composites that combine child rules. Product teams assemble rules from configuration, nest them freely, and the engine just calls `allows(context)` on the root."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "interface Rule { boolean allows(Context c); }",
+      "",
+      "Rule policy = anyOf(",
+      "    hasRole(\"admin\"),",
+      "    allOf(fromNetwork(\"10.0.0.0/8\"), mfaPassed()));",
+      "boolean ok = policy.allows(context);"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: new rule shapes need no engine change, and a whole sub-policy can be reused or tested as a single rule."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "node",
+       "name": "Node",
+       "kind": "interface",
+       "role": "Component",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ name(): String",
+        "+ size(): long"
+       ]
+      },
+      {
+       "id": "file",
+       "name": "File",
+       "kind": "record",
+       "role": "Leaf",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ size(): long"
+       ]
+      },
+      {
+       "id": "dir",
+       "name": "Dir",
+       "kind": "record",
+       "role": "Composite",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "- children: List<Node>",
+        "+ size(): long"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "file",
+       "to": "node",
+       "rel": "realizes"
+      },
+      {
+       "from": "dir",
+       "to": "node",
+       "rel": "realizes"
+      },
+      {
+       "from": "dir",
+       "to": "node",
+       "rel": "aggregation",
+       "label": "children"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "dir",
+       "text": "size() sums the children"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "root",
+       "name": "root: Dir",
+       "role": "Composite"
+      },
+      {
+       "id": "src",
+       "name": "src: Dir",
+       "role": "Composite"
+      },
+      {
+       "id": "file",
+       "name": "Main.java",
+       "role": "Leaf"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "root",
+       "label": "size()",
+       "style": "call"
+      },
+      {
+       "from": "root",
+       "to": "src",
+       "label": "size()",
+       "style": "call"
+      },
+      {
+       "from": "src",
+       "to": "file",
+       "label": "size()",
+       "style": "call"
+      },
+      {
+       "from": "file",
+       "to": "src",
+       "label": "700",
+       "style": "return"
+      },
+      {
+       "from": "src",
+       "to": "root",
+       "label": "1000",
+       "style": "return"
+      },
+      {
+       "from": "root",
+       "to": "client",
+       "label": "1200",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "The domain is naturally a tree: files, UI widgets, org charts, expressions, rules.",
+      "Clients should not care whether they hold one item or a group.",
+      "An operation is a fold over the whole structure."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The structure is flat; a plain `List` is enough.",
+      "Leaves and groups support genuinely different operations."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Cycles: a node added under itself recurses forever. Check on insertion or keep the tree immutable.",
+      "Leaf-only methods on the shared interface force `UnsupportedOperationException` stubs.",
+      "Deep trees can overflow the stack on naive recursion.",
+      "Parent pointers add mutable state that must stay consistent."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A composite with a single child everywhere.",
+      "Child management (`add`, `remove`) on the interface that leaves must ignore."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Sealed interfaces plus records give an immutable tree that `switch` matches exhaustively.",
+      "`Stream` folds replace hand-written loops over children."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "decorator",
+     "relation": "lookAlike",
+     "difference": "Both rely on recursive composition behind one interface. A decorator wraps exactly one component to add behavior; a composite holds many and combines their results."
+    },
+    {
+     "ref": "visitor",
+     "relation": "combines",
+     "difference": "Visitor adds new operations over a composite tree without editing its node classes, at the cost of making new node types expensive."
+    },
+    {
+     "ref": "iterator",
+     "relation": "combines",
+     "difference": "Iterator walks a composite in a chosen order without exposing its structure, which helps when clients need flat traversal."
+    },
+    {
+     "ref": "flyweight",
+     "relation": "combines",
+     "difference": "Leaf nodes that are immutable and repeated, such as glyphs in a document tree, can be shared flyweights."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "relation": "oftenConfused",
+     "difference": "A chain passes one request along a line until a handler claims it. A composite fans an operation out to all children and combines the answers."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "java.awt.Container",
+     "detail": "A `Component` that holds other `Component`s via `add`, so layouts and painting treat panels and buttons uniformly."
+    },
+    {
+     "where": "JDK",
+     "name": "org.w3c.dom.Node",
+     "detail": "Elements, text and attributes share one `Node` interface; `getChildNodes()` exposes the tree."
+    },
+    {
+     "where": "Android",
+     "name": "android.view.ViewGroup",
+     "detail": "A `View` that contains other `View`s; measure, layout and draw recurse through the hierarchy."
+    },
+    {
+     "where": "Jakarta Faces",
+     "name": "jakarta.faces.component.UIComponent",
+     "detail": "Components expose `getChildren()`, so a whole page is one tree rendered recursively."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "record Item(String sku, long cents) implements Priced {",
+    "    public long total() { return cents; }",
+    "}",
+    "",
+    "record Bundle(String name, List<Priced> parts) implements Priced {",
+    "    public long total() {",
+    "        return parts.stream().mapToLong(Priced::total).sum();",
+    "    }",
+    "}",
+    "// new Bundle(\"kit\", List.of(item, new Bundle(\"cables\", more)))"
+   ],
+   "options": [
+    {
+     "ref": "composite",
+     "correct": true,
+     "why": "A group implements the same interface as its members and combines their results, so bundles nest to any depth."
+    },
+    {
+     "ref": "decorator",
+     "why": "A decorator wraps a single component to add behavior. `Bundle` holds many parts and aggregates them."
+    },
+    {
+     "ref": "iterator",
+     "why": "Nothing here walks a collection on behalf of a client; the recursion is inside `total()`."
+    },
+    {
+     "ref": "visitor",
+     "why": "The operation lives inside the node classes. A visitor would move it into a separate object."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.List;",
+     "interface Priced { long total(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A reporting tool lets users build dashboards from charts, tables and text boxes. Panels can contain other panels, and 'export to PDF' and 'refresh' must work on any element or on a whole dashboard with the same call.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "composite",
+     "correct": true,
+     "why": "Panels and widgets share one interface, so refresh and export recurse over arbitrarily nested layouts."
+    },
+    {
+     "ref": "decorator",
+     "why": "It adds behavior to one element, but does not model containment of many children."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade simplifies a subsystem; it does not give uniform treatment of nested parts and wholes."
+    },
+    {
+     "ref": "mediator",
+     "why": "It centralizes communication between peers, not a part-whole hierarchy."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Composite pattern.",
+   "lines": [
+    "record Dir(String name, List<File> children) implements Node {",
+    "    public long size() {",
+    "        return children.stream().mapToLong(Node::size).sum();",
+    "    }",
+    "",
+    "    int count() {",
+    "        return children.size();",
+    "    }",
+    "",
+    "    String label() {",
+    "        return name + \"/ (\" + count() + \")\";",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    1
+   ],
+   "explanation": "The children are typed as the leaf, so a directory can never contain another directory and the tree is one level deep. Type them as the component: `List<Node> children`.",
+   "compile": {
+    "template": [
+     "import java.util.List;",
+     "interface Node { long size(); }",
+     "record File(String name, long size) implements Node {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that each one only uses what came before.",
+   "blocks": [
+    [
+     "Node a = new File(\"a.txt\", 10);",
+     "Node b = new File(\"b.txt\", 20);"
+    ],
+    [
+     "Node sub = new Dir(\"sub\", a, b);"
+    ],
+    [
+     "Node root = new Dir(\"root\", sub, new File(\"c.txt\", 5));"
+    ],
+    [
+     "long total = root.size();"
+    ],
+    [
+     "System.out.println(total);"
+    ]
+   ],
+   "explanation": "A composite needs its children to exist first, so the tree is built bottom-up. The operation runs on the root only after the whole tree is assembled.",
+   "compile": {
+    "template": [
+     "interface Node { long size(); }",
+     "record File(String name, long size) implements Node {}",
+     "record Dir(String name, Node... kids) implements Node {",
+     "  public long size() { long s = 0; for (Node k : kids) s += k.size(); return s; } }",
+     "class Snippet { void run() {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Composite in your own words: what is the shared interface for, and how does it differ from Decorator?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Composite lets a client treat one object and a group of objects the same way. Leaves and groups implement one component interface; a group implements it by delegating to its children and combining the results, so trees of any depth work through plain recursion. Decorator also nests, but wraps exactly one component to add behavior, while a composite aggregates many."
+    }
+   ],
+   "keyPoints": [
+    "Leaf and composite share one component interface",
+    "Composite delegates to children and combines results",
+    "Recursion handles any depth; the client never checks types",
+    "Decorator wraps one component to add behavior; composite holds many",
+    "Watch for cycles and leaf-only methods on the interface"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,511 @@
+{
+ "id": "decorator",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Add behavior to an object by wrapping it in another object that implements the same interface and delegates to it."
+    },
+    {
+     "type": "p",
+     "text": "A **decorator** holds a reference to a component of the same type, forwards each call, and adds work before or after. Because the wrapper is itself a component, wrappers **stack** in any order and combination, chosen at runtime, without a subclass for every combination."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Varies:** which responsibilities are added, and in what order.",
+      "**Stays stable:** the component interface and the wrapped class.",
+      "**Chosen by:** the code that assembles the stack, often at startup."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "A decorator and the object it wraps are interchangeable to the client. If the wrapper changes the interface, that is an Adapter."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Decorator.java",
+   "expectedOutput": "send: [ops] disk 91%\nsend: [ops] disk 95%\naudited: [disk 91%, disk 95%]",
+   "walkthrough": [
+    {
+     "region": "component",
+     "note": "The component interface that both the real object and every wrapper implement."
+    },
+    {
+     "region": "concrete",
+     "note": "The concrete component does the base work and knows nothing about decorators."
+    },
+    {
+     "region": "base",
+     "note": "An abstract decorator holds the wrapped `Notifier` and is itself a `Notifier`. It is the only place that knows about delegation."
+    },
+    {
+     "region": "wrappers",
+     "note": "Each wrapper adds exactly one concern and then calls `next`. `Prefixed` changes the argument; `Audited` records it."
+    },
+    {
+     "region": "stack",
+     "note": "The stack is assembled by nesting constructors. The outermost wrapper runs first; swap the order and the behavior changes."
+    },
+    {
+     "region": "client",
+     "note": "The client holds a plain `Notifier`. It cannot tell, and does not need to know, how many wrappers sit behind it."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Resilience layers around an outbound HTTP client."
+    },
+    {
+     "type": "p",
+     "text": "A payments client needs auth headers, metrics, retries and a circuit breaker, but a batch job wants only metrics and retries, and tests want none. Each concern is a decorator around `HttpGateway`. Production composes all of them; each environment picks its own stack in one place and the callers never change."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "HttpGateway http = new Metered(",
+      "    new Retrying(3,",
+      "        new Authenticated(token,",
+      "            new JdkHttpGateway(client))));"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: concerns are written and tested once, in isolation, and combined by assembly rather than by subclassing."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "notifier",
+       "name": "Notifier",
+       "kind": "interface",
+       "role": "Component",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ send(message)"
+       ]
+      },
+      {
+       "id": "console",
+       "name": "ConsoleNotifier",
+       "kind": "class",
+       "role": "ConcreteComponent",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ send(message)"
+       ]
+      },
+      {
+       "id": "base",
+       "name": "NotifierDecorator",
+       "kind": "abstract",
+       "role": "Decorator",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "# next: Notifier",
+        "+ send(message)"
+       ]
+      },
+      {
+       "id": "prefixed",
+       "name": "Prefixed",
+       "kind": "class",
+       "role": "ConcreteDecorator",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "+ send(message)"
+       ]
+      },
+      {
+       "id": "audited",
+       "name": "Audited",
+       "kind": "class",
+       "role": "ConcreteDecorator",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "+ send(message)"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "console",
+       "to": "notifier",
+       "rel": "realizes"
+      },
+      {
+       "from": "base",
+       "to": "notifier",
+       "rel": "realizes"
+      },
+      {
+       "from": "base",
+       "to": "notifier",
+       "rel": "aggregation",
+       "label": "next"
+      },
+      {
+       "from": "prefixed",
+       "to": "base",
+       "rel": "extends"
+      },
+      {
+       "from": "audited",
+       "to": "base",
+       "rel": "extends"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "audited",
+       "name": "Audited",
+       "role": "ConcreteDecorator"
+      },
+      {
+       "id": "prefixed",
+       "name": "Prefixed",
+       "role": "ConcreteDecorator"
+      },
+      {
+       "id": "console",
+       "name": "Console",
+       "role": "ConcreteComponent"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "audited",
+       "label": "send(m)",
+       "style": "call"
+      },
+      {
+       "from": "audited",
+       "to": "audited",
+       "label": "log.add(m)",
+       "style": "call"
+      },
+      {
+       "from": "audited",
+       "to": "prefixed",
+       "label": "send(m)",
+       "style": "call"
+      },
+      {
+       "from": "prefixed",
+       "to": "console",
+       "label": "send(\"[ops] \" + m)",
+       "style": "call"
+      },
+      {
+       "from": "console",
+       "to": "prefixed",
+       "label": "",
+       "style": "return"
+      },
+      {
+       "from": "prefixed",
+       "to": "audited",
+       "label": "",
+       "style": "return"
+      },
+      {
+       "from": "audited",
+       "to": "client",
+       "label": "",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Optional behaviors must combine freely at runtime.",
+      "Subclassing would explode into one class per combination.",
+      "You cannot modify the wrapped class, or should not."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The behavior is always on: put it in the class.",
+      "The interface is wide; every wrapper must forward every method."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Order matters: a retry outside versus inside a timeout behaves differently.",
+      "Identity checks and `instanceof` see the wrapper, not the real object.",
+      "Stack traces and debugging get deep, and wide interfaces drift when a method is forgotten."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Five wrappers that always appear together: merge them into one class.",
+      "A decorator that quietly changes the contract, such as swallowing exceptions."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "For a single-method interface, a higher-order function can wrap behavior without a class per layer.",
+      "`java.lang.reflect.Proxy` can generate forwarding wrappers for wide interfaces."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "proxy",
+     "relation": "lookAlike",
+     "difference": "Same wrapping shape, different intent. A proxy controls access to its subject and usually manages its lifecycle; a decorator adds responsibilities that the client opts into and can stack."
+    },
+    {
+     "ref": "adapter",
+     "relation": "lookAlike",
+     "difference": "An adapter changes the interface to fit a caller. A decorator keeps the interface identical and changes the behavior."
+    },
+    {
+     "ref": "composite",
+     "relation": "lookAlike",
+     "difference": "Composite holds many children and aggregates their results; a decorator wraps exactly one component and augments it."
+    },
+    {
+     "ref": "strategy",
+     "relation": "alternative",
+     "difference": "Strategy swaps the internals of an object through a hook it exposes. Decorator wraps from the outside and needs no hook."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "relation": "oftenConfused",
+     "difference": "A decorator always delegates and adds. A chain handler may stop the request and answer it itself."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "java.io.FilterInputStream",
+     "detail": "`BufferedInputStream` and `GZIPInputStream` wrap another `InputStream`, so `new BufferedInputStream(new GZIPInputStream(in))` stacks behaviors."
+    },
+    {
+     "where": "JDK",
+     "name": "Collections.unmodifiableList",
+     "detail": "Wraps a `List` with the same interface and rejects mutation; `synchronizedList` adds locking the same way."
+    },
+    {
+     "where": "Jakarta Servlet",
+     "name": "HttpServletRequestWrapper",
+     "detail": "Wraps a request and overrides selected methods, the standard way filters change what later code sees."
+    },
+    {
+     "where": "Guava",
+     "name": "ForwardingList",
+     "detail": "A forwarding base class for decorating a `List`; override only the methods you change."
+    },
+    {
+     "where": "Spring",
+     "name": "ServerHttpRequestDecorator",
+     "detail": "Wraps a reactive `ServerHttpRequest` so filters can alter headers or body."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Timestamped implements Sink {",
+    "    private final Sink inner;",
+    "    Timestamped(Sink inner) { this.inner = inner; }",
+    "",
+    "    public void write(String line) {",
+    "        inner.write(Instant.EPOCH + \" \" + line);",
+    "    }",
+    "}",
+    "// Sink s = new Timestamped(new Masked(new FileSink(path)));"
+   ],
+   "options": [
+    {
+     "ref": "decorator",
+     "correct": true,
+     "why": "The wrapper has the same interface as what it wraps, adds one behavior, delegates, and stacks with other wrappers."
+    },
+    {
+     "ref": "proxy",
+     "why": "A proxy controls access to one subject, for example by laziness or permissions. These wrappers add behavior and stack freely."
+    },
+    {
+     "ref": "adapter",
+     "why": "The interface is the same on both sides, so nothing is being adapted."
+    },
+    {
+     "ref": "composite",
+     "why": "Each wrapper holds exactly one `Sink`, not a group of children whose results are combined."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.time.Instant;",
+     "interface Sink { void write(String line); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "An HTTP client class is used by dozens of services. Some need logging, some need retries, some need auth headers, and a few need all three, in a specific order. The class is in a vendor library and cannot be changed.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "decorator",
+     "correct": true,
+     "why": "Wrappers implementing the same interface can be stacked per service in any combination, without touching the vendor class."
+    },
+    {
+     "ref": "strategy",
+     "why": "It swaps one algorithm, but here several independent concerns must layer on top of the same call."
+    },
+    {
+     "ref": "template-method",
+     "why": "Needs subclasses of a class you cannot change, and yields a class per combination."
+    },
+    {
+     "ref": "adapter",
+     "why": "The interface already fits callers; only behavior needs to be added."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Decorator pattern.",
+   "lines": [
+    "final class Upper implements Sink {",
+    "    private final Sink inner;",
+    "",
+    "    Upper(Sink inner) { this.inner = inner; }",
+    "",
+    "    public void write(String line) {",
+    "        String out = line.toUpperCase();",
+    "        new ConsoleSink().write(out);",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    8
+   ],
+   "explanation": "The wrapper ignores the component it was given and writes to a hard-coded sink, so anything stacked beneath it is bypassed. Delegate with `inner.write(out)`.",
+   "compile": {
+    "template": [
+     "interface Sink { void write(String line); }",
+     "class ConsoleSink implements Sink { public void write(String l) { System.out.println(l); } }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that each one only uses what came before.",
+   "blocks": [
+    [
+     "Path path = Path.of(\"app.log\");"
+    ],
+    [
+     "Sink base = new FileSink(path);"
+    ],
+    [
+     "Sink masked = new Masked(base);"
+    ],
+    [
+     "Sink stamped = new Timestamped(masked);"
+    ],
+    [
+     "stamped.write(\"login ok\");"
+    ]
+   ],
+   "explanation": "A decorator needs the component it wraps, so the stack is built from the innermost object outward, and calls go to the outermost wrapper.",
+   "compile": {
+    "template": [
+     "import java.nio.file.Path;",
+     "interface Sink { void write(String line); }",
+     "record FileSink(Path p) implements Sink { public void write(String l) {} }",
+     "record Masked(Sink in) implements Sink { public void write(String l) { in.write(l); } }",
+     "record Timestamped(Sink in) implements Sink { public void write(String l) { in.write(l); } }",
+     "class Snippet { void run() {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Decorator in your own words: why does it keep the same interface, and how does it differ from Proxy?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A decorator wraps a component that has the same interface and adds behavior before or after delegating. Because the wrapper is itself a component, wrappers stack in any order, avoiding a subclass per combination. A proxy looks the same but controls access to its subject, such as lazily creating it or checking permissions, rather than adding stackable features."
+    }
+   ],
+   "keyPoints": [
+    "Same interface as the wrapped component, so it is transparent",
+    "Delegates, adding behavior before or after",
+    "Stacks at runtime in any order; avoids subclass explosion",
+    "Proxy controls access and lifecycle; decorator adds responsibilities",
+    "Order of wrappers changes behavior"
+   ]
+  }
+ ]
+}

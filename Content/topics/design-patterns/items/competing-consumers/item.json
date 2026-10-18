@@ -1,0 +1,172 @@
+{
+  "id": "competing-consumers",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Let several identical consumers pull from one queue, so throughput scales by adding consumers and each message goes to one of them."},
+      {"type": "p", "text": "Producers write to a single **queue**. A pool of interchangeable **consumers** each take the next message, process it, and acknowledge it. The broker hands every message to one consumer, so adding or removing consumers changes capacity without touching producers."},
+      {"type": "bullets", "items": [
+        "**Scales:** consumer count, independently of producers.",
+        "**Requires:** stateless, interchangeable workers.",
+        "**Gives up:** ordering across consumers, unless you partition by key."]},
+      {"type": "callout", "tone": "warning", "text": "Delivery is almost always at-least-once: a consumer that crashes before acking causes redelivery. Consumers must tolerate duplicates."}
+    ]},
+    {"role": "implementation", "file": "CompetingConsumers.java",
+     "expectedOutput": "jobs=20 exactlyOnce=true total=210",
+     "walkthrough": [
+      {"region": "message", "note": "A job is an immutable record. `STOP` is a sentinel (poison pill) compared by identity, so it can never collide with real work."},
+      {"region": "consumer", "note": "Each worker loops on `take()`. The queue is the only shared coordination point: whoever calls `take()` first owns that job. Workers share no other state about which job is whose."},
+      {"region": "queue", "note": "One shared `LinkedBlockingQueue`, plus thread-safe bookkeeping used only to verify that no job was handled twice."},
+      {"region": "start", "note": "Four identical consumers start on virtual threads. Scaling out is changing `workers`; nothing else knows the number."},
+      {"region": "produce", "note": "The producer only enqueues. It does not know how many consumers exist or which one will take a job."},
+      {"region": "stop", "note": "One `STOP` per consumer lets each exit its loop. Leaving the `try` block waits for all workers, so the printout is deterministic."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Thumbnail generation after photo uploads."},
+      {"type": "p", "text": "A photo app publishes one `PhotoUploaded` message per upload to a queue. Traffic is spiky: ten times the load on Sunday evenings. A single worker falls hours behind, so the team runs the same worker image as N replicas on the same queue and scales N from queue depth. A message that fails three times moves to a dead-letter queue."},
+      {"type": "code", "language": "java", "lines": [
+        "// every replica runs the same loop against queue \"thumbnails\"",
+        "var msg = queue.receive(\"thumbnails\", Duration.ofSeconds(60));",
+        "thumbnailer.render(msg.photoId());   // idempotent: same output",
+        "queue.delete(msg.receiptHandle());   // ack after the work"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: Sunday peaks are absorbed by adding replicas, and a crashed worker just means its message reappears for another one."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "producer", "name": "Producer", "kind": "class", "role": "Producer", "col": 0, "row": 0,
+         "members": ["+ send(message)"]},
+        {"id": "queue", "name": "MessageQueue", "kind": "interface", "role": "Channel", "col": 1, "row": 0,
+         "members": ["+ receive(): Message", "+ ack(message)"]},
+        {"id": "c1", "name": "ConsumerA", "kind": "class", "role": "Consumer", "col": 0, "row": 1,
+         "members": ["+ run()"]},
+        {"id": "c2", "name": "ConsumerB", "kind": "class", "role": "Consumer", "col": 1, "row": 1,
+         "members": ["+ run()"]}],
+       "edges": [
+        {"from": "producer", "to": "queue", "rel": "dependency", "label": "send"},
+        {"from": "c1", "to": "queue", "rel": "association", "label": "receive"},
+        {"from": "c2", "to": "queue", "rel": "association", "label": "receive"}],
+       "notes": [{"attachTo": "queue", "text": "each message goes to one consumer"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "p", "name": "Producer"}, {"id": "q", "name": "Queue", "role": "Channel"},
+        {"id": "a", "name": "ConsumerA", "role": "Consumer"}, {"id": "b", "name": "ConsumerB", "role": "Consumer"}],
+       "messages": [
+        {"from": "p", "to": "q", "label": "send(m1)", "style": "async"},
+        {"from": "p", "to": "q", "label": "send(m2)", "style": "async"},
+        {"from": "a", "to": "q", "label": "receive()", "style": "call"},
+        {"from": "q", "to": "a", "label": "m1", "style": "return"},
+        {"from": "b", "to": "q", "label": "receive()", "style": "call"},
+        {"from": "q", "to": "b", "label": "m2", "style": "return"},
+        {"from": "a", "to": "q", "label": "ack(m1)", "style": "call"},
+        {"from": "b", "to": "q", "label": "ack(m2)", "style": "call"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Jobs are independent and one worker cannot keep up.",
+        "Load is spiky and you want to scale workers on queue depth.",
+        "A slow or crashed worker must not stall the others."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Messages must be processed in strict global order.",
+        "Every message must reach every subscriber: that is publish/subscribe."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Acking before processing loses work on a crash; acking after causes duplicates.",
+        "A poison message retried forever blocks capacity: set a retry limit and a dead-letter queue.",
+        "Ordering needs partitioning by key, which caps parallelism at the partition count."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "Adding consumers when the bottleneck is the database they all write to.",
+        "Competing consumers on a queue that carries only a handful of messages per hour."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Virtual threads make one thread per in-flight message cheap, so a blocking consumer loop is fine.",
+        "`ExecutorService` with `newVirtualThreadPerTaskExecutor()` gives structured start and shutdown, as in the sample."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "producer-consumer", "relation": "specializes", "difference": "Producer-Consumer is the in-process hand-off through a bounded buffer. Competing Consumers applies it across processes with a broker, acknowledgements, redelivery and scale-out."},
+      {"ref": "thread-pool", "relation": "lookAlike", "difference": "A thread pool shares a work queue among threads of one JVM and loses the queue on exit. Competing consumers share a durable queue among separate processes."},
+      {"ref": "observer", "relation": "oftenConfused", "difference": "Observer or pub/sub delivers each event to every subscriber. Competing consumers deliver each message to exactly one member of the group."},
+      {"ref": "idempotent-consumer", "relation": "combines", "difference": "At-least-once delivery means a message can reach a second consumer after a timeout. Each consumer must be idempotent to make that harmless."},
+      {"ref": "bulkhead", "relation": "combines", "difference": "Separate queues and consumer pools per workload keep one slow job type from consuming all capacity."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Apache Kafka", "name": "Consumer groups", "detail": "Consumers sharing a `group.id` split a topic's partitions between them; each partition is read by one member at a time."},
+      {"where": "RabbitMQ", "name": "Work queues", "detail": "Several consumers on one queue receive messages round-robin; `basic.ack` confirms and unacked messages are redelivered."},
+      {"where": "Amazon SQS", "name": "Visibility timeout", "detail": "A received message is hidden from other consumers until it is deleted or the timeout expires, then reappears."},
+      {"where": "JDK", "name": "ThreadPoolExecutor", "detail": "Worker threads compete for tasks from one `BlockingQueue`: the same idea inside a single JVM."},
+      {"where": "Kubernetes", "name": "Job with parallelism", "detail": "A work-queue Job runs several identical pods that each pull items from an external queue until it is empty."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class JobWorker {",
+      "    private final MessageQueue queue;",
+      "    private final Consumer<String> handler;",
+      "    JobWorker(MessageQueue q, Consumer<String> h) { queue = q; handler = h; }",
+      "    void poll() {",
+      "        Message m = queue.receive(\"jobs\", Duration.ofSeconds(30));",
+      "        if (m == null) return;",
+      "        handler.accept(m.body());",
+      "        queue.delete(m.receiptHandle());",
+      "    }",
+      "}",
+      "// deployed as N identical replicas on the same queue name"],
+     "options": [
+      {"ref": "competing-consumers", "correct": true, "why": "Identical workers pull from one queue; a received message is hidden from the others and deleted only after the work succeeds."},
+      {"ref": "observer", "why": "Observer would give every replica every message. Here a message is taken by one consumer only."},
+      {"ref": "idempotent-consumer", "why": "Nothing records processed message ids or skips duplicates; the code only shows pull, process and ack."},
+      {"ref": "thread-pool", "why": "A thread pool lives inside one JVM and owns its threads; these are separate replicas sharing an external queue."}],
+     "compile": {"template": [
+      "import java.time.Duration;", "import java.util.function.Consumer;",
+      "record Message(String body, String receiptHandle) {}",
+      "interface MessageQueue { Message receive(String name, Duration hide); void delete(String handle); }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "An invoicing service renders PDFs from a queue. Each job takes about two seconds and is independent. On the first of the month the backlog reaches hours, and one worker pegs a single CPU.",
+     "prompt": "Which pattern most directly fixes the backlog?",
+     "options": [
+      {"ref": "competing-consumers", "correct": true, "why": "Independent jobs on one queue can be drained in parallel by adding identical workers, with no producer change."},
+      {"ref": "rate-limiter", "why": "Limiting intake lowers the arrival rate but does not drain the backlog; capacity must grow."},
+      {"ref": "bulkhead", "why": "Isolating pools protects other workloads but adds no throughput for this one."},
+      {"ref": "api-gateway", "why": "A gateway sits in front of synchronous client calls and does nothing for background job throughput."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks reliable consumption.",
+     "lines": [
+      "final class JobWorker {",
+      "    private final MessageQueue queue;",
+      "    private final Consumer<String> handler;",
+      "    JobWorker(MessageQueue q, Consumer<String> h) { queue = q; handler = h; }",
+      "    void poll() {",
+      "        Message m = queue.receive(\"jobs\", Duration.ofSeconds(30));",
+      "        if (m == null) return;",
+      "        queue.delete(m.receiptHandle());",
+      "        handler.accept(m.body());",
+      "    }",
+      "}"],
+     "flawLines": [8],
+     "explanation": "The message is acknowledged before the work is done. A crash in the handler loses the job for good. Delete after `handler.accept` succeeds, and make the handler idempotent for redelivery.",
+     "compile": {"template": [
+      "import java.time.Duration;", "import java.util.function.Consumer;",
+      "record Message(String body, String receiptHandle) {}",
+      "interface MessageQueue { Message receive(String name, Duration hide); void delete(String handle); }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order one consumer iteration so that every line uses what came before.",
+     "blocks": [
+      ["Message m = queue.receive(\"jobs\", Duration.ofSeconds(30));"],
+      ["if (m == null) return;"],
+      ["handler.accept(m.body());"],
+      ["queue.delete(m.receiptHandle());"]],
+     "explanation": "Receive first, bail out on an empty poll, do the work, and acknowledge last so a failure leaves the message to reappear for another consumer.",
+     "compile": {"template": [
+      "import java.time.Duration;", "import java.util.function.Consumer;",
+      "record Message(String body, String receiptHandle) {}",
+      "interface MessageQueue { Message receive(String name, Duration hide); void delete(String handle); }",
+      "class Snippet { void run(MessageQueue queue, Consumer<String> handler) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Competing Consumers: how it scales, what delivery guarantee you get, and how it differs from publish/subscribe.",
+     "modelAnswer": [
+      {"type": "p", "text": "Several identical workers read one queue and each message goes to one of them, so you scale by adding workers. Delivery is at-least-once: unacknowledged messages are redelivered, so handlers must be idempotent and ordering is lost. Pub/sub instead copies each message to every subscriber."}],
+     "keyPoints": [
+      "Many identical consumers on one queue; each message goes to one",
+      "Scale out by adding consumers, producers unaffected",
+      "At-least-once delivery means redelivery and duplicates",
+      "Handlers should be idempotent; ordering is not guaranteed",
+      "Pub/sub fans out to all subscribers instead"]}
+  ]
+}

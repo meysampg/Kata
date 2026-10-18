@@ -1,0 +1,164 @@
+{
+  "id": "template-method",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Fix the skeleton of an algorithm in a base class and let subclasses fill in individual steps."},
+      {"type": "p", "text": "The base class owns the **template method**: a `final` method that calls steps in a fixed order. Subclasses override **abstract steps** they must supply and optional **hooks** they may refine. The base class calls the subclass, not the other way round, which is the Hollywood principle."},
+      {"type": "bullets", "items": [
+        "**Varies:** individual steps, supplied by subclasses.",
+        "**Stays stable:** the order and the control flow.",
+        "**Chosen by:** inheritance, fixed at compile time."]},
+      {"type": "callout", "tone": "info", "text": "Make the template `final`. If subclasses can override the skeleton, the invariant that justified the pattern is gone."}
+    ]},
+    {"role": "implementation", "file": "TemplateMethod.java",
+     "expectedOutput": "open\nsaved 2\n[User[name=ana, age=31], User[name=bo, age=40]]",
+     "walkthrough": [
+      {"region": "template", "note": "`run` is `public final`: it fixes the sequence open, parse, filter, store, close. Subclasses cannot reorder it or skip a step."},
+      {"region": "steps", "note": "Abstract steps are the extension points a subclass must implement. They are `protected`, since only the template should call them."},
+      {"region": "hooks", "note": "Hooks have a default: `accept` keeps every row, `open` and `close` do nothing. A subclass overrides them only when it needs to."},
+      {"region": "concrete", "note": "The subclass fills in the steps. `@Override` makes the compiler catch a misspelled hook that would otherwise silently never run."},
+      {"region": "client", "note": "The client calls the template. The importer calls back into its own overrides, and the underage row is filtered by the hook."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Payment provider integrations behind one gateway."},
+      {"type": "p", "text": "Every provider needs the same envelope: validate the request, take an idempotency key, call the provider, map its error codes, write an audit record. Only the call and the error mapping differ. A `PaymentGateway.charge` template guarantees that no provider integration forgets the audit record or the idempotency check, and a new provider is a subclass of two methods."},
+      {"type": "code", "language": "java", "lines": [
+        "public final Receipt charge(Charge c) {",
+        "    validate(c);",
+        "    var key = idempotencyKey(c);",
+        "    var raw = call(c, key);          // abstract",
+        "    audit.record(c, raw);",
+        "    return map(raw);                 // abstract",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: cross-cutting rules are written once, in one `final` method, so a new provider cannot skip them."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "base", "name": "Importer<T>", "kind": "abstract", "role": "AbstractClass", "col": 0.5, "row": 0,
+         "members": ["+ run(lines): int", "# parse(line): T", "# store(row)", "# accept(row): boolean"]},
+        {"id": "users", "name": "UserImporter", "kind": "class", "role": "ConcreteClass", "col": 0, "row": 1,
+         "members": ["# parse(line)", "# store(row)", "# accept(row)"]},
+        {"id": "orders", "name": "OrderImporter", "kind": "class", "role": "ConcreteClass", "col": 1, "row": 1,
+         "members": ["# parse(line)", "# store(row)"]}],
+       "edges": [
+        {"from": "users", "to": "base", "rel": "extends"},
+        {"from": "orders", "to": "base", "rel": "extends"}],
+       "notes": [{"attachTo": "base", "text": "run() is final"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "imp", "name": "UserImporter", "role": "ConcreteClass"}],
+       "messages": [
+        {"from": "client", "to": "imp", "label": "run(lines)", "style": "call"},
+        {"from": "imp", "to": "imp", "label": "open()", "style": "call"},
+        {"from": "imp", "to": "imp", "label": "parse(line)", "style": "call"},
+        {"from": "imp", "to": "imp", "label": "accept(row)", "style": "call"},
+        {"from": "imp", "to": "imp", "label": "store(row)", "style": "call"},
+        {"from": "imp", "to": "client", "label": "saved", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Several classes share an algorithm and differ in a few steps.",
+        "An order or invariant must hold for every variant, such as audit or cleanup.",
+        "A framework needs defined extension points."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Variants must be chosen or swapped at runtime.",
+        "Behavior varies along several independent axes: subclass counts multiply."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Calling an overridable step from the base constructor: the subclass fields are not initialized yet.",
+        "Subclasses violating the contract of a step, which breaks substitutability.",
+        "Too many hooks, so nobody can state what the template guarantees."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "A deep hierarchy built only to reuse the skeleton.",
+        "Hooks that every subclass overrides identically."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Passing steps as lambdas to a method or constructor is Strategy, and often simpler.",
+        "Interface `default` methods can host a template without a base class."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "strategy", "relation": "alternative", "difference": "Template Method varies steps through inheritance, fixed at compile time. Strategy varies the whole algorithm through composition and can be swapped at runtime."},
+      {"ref": "factory-method", "relation": "specializes", "difference": "A factory method is a template step whose job is to create an object. Template Method is the broader skeleton that may contain it."},
+      {"ref": "composition-over-inheritance", "relation": "oftenConfused", "difference": "Template Method is the textbook inheritance-based pattern. Prefer composition once the skeleton needs to change at runtime or subclasses multiply."},
+      {"ref": "lsp", "relation": "combines", "difference": "Overridden steps and hooks must honor the base class's contract, or the template's guarantees silently break."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "Jakarta Servlet", "name": "HttpServlet", "detail": "`service` dispatches to `doGet`, `doPost` and the other hooks that you override."},
+      {"where": "JDK", "name": "java.io.InputStream", "detail": "`read(byte[], int, int)` is implemented in terms of the single abstract `read()`."},
+      {"where": "JDK", "name": "java.util.AbstractList", "detail": "`indexOf`, `iterator` and others are built on the abstract `get(int)` and `size()`."},
+      {"where": "Spring", "name": "OncePerRequestFilter", "detail": "`doFilter` guarantees once-per-request execution and delegates to the abstract `doFilterInternal`."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "abstract class Report {",
+      "    public final String render() {",
+      "        StringBuilder sb = new StringBuilder(header());",
+      "        for (String row : rows()) sb.append(row).append('\\n');",
+      "        return sb.append(footer()).toString();",
+      "    }",
+      "    protected abstract String header();",
+      "    protected abstract List<String> rows();",
+      "    protected String footer() { return \"\"; }",
+      "}"],
+     "options": [
+      {"ref": "template-method", "correct": true, "why": "A final method fixes the sequence; abstract steps and an overridable default hook are filled in by subclasses."},
+      {"ref": "strategy", "why": "No collaborator is injected; variation arrives through subclassing, not composition."},
+      {"ref": "builder", "why": "The steps do not accumulate configuration for a product; they render once in a fixed order."},
+      {"ref": "decorator", "why": "Nothing wraps another `Report` instance with the same interface."}],
+     "compile": {"template": ["import java.util.List;", "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "Five batch jobs each read a file, transform rows and write results. All must log start and end, open and close the same resources, and fail the same way. Only the transform differs, and the job type is known at deploy time.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "template-method", "correct": true, "why": "A fixed lifecycle that must hold for every job, with one varying step, chosen at compile time."},
+      {"ref": "strategy", "why": "It could work, but nothing then forces each job to keep the shared lifecycle, and no runtime swapping is needed."},
+      {"ref": "observer", "why": "Jobs do not broadcast changes to dependents; they need a guaranteed sequence."},
+      {"ref": "visitor", "why": "There is no class hierarchy of elements needing new operations."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Template Method pattern.",
+     "lines": [
+      "abstract class Job {",
+      "    public void run() {",
+      "        open();",
+      "        try {",
+      "            work();",
+      "        } finally {",
+      "            close();",
+      "        }",
+      "    }",
+      "    protected abstract void work();",
+      "    protected void open() {}",
+      "    protected void close() {}",
+      "}"],
+     "flawLines": [2],
+     "explanation": "The template is overridable, so a subclass can drop the `finally` and leak the resource. Declare it `public final void run()`.",
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the template so that each step has what it needs.",
+     "blocks": [
+      ["open();"],
+      ["T row = parse(line);"],
+      ["if (!accept(row)) continue;"],
+      ["store(row);"],
+      ["close();"]],
+     "explanation": "Resources open before use, a row must be parsed before it is filtered, and only accepted rows are stored. Closing comes after the loop work.",
+     "compile": {"template": [
+      "import java.util.List;",
+      "abstract class Importer<T> {",
+      "  abstract T parse(String s); abstract void store(T t); boolean accept(T t) { return true; }",
+      "  void open() {} void close() {}",
+      "  void run(List<String> lines) {",
+      "    open();",
+      "    for (String line : lines) {",
+      "{{code}}",
+      "    }",
+      "  } }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Template Method in your own words: what is fixed, what varies, and why prefer Strategy sometimes.",
+     "modelAnswer": [
+      {"type": "p", "text": "A base class defines a final method with the algorithm's fixed order and calls abstract steps and optional hooks that subclasses implement. The base calls the subclass. It is inheritance-based and decided at compile time; Strategy gives the same variation through composition and can change at runtime."}],
+     "keyPoints": [
+      "Final template method fixes the order and invariants",
+      "Subclasses supply abstract steps and optional hooks",
+      "The base class calls subclass code (Hollywood principle)",
+      "Compile-time inheritance; Strategy is runtime composition",
+      "Never call overridable steps from a constructor"]}
+  ]
+}

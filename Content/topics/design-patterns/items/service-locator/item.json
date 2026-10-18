@@ -1,0 +1,442 @@
+{
+  "id": "service-locator",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Let code look up the services it needs from a central registry, instead of receiving them."
+        },
+        {
+          "type": "p",
+          "text": "A **locator** maps a type or name to a service instance. A class calls `Locator.get(Mailer.class)` when it needs one. This decouples the class from the concrete implementation, but dependencies become **invisible**: nothing in the constructor says what the class needs, and a missing registration fails at runtime."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Benefit:** easy to retrofit, no constructor changes.",
+            "**Cost:** hidden dependencies and global state.",
+            "**Fit:** runtime discovery, framework edges."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "warning",
+          "text": "Treat it as the pattern that dependency injection replaces. Prefer it only where the set of services is unknown at compile time."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "ServiceLocator.java",
+      "expectedOutput": "Welcome, ana\nruntime: no service registered for Mailer",
+      "walkthrough": [
+        {
+          "region": "locator",
+          "note": "A static registry keyed by type. `get` fails loudly with a message naming the missing type, and a concurrent map keeps it safe across threads."
+        },
+        {
+          "region": "consumer",
+          "note": "`SignupService` has no constructor parameters, so its dependency on `Mailer` is invisible until the method runs."
+        },
+        {
+          "region": "registration",
+          "note": "Startup code registers implementations. Nothing forces this to happen before first use."
+        },
+        {
+          "region": "failure",
+          "note": "Remove the registration and the same call compiles but fails at runtime. This is the cost DI avoids by moving the failure to construction."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A build tool discovering compiler plugins at startup."
+        },
+        {
+          "type": "p",
+          "text": "The tool cannot know at compile time which plugins sit on the classpath. It asks the JDK's `ServiceLoader` for every `CompilerPlugin` implementation, each declared in a descriptor inside its own jar. Adding a plugin means dropping a jar in, with no change to the host. A locator fits because discovery, not wiring, is the problem."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "var plugins = ServiceLoader.load(CompilerPlugin.class);",
+            "for (CompilerPlugin p : plugins) {",
+            "    p.configure(project);",
+            "}"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: extensibility without recompiling the host. Pair it with DI inside the plugin so its own collaborators stay explicit."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "main",
+              "name": "Main",
+              "kind": "class",
+              "role": "Bootstrap",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ main(args)"
+              ]
+            },
+            {
+              "id": "svc",
+              "name": "SignupService",
+              "kind": "class",
+              "role": "Client",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ signUp(email)"
+              ]
+            },
+            {
+              "id": "loc",
+              "name": "Locator",
+              "kind": "class",
+              "role": "Registry",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "- SERVICES: Map",
+                "+ register(type, svc)",
+                "+ get(type): T"
+              ]
+            },
+            {
+              "id": "mail",
+              "name": "Mailer",
+              "kind": "interface",
+              "role": "Service",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "+ send(to, body)"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "main",
+              "to": "loc",
+              "rel": "dependency",
+              "label": "register"
+            },
+            {
+              "from": "svc",
+              "to": "loc",
+              "rel": "dependency",
+              "label": "get(Class)"
+            },
+            {
+              "from": "loc",
+              "to": "mail",
+              "rel": "association",
+              "label": "holds"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "svc",
+              "text": "dependency not visible in its API"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "c",
+              "name": "SignupService",
+              "role": "Client"
+            },
+            {
+              "id": "l",
+              "name": "Locator",
+              "role": "Registry"
+            },
+            {
+              "id": "m",
+              "name": "Mailer",
+              "role": "Service"
+            }
+          ],
+          "messages": [
+            {
+              "from": "c",
+              "to": "l",
+              "label": "get(Mailer.class)",
+              "style": "call"
+            },
+            {
+              "from": "l",
+              "to": "c",
+              "label": "mailer",
+              "style": "return"
+            },
+            {
+              "from": "c",
+              "to": "m",
+              "label": "send(email, body)",
+              "style": "call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Implementations are discovered at runtime, as with plugins and drivers.",
+            "Retrofitting legacy code that you can't give constructors yet.",
+            "At a framework boundary where object creation is out of your control."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "You control construction: use [Dependency Injection](kata:dependency-injection) instead.",
+            "You need compile-time or startup-time proof that dependencies exist."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Hidden dependencies make classes hard to understand and reuse.",
+            "Global mutable registry leaks state between tests.",
+            "Failures appear at the first call, possibly in production."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Business classes that call `Locator.get` several times per method.",
+            "Injecting the locator itself everywhere, which is DI in name only."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "dependency-injection",
+          "relation": "alternative",
+          "difference": "The class asks for services (pull) versus being handed them (push). Push makes dependencies explicit; pull hides them and fails later."
+        },
+        {
+          "ref": "singleton",
+          "relation": "lookAlike",
+          "difference": "Both give global access. A singleton is one class controlling its own instance; a locator is a registry of many services replaceable by type."
+        },
+        {
+          "ref": "factory-method",
+          "relation": "oftenConfused",
+          "difference": "A factory creates a new object on request. A locator returns an already registered one, often shared."
+        },
+        {
+          "ref": "dip",
+          "relation": "oftenConfused",
+          "difference": "A locator decouples from concrete classes, as DIP asks, but still couples every client to the locator and hides what it uses."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.ServiceLoader",
+          "detail": "Discovers implementations of a service interface declared in `META-INF/services` or `module-info.java`."
+        },
+        {
+          "where": "JNDI",
+          "name": "javax.naming.InitialContext.lookup",
+          "detail": "Classic Jakarta EE way to find a DataSource or EJB by name."
+        },
+        {
+          "where": "Spring",
+          "name": "ApplicationContext.getBean",
+          "detail": "Direct pull from the container; legitimate at edges, a smell inside beans."
+        },
+        {
+          "where": "Android",
+          "name": "Context.getSystemService",
+          "detail": "Looks up platform services such as `ConnectivityManager` by name or class."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Billing {",
+        "    void charge(String accountId) {",
+        "        Gateway gateway = Registry.lookup(Gateway.class);",
+        "        Clock clock = Registry.lookup(Clock.class);",
+        "        gateway.pay(accountId, clock.instant());",
+        "    }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "service-locator",
+          "correct": true,
+          "why": "The class pulls its collaborators from a global registry inside the method, so its needs are invisible from outside."
+        },
+        {
+          "ref": "dependency-injection",
+          "why": "Injection would receive `Gateway` and `Clock` as constructor parameters instead of fetching them."
+        },
+        {
+          "ref": "singleton",
+          "why": "`Registry` is global, but the point here is lookup of several services by type, not a class restricting its own instances."
+        },
+        {
+          "ref": "factory-method",
+          "why": "`lookup` doesn't create a product through an overridable creation step."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.time.*;",
+          "interface Gateway { void pay(String a, Instant t); }",
+          "class Registry { static <T> T lookup(Class<T> c) { return null; } }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A host application must load optional export formats from jars dropped into a folder by third parties. The host can't know the implementations at compile time and must find them at startup.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "service-locator",
+          "correct": true,
+          "why": "Runtime discovery by interface is the locator's legitimate use, as `ServiceLoader` does."
+        },
+        {
+          "ref": "dependency-injection",
+          "why": "Constructor wiring needs the implementations known to the composition root, which is exactly what isn't available."
+        },
+        {
+          "ref": "factory-method",
+          "why": "A factory method needs a subclass per format known in advance."
+        },
+        {
+          "ref": "singleton",
+          "why": "A global instance doesn't discover anything; it only restricts instance count."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the Service Locator pattern.",
+      "lines": [
+        "final class Registry {",
+        "    private static final Map<Class<?>, Object> S = new ConcurrentHashMap<>();",
+        "",
+        "    static <T> void register(Class<T> type, T service) { S.put(type, service); }",
+        "",
+        "    static <T> T get(Class<T> type) {",
+        "        T service = type.cast(S.get(type));",
+        "        if (service == null) {",
+        "            return null;",
+        "        }",
+        "        return service;",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "Returning null defers the failure to a distant NullPointerException. Throw an exception naming the missing type so the problem surfaces where the lookup happens.",
+      "compile": {
+        "template": [
+          "import java.util.Map;",
+          "import java.util.concurrent.ConcurrentHashMap;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "Mailer mailer = (to, body) -> System.out.println(body);"
+        ],
+        [
+          "Locator.register(Mailer.class, mailer);"
+        ],
+        [
+          "new SignupService().signUp(\"ana\");"
+        ],
+        [
+          "Locator.clear();"
+        ]
+      ],
+      "explanation": "A service must exist before it is registered, and registration must precede the first lookup. Clearing comes last, so earlier calls still find it.",
+      "compile": {
+        "template": [
+          "interface Mailer { void send(String to, String body); }",
+          "class Locator { static <T> void register(Class<T> c, T s) {} static void clear() {} }",
+          "class SignupService { void signUp(String e) {} }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Service Locator pattern and why most teams prefer dependency injection.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A service locator is a registry that code queries for the services it needs. It decouples callers from concrete classes, but the dependencies are hidden in method bodies, global state complicates tests, and a missing registration fails at runtime. Dependency injection makes them explicit parameters. Locators remain valid for runtime plugin discovery."
+        }
+      ],
+      "keyPoints": [
+        "Registry code pulls services",
+        "Dependencies are hidden from the API",
+        "Missing registration fails at runtime",
+        "Global state hurts test isolation",
+        "Valid for plugin discovery such as ServiceLoader"
+      ]
+    }
+  ]
+}

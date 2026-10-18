@@ -1,0 +1,342 @@
+{
+  "id": "ocp",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Software entities should be open for extension and closed for modification: add behavior by adding code, not by editing tested code."
+        },
+        {
+          "type": "p",
+          "text": "Find the axis that varies, put an **abstraction** in front of it, and make the stable code depend only on that abstraction. New variants then arrive as new classes. The module is **closed** to edits and **open** through its extension point. Meyer proposed it for inheritance; Martin recast it around polymorphism."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Closed:** the orchestrating code, already tested and released.",
+            "**Open:** a new `PriceRule` implementation, lambda or plugin.",
+            "**Cost:** you must guess the axis; abstracting every axis is waste."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "warning",
+          "text": "OCP is not \"never edit\". Fixing a bug is a modification. It targets the recurring edit: the next `case` added to the same switch."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Ocp.java",
+      "expectedOutput": "before VIP: 1800\nafter VIP: 1800\nblack friday: 1350\nblack friday floor: 1000",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "Every new customer tier edits this `switch`, so already-tested pricing is reopened on each release."
+        },
+        {
+          "region": "abstraction",
+          "note": "The extension point is a one-method interface. It names the axis that varies and nothing else."
+        },
+        {
+          "region": "closed",
+          "note": "`Pricer` depends only on the abstraction. It is closed: new rules never require editing it."
+        },
+        {
+          "region": "extensions",
+          "note": "New behavior arrives as new types. Each rule is small, tested alone and unaware of the others."
+        },
+        {
+          "region": "plug",
+          "note": "Composition happens at the edge. The Black Friday pricer is a new list of rules, including a lambda, with no edit to `Pricer`."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Alert routing in a monitoring platform."
+        },
+        {
+          "type": "p",
+          "text": "Each new alert destination (Slack, PagerDuty, SMS) meant a new `case` in `AlertRouter`, a core release and a regression run on every existing channel. The router now depends on an `AlertChannel` interface and discovers implementations with `ServiceLoader`. A channel ships as a separate jar; the router is untouched and its tests never change."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "interface AlertChannel { String name(); void send(Alert a); }",
+            "",
+            "for (AlertChannel c : ServiceLoader.load(AlertChannel.class)) {",
+            "    registry.put(c.name(), c);",
+            "}"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: teams add channels without a core release, and no existing channel can regress."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The same `switch` or `if` chain grows with every feature.",
+            "Variants come from other teams or plugins.",
+            "The core is costly to retest or release."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Only one variant exists and no second is in sight.",
+            "The axis of change is unknown: wait for the second case."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Guessing the wrong axis: the abstraction fits yesterday's variants and blocks tomorrow's.",
+            "Rules that depend on order or on each other make the extension point leaky.",
+            "Plugin discovery moves failures from compile time to runtime."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "Interfaces with one implementation \"for future extension\".",
+            "A strategy hierarchy for a rule unchanged in five years."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Lambdas and `ServiceLoader` are lightweight extension points.",
+            "A sealed interface closes the set on purpose; the compiler flags every `switch` to update."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "strategy",
+          "relation": "combines",
+          "difference": "OCP names the goal; Strategy is the most common structure that achieves it for one varying algorithm."
+        },
+        {
+          "ref": "decorator",
+          "relation": "combines",
+          "difference": "Decorator extends behavior by wrapping an object, so the wrapped class is never edited."
+        },
+        {
+          "ref": "template-method",
+          "relation": "alternative",
+          "difference": "Template Method extends through inheritance hooks, fixed at compile time. Interface-based OCP extends by composition."
+        },
+        {
+          "ref": "visitor",
+          "relation": "alternative",
+          "difference": "Visitor opens the set of operations but closes the set of types; adding a type edits every visitor."
+        },
+        {
+          "ref": "lsp",
+          "relation": "combines",
+          "difference": "Extensions are only safe if they honor the abstraction's contract, which is what LSP states."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.ServiceLoader",
+          "detail": "Loads providers of a service interface from the classpath or module path without changing the consumer."
+        },
+        {
+          "where": "JDK",
+          "name": "java.sql.DriverManager",
+          "detail": "Registered `Driver` implementations extend JDBC to a new database with no change to client code."
+        },
+        {
+          "where": "Jakarta Servlet",
+          "name": "jakarta.servlet.Filter",
+          "detail": "Filters are added through `@WebFilter` or deployment configuration; the container is unchanged."
+        },
+        {
+          "where": "Spring Boot",
+          "name": "AutoConfiguration.imports",
+          "detail": "Starters contribute auto-configuration classes listed in `META-INF/spring/`, extending the app without edits."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this code most clearly strain?",
+      "lines": [
+        "double fee(Order o) {",
+        "    switch (o.carrier()) {",
+        "        case \"DHL\": return o.kg() * 4.0;",
+        "        case \"UPS\": return o.kg() * 3.5 + 2;",
+        "        case \"FEDEX\": return o.kg() * 5.0;",
+        "        default: throw new IllegalArgumentException(o.carrier());",
+        "    }",
+        "}",
+        "// each quarter another carrier arrives, and another case"
+      ],
+      "options": [
+        {
+          "ref": "ocp",
+          "correct": true,
+          "why": "Every new carrier reopens and edits tested code; the variation should sit behind an abstraction."
+        },
+        {
+          "ref": "srp",
+          "why": "The method has one job, computing a fee; the problem is the recurring edit, not mixed concerns."
+        },
+        {
+          "ref": "lsp",
+          "why": "No inheritance or subtyping is involved."
+        },
+        {
+          "ref": "dip",
+          "why": "Nothing depends on an infrastructure detail; the pain is the growing switch."
+        }
+      ],
+      "compile": {
+        "template": [
+          "record Order(String carrier, double kg) {}",
+          "class Snippet {",
+          "{{code}}",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A fraud engine ends in a growing if-else of 40 country-specific checks edited by one team. Partners now want to supply their own checks without repository access, and one check must never force retesting the others.",
+      "prompt": "Which principle should drive the redesign?",
+      "options": [
+        {
+          "ref": "ocp",
+          "correct": true,
+          "why": "Keep the engine stable behind a `FraudCheck` interface and let checks be added as plugins, so extension needs no edits."
+        },
+        {
+          "ref": "srp",
+          "why": "Splitting the engine into classes by concern would not let outside parties add checks."
+        },
+        {
+          "ref": "isp",
+          "why": "The interface is not too wide; there is no interface yet, only a long conditional."
+        },
+        {
+          "ref": "tell-dont-ask",
+          "why": "Encapsulating state does not address how new checks get added."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that reopens a closed class.",
+      "lines": [
+        "final class Pricer {",
+        "    private final List<PriceRule> rules;",
+        "",
+        "    Pricer(List<PriceRule> rules) { this.rules = rules; }",
+        "",
+        "    long price(long cents, DayOfWeek day) {",
+        "        long result = cents;",
+        "        for (PriceRule rule : rules) result = rule.apply(result);",
+        "        if (day == DayOfWeek.FRIDAY) result = result * 90 / 100;",
+        "        return result;",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "A hardcoded Friday discount lives inside the class that is supposed to be closed. Express it as a `PriceRule`, so promotions are added without editing `Pricer`.",
+      "compile": {
+        "template": [
+          "import java.time.DayOfWeek;",
+          "import java.util.List;",
+          "interface PriceRule { long apply(long cents); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the setup so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var blackFriday = new PercentOff(25);"
+        ],
+        [
+          "var rules = List.of(new PercentOff(10), blackFriday);"
+        ],
+        [
+          "var pricer = new Pricer(rules);"
+        ],
+        [
+          "long price = pricer.price(2000);"
+        ],
+        [
+          "System.out.println(price);"
+        ]
+      ],
+      "explanation": "Rules come first, then the list of them, then the pricer built from the list. Only a built pricer can price, and printing needs the result.",
+      "compile": {
+        "template": [
+          "import java.util.List;",
+          "interface PriceRule { long apply(long cents); }",
+          "record PercentOff(int percent) implements PriceRule { public long apply(long c) { return c; } }",
+          "final class Pricer { Pricer(List<? extends PriceRule> r) {} long price(long c) { return c; } }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Open/Closed Principle in your own words. What is closed, what is open, and what does it not forbid?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Stable, tested code is closed: new behavior should not require editing it. It stays open because it depends on an abstraction that new implementations can fill. OCP does not forbid bug fixes. It targets the recurring change, like another switch case, and only pays off if you guessed the right axis."
+        }
+      ],
+      "keyPoints": [
+        "Closed to edits, open to extension",
+        "Achieved through an abstraction on the varying axis",
+        "Targets recurring edits, not bug fixes",
+        "Requires picking the axis; premature abstraction is waste",
+        "Safe extension relies on LSP"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,511 @@
+{
+ "id": "command",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Wrap a request in an object so it can be queued, logged, retried, or undone."
+    },
+    {
+     "type": "p",
+     "text": "A **command** turns an operation into data: it carries its receiver and arguments, and exposes `execute()` (and sometimes `undo()`). The **invoker** runs commands without knowing what they do, so it can schedule, record or reverse them. The **receiver** does the real work."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Decouples:** who asks for an action from who performs it, and when.",
+      "**Enables:** undo/redo, queues, retries, audit logs, macros.",
+      "**Requires:** commands capture what they need to undo themselves."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "If you only need to run something later, a lambda or `Runnable` is already a command. The pattern pays off once you add undo, persistence or logging."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Command.java",
+   "expectedOutput": "world\nHello world\nHello",
+   "walkthrough": [
+    {
+     "region": "receiver",
+     "note": "The receiver is plain state with no knowledge of commands. Commands are the only ones who modify it here."
+    },
+    {
+     "region": "command",
+     "note": "The command contract: do it, and reverse it. Invokers depend on nothing else."
+    },
+    {
+     "region": "concrete",
+     "note": "`Insert` is reversible from its own fields. `Delete` captures the removed text during `execute`, because undo cannot recompute what is gone."
+    },
+    {
+     "region": "invoker",
+     "note": "The invoker runs a command and keeps it on a stack. It never inspects the command type, so history and undo work for any command."
+    },
+    {
+     "region": "client",
+     "note": "Three edits, then two undos walk back through history in reverse order: delete, then the second insert."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A persistent background job queue."
+    },
+    {
+     "type": "p",
+     "text": "An order service enqueues `SendInvoice(orderId)` and `ResizeImage(assetId, width)` as small serializable records in a database table. Workers on other machines load a row, run it, and mark it done. Failures retry with backoff, an admin screen lists and cancels pending jobs, and the same table is the audit log. The web request returns before any work happens."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "sealed interface Job permits SendInvoice, ResizeImage {}",
+      "record SendInvoice(long orderId) implements Job {}",
+      "",
+      "queue.enqueue(new SendInvoice(order.id()));",
+      "// worker: handlers.get(job.getClass()).run(job)"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: work becomes data. It can wait, move between machines, be retried and be inspected, with no change to the code that requested it."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "history",
+       "name": "History",
+       "kind": "class",
+       "role": "Invoker",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "- done: Deque<Command>",
+        "+ run(c) / undo()"
+       ]
+      },
+      {
+       "id": "cmd",
+       "name": "Command",
+       "kind": "interface",
+       "role": "Command",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "+ execute()",
+        "+ undo()"
+       ]
+      },
+      {
+       "id": "insert",
+       "name": "Insert",
+       "kind": "record",
+       "role": "ConcreteCommand",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "doc, at, s"
+       ]
+      },
+      {
+       "id": "delete",
+       "name": "Delete",
+       "kind": "class",
+       "role": "ConcreteCommand",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "doc, from, to",
+        "- removed: String"
+       ]
+      },
+      {
+       "id": "doc",
+       "name": "Doc",
+       "kind": "class",
+       "role": "Receiver",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "+ text: StringBuilder"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "history",
+       "to": "cmd",
+       "rel": "aggregation",
+       "label": "done"
+      },
+      {
+       "from": "insert",
+       "to": "cmd",
+       "rel": "realizes"
+      },
+      {
+       "from": "delete",
+       "to": "cmd",
+       "rel": "realizes"
+      },
+      {
+       "from": "insert",
+       "to": "doc",
+       "rel": "dependency"
+      },
+      {
+       "from": "delete",
+       "to": "doc",
+       "rel": "dependency"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "history",
+       "name": "History",
+       "role": "Invoker"
+      },
+      {
+       "id": "delete",
+       "name": "Delete",
+       "role": "ConcreteCommand"
+      },
+      {
+       "id": "doc",
+       "name": "Doc",
+       "role": "Receiver"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "delete",
+       "label": "new Delete(doc, 0, 6)",
+       "style": "create"
+      },
+      {
+       "from": "client",
+       "to": "history",
+       "label": "run(cmd)",
+       "style": "call"
+      },
+      {
+       "from": "history",
+       "to": "delete",
+       "label": "execute()",
+       "style": "call"
+      },
+      {
+       "from": "delete",
+       "to": "doc",
+       "label": "delete(0, 6)",
+       "style": "call"
+      },
+      {
+       "from": "client",
+       "to": "history",
+       "label": "undo()",
+       "style": "call"
+      },
+      {
+       "from": "history",
+       "to": "delete",
+       "label": "undo()",
+       "style": "call"
+      },
+      {
+       "from": "delete",
+       "to": "doc",
+       "label": "insert(0, removed)",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Operations need undo/redo, history or an audit trail.",
+      "Work must be queued, scheduled, retried or sent to another process.",
+      "Operations should be composable into macros or batches."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "A direct call or a one-shot callback is enough.",
+      "Undo cannot be defined, for instance after an irreversible side effect."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Undo that does not capture prior state, such as the deleted text.",
+      "Commands holding live references that change before they run.",
+      "Retries need idempotent commands; otherwise they run twice.",
+      "Serialized commands need versioning when their shape changes."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A command class per button that only forwards one call.",
+      "Unbounded history that keeps every object alive."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Lambdas and `Runnable` are commands without undo.",
+      "Sealed interfaces of records make serializable, exhaustively handled commands."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "strategy",
+     "relation": "oftenConfused",
+     "difference": "A strategy answers how to do one job right now. A command packages a request to run, queue or undo later."
+    },
+    {
+     "ref": "memento",
+     "relation": "combines",
+     "difference": "Undo can restore a snapshot (memento) instead of computing an inverse. Heavy edits favor snapshots; small ones favor inverse operations."
+    },
+    {
+     "ref": "composite",
+     "relation": "combines",
+     "difference": "A macro command is a composite: it holds a list of commands and executes or undoes them as one."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "relation": "combines",
+     "difference": "Commands travel down a handler chain so that one handler can validate, log or reject them."
+    },
+    {
+     "ref": "saga",
+     "relation": "combines",
+     "difference": "A saga is a long-running sequence of commands where each step has a compensating command."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "Runnable and Executor",
+     "detail": "`Executor.execute(Runnable)` separates submitting an action from deciding when and on which thread it runs."
+    },
+    {
+     "where": "JDK",
+     "name": "javax.swing.Action",
+     "detail": "A reusable object that bundles behavior with its text, icon and enabled state for menus and buttons."
+    },
+    {
+     "where": "Eclipse",
+     "name": "IUndoableOperation",
+     "detail": "Operations with `execute`, `undo` and `redo` managed by an `IOperationHistory`."
+    },
+    {
+     "where": "Quartz",
+     "name": "org.quartz.Job",
+     "detail": "Scheduled work expressed as a `Job` with a `JobDetail`, stored and fired by the scheduler."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "record Transfer(Account from, Account to, long cents) implements Action {",
+    "    public void run() {",
+    "        from.withdraw(cents);",
+    "        to.deposit(cents);",
+    "    }",
+    "",
+    "    public void revert() {",
+    "        to.withdraw(cents);",
+    "        from.deposit(cents);",
+    "    }",
+    "}",
+    "// journal.add(new Transfer(a, b, 500)); ... journal.getLast().revert();"
+   ],
+   "options": [
+    {
+     "ref": "command",
+     "correct": true,
+     "why": "The request is an object carrying its receivers and arguments, and can be recorded and reversed later."
+    },
+    {
+     "ref": "memento",
+     "why": "A memento restores a captured snapshot. This reverses by applying inverse operations."
+    },
+    {
+     "ref": "strategy",
+     "why": "Nothing here is a swappable algorithm; the object represents one specific request."
+    },
+    {
+     "ref": "template-method",
+     "why": "There is no base class with a fixed skeleton and overridable steps."
+    }
+   ],
+   "compile": {
+    "template": [
+     "interface Action { void run(); void revert(); }",
+     "class Account { void withdraw(long c) {} void deposit(long c) {} }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A scheduler must persist user-submitted operations such as resizing an image or sending an email, run them later on other workers, retry them after failures, and show them in an admin screen.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "command",
+     "correct": true,
+     "why": "Each operation becomes a serializable object that can be stored, executed later, retried and listed."
+    },
+    {
+     "ref": "strategy",
+     "why": "It chooses how to do something now; it does not turn requests into storable data."
+    },
+    {
+     "ref": "observer",
+     "why": "It broadcasts changes to listeners; it does not queue or retry requests."
+    },
+    {
+     "ref": "memento",
+     "why": "It captures state for restoring, not an operation to execute later."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Command pattern's undo.",
+   "lines": [
+    "final class Delete implements Command {",
+    "    private final Doc doc;",
+    "    private final int from, to;",
+    "    private String removed = \"\";",
+    "",
+    "    Delete(Doc doc, int from, int to) {",
+    "        this.doc = doc; this.from = from; this.to = to;",
+    "    }",
+    "",
+    "    public void execute() { doc.text.delete(from, to); }",
+    "    public void undo() { doc.text.insert(from, removed); }",
+    "}"
+   ],
+   "flawLines": [
+    10
+   ],
+   "explanation": "`execute` never records the text it removes, so `undo` inserts an empty string. Capture state first: `removed = doc.text.substring(from, to);` before deleting.",
+   "compile": {
+    "template": [
+     "class Doc { final StringBuilder text = new StringBuilder(); }",
+     "interface Command { void execute(); void undo(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that each one only uses what came before.",
+   "blocks": [
+    [
+     "var doc = new Doc();",
+     "var history = new History();"
+    ],
+    [
+     "Command cmd = new Insert(doc, 0, \"Hi\");"
+    ],
+    [
+     "history.run(cmd);"
+    ],
+    [
+     "history.undo();"
+    ],
+    [
+     "System.out.println(doc.text);"
+    ]
+   ],
+   "explanation": "The command needs its receiver, and the invoker must run it before there is anything to undo. The final state is printed only after the undo.",
+   "compile": {
+    "template": [
+     "class Doc { final StringBuilder text = new StringBuilder(); }",
+     "interface Command { void execute(); void undo(); }",
+     "record Insert(Doc d, int at, String s) implements Command { public void execute() { d.text.insert(at, s); } public void undo() { d.text.delete(at, at + s.length()); } }",
+     "class History { void run(Command c) { c.execute(); } void undo() {} }",
+     "class Snippet { void run() {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Command in your own words: what does packaging a request as an object buy you, and what must a command capture to be undoable?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Command turns an operation into an object with its receiver and arguments. An invoker can then run it later, queue it, log it, retry it or send it elsewhere without knowing what it does. For undo, a command must capture whatever it needs to reverse itself, such as the deleted text, while executing. Strategy differs: it picks how to do a job now."
+    }
+   ],
+   "keyPoints": [
+    "Request becomes an object: receiver plus arguments",
+    "Invoker is decoupled from what the command does",
+    "Enables queue, log, retry, undo and macros",
+    "Undo needs state captured during execute",
+    "Strategy chooses how now; command packages what to run later"
+   ]
+  }
+ ]
+}

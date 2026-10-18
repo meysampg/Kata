@@ -1,0 +1,504 @@
+{
+ "id": "facade",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Offer one simple, task-oriented entry point to a complex subsystem so clients stop depending on its internals."
+    },
+    {
+     "type": "p",
+     "text": "A **facade** exposes the handful of operations clients actually need and orchestrates the subsystem classes behind them. The subsystem knows nothing about the facade, and it stays usable directly for the rare caller who needs full control. The facade owns the *sequence*, including compensation when a step fails."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Hides:** which subsystem classes exist and the order of calls.",
+      "**Exposes:** use-case-sized methods with its own types.",
+      "**Does not:** add new business rules; it coordinates them."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "A facade that grows logic of its own becomes a god object. Keep it thin and push rules back into the subsystem."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Facade.java",
+   "expectedOutput": "Placed[tracking=TRK-A1-1]\nRejected[reason=stock]\nRejected[reason=payment]",
+   "walkthrough": [
+    {
+     "region": "subsystem",
+     "note": "Three subsystem classes with their own small APIs. None references the facade, so each can be used and tested alone."
+    },
+    {
+     "region": "result",
+     "note": "The facade returns its own sealed result type, so clients never see subsystem types or exceptions."
+    },
+    {
+     "region": "facade",
+     "note": "`place` encodes the correct sequence: reserve, charge, ship. If payment fails it releases the reservation, so callers cannot forget the compensation."
+    },
+    {
+     "region": "client",
+     "note": "One call per use case. The client names no subsystem class; stock runs out on the second call and the third fails at payment."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Media transcoding behind a single call."
+    },
+    {
+     "type": "p",
+     "text": "Converting an upload means demuxing tracks, choosing codecs by device profile, encoding video and audio, muxing, and generating thumbnails. The web app only wants an MP4 and a poster image. A `MediaConverter` facade takes a source and a target profile and runs the pipeline, while the media team still calls the individual stages when they tune encoding."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "var converter = new MediaConverter(toolchain);",
+      "Rendition out = converter.convert(upload, Profile.MOBILE_720P);",
+      "// out.video(), out.poster(), out.durationMs()"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the app depends on one method and one result type, so swapping the encoder or reordering stages touches the facade only."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "client",
+       "name": "Client",
+       "kind": "class",
+       "role": "Client",
+       "col": 0.5,
+       "row": 0,
+       "members": []
+      },
+      {
+       "id": "facade",
+       "name": "OrderService",
+       "kind": "class",
+       "role": "Facade",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ place(sku, qty, card, addr)"
+       ]
+      },
+      {
+       "id": "inv",
+       "name": "Inventory",
+       "kind": "class",
+       "role": "Subsystem",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "+ reserve(sku, qty)",
+        "+ release(sku, qty)"
+       ]
+      },
+      {
+       "id": "pay",
+       "name": "Payments",
+       "kind": "class",
+       "role": "Subsystem",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "+ charge(card, cents)"
+       ]
+      },
+      {
+       "id": "ship",
+       "name": "Shipping",
+       "kind": "class",
+       "role": "Subsystem",
+       "col": 0.5,
+       "row": 3,
+       "members": [
+        "+ book(sku, address)"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "client",
+       "to": "facade",
+       "rel": "dependency"
+      },
+      {
+       "from": "facade",
+       "to": "inv",
+       "rel": "dependency"
+      },
+      {
+       "from": "facade",
+       "to": "pay",
+       "rel": "dependency"
+      },
+      {
+       "from": "facade",
+       "to": "ship",
+       "rel": "dependency"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "facade",
+       "name": "OrderService",
+       "role": "Facade"
+      },
+      {
+       "id": "inv",
+       "name": "Inventory",
+       "role": "Subsystem"
+      },
+      {
+       "id": "pay",
+       "name": "Payments",
+       "role": "Subsystem"
+      },
+      {
+       "id": "ship",
+       "name": "Shipping",
+       "role": "Subsystem"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "facade",
+       "label": "place(...)",
+       "style": "call"
+      },
+      {
+       "from": "facade",
+       "to": "inv",
+       "label": "reserve(sku, qty)",
+       "style": "call"
+      },
+      {
+       "from": "inv",
+       "to": "facade",
+       "label": "true",
+       "style": "return"
+      },
+      {
+       "from": "facade",
+       "to": "pay",
+       "label": "charge(card, cents)",
+       "style": "call"
+      },
+      {
+       "from": "pay",
+       "to": "facade",
+       "label": "true",
+       "style": "return"
+      },
+      {
+       "from": "facade",
+       "to": "ship",
+       "label": "book(sku, address)",
+       "style": "call"
+      },
+      {
+       "from": "ship",
+       "to": "facade",
+       "label": "tracking",
+       "style": "return"
+      },
+      {
+       "from": "facade",
+       "to": "client",
+       "label": "Placed",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "A subsystem has many classes and a correct call order that clients keep getting wrong.",
+      "You want a stable boundary between layers or between teams.",
+      "Legacy code needs a clean entry point before refactoring."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The subsystem is already one small class.",
+      "Clients truly need fine-grained control of every step."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Logic creeping in until the facade is a god class.",
+      "Leaking subsystem types in signatures, which defeats the isolation.",
+      "Becoming the only door, so every new need requires a facade change."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "One facade per class, forwarding each method unchanged.",
+      "A facade that every layer calls, including the subsystem itself."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "A sealed result type or `Optional` keeps subsystem exceptions out of the facade's contract.",
+      "Modules (JPMS) can enforce that only the facade package is exported."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "adapter",
+     "relation": "oftenConfused",
+     "difference": "An adapter makes one existing interface match another that a client expects. A facade defines a new, simpler interface over several classes."
+    },
+    {
+     "ref": "mediator",
+     "relation": "lookAlike",
+     "difference": "Both sit among many objects. A mediator coordinates peers that talk through it in both directions; a facade is one-way and the subsystem never knows it exists."
+    },
+    {
+     "ref": "proxy",
+     "relation": "oftenConfused",
+     "difference": "A proxy has the same interface as one subject and controls access to it. A facade has its own interface and fronts many objects."
+    },
+    {
+     "ref": "singleton",
+     "relation": "combines",
+     "difference": "A facade is often exposed as a single shared instance, though injecting it as a normal dependency is easier to test."
+    },
+    {
+     "ref": "abstract-factory",
+     "relation": "alternative",
+     "difference": "An abstract factory can hide how subsystem objects are created, while a facade hides how they are used together."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "SLF4J",
+     "name": "org.slf4j.LoggerFactory",
+     "detail": "The Simple Logging Facade for Java: one API in front of Logback, Log4j 2 or `java.util.logging`."
+    },
+    {
+     "where": "Spring",
+     "name": "JdbcTemplate",
+     "detail": "Hides connection, statement, result set and cleanup handling behind methods such as `query` and `update`."
+    },
+    {
+     "where": "JDK",
+     "name": "java.nio.file.Files",
+     "detail": "Static one-call operations like `readString` and `copy` over `FileSystemProvider`, channels and streams."
+    },
+    {
+     "where": "Spring Boot",
+     "name": "SpringApplication.run",
+     "detail": "One call that creates the environment, application context, auto-configuration and embedded server."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class MediaConverter {",
+    "    private final Demuxer demuxer = new Demuxer();",
+    "    private final Encoder encoder = new Encoder();",
+    "    private final Muxer muxer = new Muxer();",
+    "",
+    "    Path toMp4(Path source) {",
+    "        var tracks = demuxer.split(source);",
+    "        var encoded = encoder.h264(tracks);",
+    "        return muxer.pack(encoded, source.resolveSibling(\"out.mp4\"));",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "facade",
+     "correct": true,
+     "why": "One method hides three collaborating subsystem classes and the order in which they must be called."
+    },
+    {
+     "ref": "mediator",
+     "why": "The three collaborators never talk to each other through this class; it only sequences calls on them."
+    },
+    {
+     "ref": "adapter",
+     "why": "No existing interface is being translated to an expected one; a new simple interface is created."
+    },
+    {
+     "ref": "proxy",
+     "why": "The class does not stand in for any single object that shares its interface."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.nio.file.Path;",
+     "import java.util.List;",
+     "class Demuxer { List<String> split(Path p) { return List.of(); } }",
+     "class Encoder { List<String> h264(List<String> t) { return t; } }",
+     "class Muxer { Path pack(List<String> t, Path out) { return out; } }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A new mobile app must notify users by email, SMS and push. Each channel has its own internal service with a separate SDK, auth and retry rules. The app team wants a single call, and other teams must keep using the services directly.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "facade",
+     "correct": true,
+     "why": "A new simple interface over several services, which stay independently usable by other teams."
+    },
+    {
+     "ref": "adapter",
+     "why": "It converts one interface to another; here a new, simpler interface over several services is needed."
+    },
+    {
+     "ref": "mediator",
+     "why": "The services do not need to coordinate with each other; they need a single entry point."
+    },
+    {
+     "ref": "decorator",
+     "why": "Wrapping one service to add behavior does not unify three different ones."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Facade pattern.",
+   "lines": [
+    "final class OrderService {",
+    "    private final Inventory inventory = new Inventory();",
+    "    private final Payments payments = new Payments();",
+    "",
+    "    Payments.Receipt place(String sku, int qty, String card) {",
+    "        inventory.reserve(sku, qty);",
+    "        return payments.charge(card, 1999L * qty);",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    5
+   ],
+   "explanation": "The signature returns a subsystem type, so every client now depends on `Payments`, defeating the isolation. Return the facade's own result type, for example `Outcome`.",
+   "compile": {
+    "template": [
+     "class Inventory { boolean reserve(String s, int q) { return true; } }",
+     "class Payments { record Receipt(String id) {} Receipt charge(String c, long cents) { return new Receipt(\"r\"); } }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the body of the facade method so that each step is only done when it is safe.",
+   "blocks": [
+    [
+     "if (!inventory.reserve(sku, qty)) return \"stock\";"
+    ],
+    [
+     "if (!payments.charge(card, cents)) {",
+     "    inventory.release(sku, qty);",
+     "    return \"payment\";",
+     "}"
+    ],
+    [
+     "String tracking = shipping.book(sku, address);"
+    ],
+    [
+     "return \"placed \" + tracking;"
+    ]
+   ],
+   "explanation": "Reserve first so nothing is charged without stock. Charging comes next, with the release compensating a failure. Shipping happens only after payment, and the result is returned last.",
+   "compile": {
+    "template": [
+     "class Inventory { boolean reserve(String s, int q) { return true; } void release(String s, int q) {} }",
+     "class Payments { boolean charge(String c, long cents) { return true; } }",
+     "class Shipping { String book(String s, String a) { return \"T\"; } }",
+     "class Snippet {",
+     "  Inventory inventory = new Inventory(); Payments payments = new Payments(); Shipping shipping = new Shipping();",
+     "  String place(String sku, int qty, String card, long cents, String address) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Facade in your own words: what does it hide, and how does it differ from Adapter?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A facade gives clients one simple entry point to a subsystem of many classes. It owns the call sequence, including compensation, and returns its own types so clients never touch internals. The subsystem does not know about it. An adapter instead translates one existing interface into the one a client expects; it does not simplify a group."
+    }
+   ],
+   "keyPoints": [
+    "One simple, use-case-sized interface over many classes",
+    "Owns the sequencing and compensation",
+    "Subsystem stays unaware and still directly usable",
+    "Returns its own types, not subsystem types",
+    "Adapter converts an interface; facade simplifies a subsystem"
+   ]
+  }
+ ]
+}

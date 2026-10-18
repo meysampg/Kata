@@ -1,0 +1,349 @@
+{
+  "id": "srp",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A class should have one reason to change: it answers to a single actor, not to everything it happens to do."
+        },
+        {
+          "type": "p",
+          "text": "Martin's later wording is about **actors**, the people or teams whose requirements drive change. If finance, HR and operations can each force an edit to the same class, those edits collide. **Cohesion** is measured by what changes together, not by how few methods a class has."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Reason to change:** a stakeholder's rule, not a code feature.",
+            "**Smell:** a class imported by unrelated teams, or constant merge conflicts in one file.",
+            "**Fix:** separate by axis of change, then compose the pieces."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "\"Does one thing\" is a misreading. A class with ten methods that all change for the same reason is cohesive and fine."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Srp.java",
+      "expectedOutput": "DB <- 3000\nA1 x2 B7 x1 = 30\nA1 x2 B7 x1 = 30\n1 stored",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "`InvoiceBefore` changes for three audiences: pricing rules, presentation and persistence. Edits for one can break the others."
+        },
+        {
+          "region": "model",
+          "note": "The domain object keeps only what changes with business rules: lines and totals. It is immutable, so it is safe to share."
+        },
+        {
+          "region": "format",
+          "note": "Presentation moves out. A new layout or locale is now an edit to the renderer alone."
+        },
+        {
+          "region": "store",
+          "note": "Persistence becomes a port. A one-method interface can be a method reference, here `rows::add`, in tests."
+        },
+        {
+          "region": "service",
+          "note": "The service only coordinates. It has two collaborators and no rules of its own, so it rarely needs to change."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Payroll code shared by finance, HR and the DBAs."
+        },
+        {
+          "type": "p",
+          "text": "An `Employee` class held `calculatePay()` for finance, `reportHours()` for HR and `save()` for the database team. HR asked for overtime to be counted differently in reports; both methods shared a helper, so the change silently altered paychecks. Splitting it into `PayCalculator`, `HoursReporter` and `EmployeeRepository` gave each actor a class it can change without touching the others."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "class Employee {",
+            "    Money calculatePay() { ... }   // finance",
+            "    String reportHours() { ... }   // HR",
+            "    void save() { ... }            // DBAs",
+            "}"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: an HR change can no longer alter a paycheck, and each class has a test suite owned by one team."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Two teams or rules regularly edit the same class.",
+            "A class needs unrelated dependencies: mailer, tax table and database.",
+            "Tests need heavy setup for logic that has nothing to do with it."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "The class is small and every method changes together: splitting only adds indirection.",
+            "The second reason to change is speculative; split when it appears."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Splitting by technical layer instead of actor yields anemic classes and shotgun surgery.",
+            "Pieces with no orchestrator hide the use case across many files.",
+            "Separating data from behavior that always change together."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "`XManager`, `XHelper` and `XUtil` classes that collect leftovers.",
+            "Every small feature touches five files."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records and lambdas make small collaborators cheap, so splitting costs less than it did.",
+            "Sealed hierarchies keep variants together when they change together."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "ocp",
+          "relation": "combines",
+          "difference": "SRP isolates one axis of change in one place; OCP then makes that axis extensible without edits."
+        },
+        {
+          "ref": "isp",
+          "relation": "lookAlike",
+          "difference": "ISP is SRP seen from the client: narrow the interface to the one role a caller needs."
+        },
+        {
+          "ref": "facade",
+          "relation": "oftenConfused",
+          "difference": "A facade deliberately aggregates a subsystem for callers. It is fine while it only delegates and holds no rules."
+        },
+        {
+          "ref": "decorator",
+          "relation": "combines",
+          "difference": "Cross-cutting concerns such as logging or caching can leave a class by wrapping it."
+        },
+        {
+          "ref": "dependency-injection",
+          "relation": "combines",
+          "difference": "Once responsibilities are split, injection wires the pieces without the pieces knowing each other."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.logging Handler, Formatter, Filter",
+          "detail": "A `Handler` decides where records go, a `Formatter` how they look, a `Filter` which pass."
+        },
+        {
+          "where": "Spring Batch",
+          "name": "ItemReader, ItemProcessor, ItemWriter",
+          "detail": "A step separates reading, transforming and writing; each changes independently."
+        },
+        {
+          "where": "JDK",
+          "name": "java.net.http HttpClient, HttpRequest, HttpResponse.BodyHandler",
+          "detail": "Sending, describing the request and decoding the body are separate types."
+        },
+        {
+          "where": "Spring",
+          "name": "@Controller, @Service, @Repository",
+          "detail": "Stereotypes encode web, business and persistence concerns as separate beans."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this class most clearly violate?",
+      "lines": [
+        "final class Employee {",
+        "    String name; int hours; long rate;",
+        "",
+        "    long calculatePay() { return hours * rate; }              // finance",
+        "    String hoursReport() { return name + \": \" + hours; }      // HR",
+        "    void save(List<String> db) { db.add(name + \",\" + rate); } // DBAs",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "srp",
+          "correct": true,
+          "why": "Finance, HR and the DBAs each have a reason to change this one class."
+        },
+        {
+          "ref": "isp",
+          "why": "There is no interface that forces clients to depend on methods they do not use."
+        },
+        {
+          "ref": "lsp",
+          "why": "There is no subtype relationship, so nothing can fail to substitute."
+        },
+        {
+          "ref": "dip",
+          "why": "Nothing here depends on a concrete collaborator; the issue is mixed reasons to change."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A `ReportService` was edited four times last quarter: a tax-rate change, a new CSV column layout, an S3 bucket move and a new email subject. Different people made each edit, and two collided in review.",
+      "prompt": "What is the most useful refactoring?",
+      "options": [
+        {
+          "ref": "srp",
+          "correct": true,
+          "why": "The four edits come from four different reasons. Separate calculation, formatting, storage and delivery so each change lands in one class."
+        },
+        {
+          "ref": "ocp",
+          "why": "Extension points would help future variants, but they do not separate these four unrelated reasons to change."
+        },
+        {
+          "ref": "isp",
+          "why": "The class implements no fat interface; splitting interfaces does not reduce the edits."
+        },
+        {
+          "ref": "dip",
+          "why": "Inverting dependencies helps testing, but the class would still hold all four reasons to change."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that adds a second reason to change.",
+      "lines": [
+        "final class InvoiceService {",
+        "    private final InvoiceStore store;",
+        "    private final Mailer mailer;",
+        "",
+        "    InvoiceService(InvoiceStore store, Mailer mailer) {",
+        "        this.store = store;",
+        "        this.mailer = mailer;",
+        "    }",
+        "",
+        "    void issue(Invoice inv) {",
+        "        long gross = inv.net() * 119 / 100;",
+        "        store.save(inv);",
+        "        mailer.send(inv.id() + \": \" + gross);",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        11
+      ],
+      "explanation": "The orchestrating service embeds a tax rule, so a VAT change now edits the service. Move the rule into the invoice or a tax calculator and keep the service coordinating only.",
+      "compile": {
+        "template": [
+          "interface Mailer { void send(String s); }",
+          "interface InvoiceStore { void save(Invoice i); }",
+          "record Invoice(String id, long net) {}",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the wiring so that each line only uses what came before.",
+      "blocks": [
+        [
+          "var lines = List.of(new Line(\"A1\", 2, 1250));"
+        ],
+        [
+          "var invoice = new Invoice(lines);"
+        ],
+        [
+          "var rows = new ArrayList<Invoice>();"
+        ],
+        [
+          "var service = new BillingService(new InvoiceRenderer(), rows::add);"
+        ],
+        [
+          "String text = service.issue(invoice);"
+        ],
+        [
+          "System.out.println(text);"
+        ]
+      ],
+      "explanation": "Data first, then the store the service needs, then the service; only a built service can issue, and only an issued invoice has text to print.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "record Line(String sku, int qty, long cents) {}",
+          "record Invoice(List<Line> lines) {}",
+          "final class InvoiceRenderer {}",
+          "interface InvoiceStore { void save(Invoice i); }",
+          "final class BillingService {",
+          "    BillingService(InvoiceRenderer r, InvoiceStore s) {}",
+          "    String issue(Invoice i) { return \"ok\"; }",
+          "}",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain the Single Responsibility Principle in your own words. What counts as a 'responsibility', and what does it not mean?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A responsibility is a reason to change, tied to one actor whose requirements drive that code. A class should answer to one. It does not mean one method or one verb: a cohesive class with many methods is fine. The test is whether unrelated stakeholders can force edits to the same file."
+        }
+      ],
+      "keyPoints": [
+        "Responsibility = reason to change = one actor",
+        "Not 'does one thing' or one method",
+        "Smell: unrelated teams editing the same class",
+        "Split by axis of change, then compose",
+        "Do not split speculatively"
+      ]
+    }
+  ]
+}

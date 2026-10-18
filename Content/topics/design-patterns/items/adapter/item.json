@@ -1,0 +1,167 @@
+{
+  "id": "adapter",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Wrap an existing class so it satisfies the interface your code expects, without changing either side."},
+      {"type": "p", "text": "The **adapter** implements the **target** interface your clients use and holds an **adaptee**, usually a legacy class, a vendor SDK or a generated client. It translates calls, data shapes and errors in both directions. The rest of the code never learns the foreign API exists."},
+      {"type": "bullets", "items": [
+        "**Translates:** method names, types, units, error models.",
+        "**Contains:** the vendor or legacy coupling in one class.",
+        "**Does not:** add behavior; that is Decorator's job."]},
+      {"type": "callout", "tone": "info", "text": "Prefer an object adapter (composition). A class adapter needs multiple inheritance, which Java does not have for classes."}
+    ]},
+    {"role": "implementation", "file": "Adapter.java",
+     "expectedOutput": "Optional[Point[lat=52.52, lon=13.4]]\nOptional.empty",
+     "walkthrough": [
+      {"region": "target", "note": "The target is the domain's own interface: a typed `Point` and an `Optional` for not found. This is the shape the rest of the code wants."},
+      {"region": "adaptee", "note": "The adaptee has a different contract: it returns a delimited string and an empty string for failure. You cannot or will not change it."},
+      {"region": "adapter", "note": "The adapter implements the target, delegates to the adaptee, and converts both the data (string to `Point`) and the failure signal (empty string to `Optional.empty`)."},
+      {"region": "client", "note": "The client uses `Locator` only. Swapping the legacy service for a new provider means writing another adapter, not editing callers."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Integrating a vendor's payment SDK behind your own port."},
+      {"type": "p", "text": "The SDK is callback-based, throws its own checked exceptions, and takes amounts in minor units as `long`. Your domain code wants a `PaymentPort` with `Money` and a sealed result type. One `AcmePaymentAdapter` converts amounts, turns callbacks into a return value and maps vendor errors to domain failures. When the vendor changes or a second provider arrives, only that class changes."},
+      {"type": "code", "language": "java", "lines": [
+        "interface PaymentPort { PaymentResult charge(Money amount, Card card); }",
+        "",
+        "final class AcmePaymentAdapter implements PaymentPort {",
+        "    private final AcmeClient sdk;",
+        "    ...",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: vendor types stop at the adapter boundary, so the domain and its tests never import the SDK."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "role": "Client", "col": 0.5, "row": 0},
+        {"id": "target", "name": "Locator", "kind": "interface", "role": "Target", "col": 0.5, "row": 1,
+         "members": ["+ locate(addr): Optional"]},
+        {"id": "adapter", "name": "GeoAdapter", "kind": "class", "role": "Adapter", "col": 0, "row": 2,
+         "members": ["- legacy: LegacyGeoService", "+ locate(addr)"]},
+        {"id": "adaptee", "name": "LegacyGeoService", "kind": "class", "role": "Adaptee", "col": 1, "row": 2,
+         "members": ["+ lookup(query): String"]}],
+       "edges": [
+        {"from": "client", "to": "target", "rel": "association", "label": "uses"},
+        {"from": "adapter", "to": "target", "rel": "realizes"},
+        {"from": "adapter", "to": "adaptee", "rel": "aggregation", "label": "wraps"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "ad", "name": "GeoAdapter", "role": "Adapter"},
+        {"id": "old", "name": "LegacyGeoService", "role": "Adaptee"}],
+       "messages": [
+        {"from": "client", "to": "ad", "label": "locate(address)", "style": "call"},
+        {"from": "ad", "to": "old", "label": "lookup(address)", "style": "call"},
+        {"from": "old", "to": "ad", "label": "\"52.52|13.40\"", "style": "return"},
+        {"from": "ad", "to": "client", "label": "Optional<Point>", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "You must use a class whose interface does not match what your code needs.",
+        "You want vendor or legacy types confined to one boundary class.",
+        "Several providers must be swappable behind one port."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "You own the adaptee; change its interface directly.",
+        "The translation is trivial and used once: call it inline."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Leaking adaptee types or exceptions through the target interface.",
+        "Mismatched semantics, such as sync versus async or retries, hidden behind one method.",
+        "Adapters accreting business logic."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "An adapter between two classes you both own.",
+        "A chain of adapters converting back and forth."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "A lambda or method reference is an adapter to any functional interface.",
+        "Records make the target's data shape cheap to define."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "decorator", "relation": "lookAlike", "difference": "Decorator keeps the same interface and adds behavior. Adapter changes the interface and adds none."},
+      {"ref": "facade", "relation": "lookAlike", "difference": "Facade defines a new, simpler interface over many classes. Adapter conforms one class to an interface that already exists."},
+      {"ref": "proxy", "relation": "lookAlike", "difference": "Proxy exposes the same interface as its subject and controls access. Adapter exposes a different one."},
+      {"ref": "bridge", "relation": "oftenConfused", "difference": "Adapter reconciles two existing, incompatible interfaces after the fact. Bridge is designed up front so abstraction and implementation vary independently."},
+      {"ref": "strategy", "relation": "oftenConfused", "difference": "Strategy chooses among algorithms built for one interface. Adapter makes a foreign class fit an interface it was not built for."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.io.InputStreamReader", "detail": "Adapts a byte `InputStream` to the character `Reader` interface, decoding with a charset."},
+      {"where": "JDK", "name": "java.util.Arrays#asList", "detail": "Presents an array through the `List` interface, backed by the array."},
+      {"where": "JDK", "name": "java.util.concurrent.Executors#callable", "detail": "Adapts a `Runnable` and a result value to a `Callable`."},
+      {"where": "Spring MVC", "name": "HandlerAdapter", "detail": "`DispatcherServlet` uses adapters to invoke different handler types, such as annotated controllers, through one interface."},
+      {"where": "Jakarta XML Binding", "name": "XmlAdapter", "detail": "Converts between a bound type and a value type used in XML."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class MetricsSink implements Reporter {",
+      "    private final StatsdClient client;",
+      "",
+      "    MetricsSink(StatsdClient client) { this.client = client; }",
+      "",
+      "    public void report(String name, Duration d) {",
+      "        client.timing(name.replace('.', '_'), d.toMillis());",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "adapter", "correct": true, "why": "It implements the interface the app expects and converts names and units to fit a third-party client's API."},
+      {"ref": "decorator", "why": "It does not add behavior around the same interface; the two interfaces differ."},
+      {"ref": "proxy", "why": "It neither controls access to the client nor shares its interface."},
+      {"ref": "facade", "why": "It wraps a single client to match an existing interface, not a subsystem to simplify."}],
+     "compile": {"template": [
+      "import java.time.Duration;",
+      "interface Reporter { void report(String name, Duration d); }",
+      "interface StatsdClient { void timing(String n, long ms); }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "Your domain code expects a `Notifier` interface. A partner library offers `PartnerMailer` with `deliver(Envelope, boolean)`. You cannot modify the library and want the domain to stay independent of it.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "adapter", "correct": true, "why": "A class that implements `Notifier` and delegates to `PartnerMailer` conforms the foreign API to the expected interface."},
+      {"ref": "facade", "why": "A facade would invent a new simplified API over a subsystem; here an existing interface must be satisfied."},
+      {"ref": "decorator", "why": "Decorator needs both sides to share an interface, and adds behavior; neither is true here."},
+      {"ref": "bridge", "why": "Bridge is a design-time split into two hierarchies, not a retrofit for an unmodifiable class."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Adapter pattern.",
+     "lines": [
+      "interface Locator { Optional<Point> locate(String address); }",
+      "",
+      "final class GeoAdapter implements Locator {",
+      "    private final LegacyGeoService legacy;",
+      "",
+      "    GeoAdapter(LegacyGeoService legacy) { this.legacy = legacy; }",
+      "",
+      "    public Optional<Point> locate(String address) {",
+      "        String raw = legacy.lookup(address);",
+      "        if (raw.isEmpty()) throw new LegacyFailure(raw);",
+      "        return Optional.of(Point.parse(raw));",
+      "    }",
+      "}"],
+     "flawLines": [10],
+     "explanation": "The adaptee's failure model leaks through the target: callers now handle `LegacyFailure`, though the interface promises `Optional`. Return `Optional.empty()` instead.",
+     "compile": {"template": [
+      "import java.util.Optional;",
+      "record Point(double lat, double lon) { static Point parse(String s) { return new Point(0, 0); } }",
+      "class LegacyGeoService { String lookup(String q) { return \"\"; } }",
+      "@SuppressWarnings(\"serial\") class LegacyFailure extends RuntimeException { LegacyFailure(String m) { super(m); } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the body of an adapter's method so that each line only uses what came before.",
+     "blocks": [
+      ["String raw = legacy.lookup(address);"],
+      ["if (raw.isEmpty()) return Optional.empty();"],
+      ["String[] parts = raw.split(\"\\\\|\");"],
+      ["return Optional.of(new Point(Double.parseDouble(parts[0]), Double.parseDouble(parts[1])));"]],
+     "explanation": "Call the adaptee, map its failure signal to the target's, parse the data, then return it in the target's type. Parsing an empty string would fail.",
+     "compile": {"template": [
+      "import java.util.Optional;",
+      "record Point(double lat, double lon) {}",
+      "class LegacyGeoService { String lookup(String q) { return \"\"; } }",
+      "class Snippet { LegacyGeoService legacy;",
+      "  Optional<Point> locate(String address) {",
+      "{{code}}", "  }", "}"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Adapter in your own words: what does it change, and how does it differ from Decorator and Facade?",
+     "modelAnswer": [
+      {"type": "p", "text": "An adapter implements the interface your code expects and delegates to an existing class that has a different one, translating calls, data and errors. It changes the interface and adds no behavior. Decorator keeps the interface and adds behavior; Facade invents a new simpler interface over a subsystem."}],
+     "keyPoints": [
+      "Implements the target interface, wraps the adaptee",
+      "Translates methods, data shapes and error models",
+      "Changes the interface, not the behavior",
+      "Decorator keeps the interface; Facade defines a new one",
+      "Confines vendor or legacy types to one class"]}
+  ]
+}

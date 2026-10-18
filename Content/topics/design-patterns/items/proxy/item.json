@@ -1,0 +1,465 @@
+{
+ "id": "proxy",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Stand in for another object behind the same interface, to control access to it, defer its creation, or add checks."
+    },
+    {
+     "type": "p",
+     "text": "A **proxy** implements the subject's interface and holds, or can create, the **real subject**. Clients cannot tell the difference. The proxy decides *whether* and *when* a call reaches the real object. Common kinds: **virtual** (lazy creation), **protection** (permissions), **remote** (network stub), **smart** (caching, counting)."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Controls:** access, timing and location of the real subject.",
+      "**Keeps:** the subject's exact interface.",
+      "**Often generated:** dynamic proxies and bytecode libraries create them."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "The proxy usually owns the real subject's lifecycle. A decorator receives its component from outside and exists to add features."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Proxy.java",
+   "expectedOutput": "proxy ready\nconnect\nbody of a1\nbody of a1\ndenied: x9\n-> read\nbody of a1",
+   "walkthrough": [
+    {
+     "region": "subject",
+     "note": "The interface shared by the real object and its stand-in. Clients depend only on this."
+    },
+    {
+     "region": "real",
+     "note": "The expensive real subject. Its constructor prints `connect` to show when it is actually built."
+    },
+    {
+     "region": "proxy",
+     "note": "Protection and virtual proxy in one. The permission check comes first, so a denied call never creates the real object, which is then built lazily on first use."
+    },
+    {
+     "region": "client",
+     "note": "The proxy is created without connecting. `connect` appears once, at the first allowed read; `x9` is rejected before any connection."
+    },
+    {
+     "region": "dynamic",
+     "note": "`java.lang.reflect.Proxy` generates a stand-in at runtime for any interface. One handler intercepts every method; this is how frameworks add logging or transactions."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A lazy-loading entity in an ORM."
+    },
+    {
+     "type": "p",
+     "text": "Loading an `Order` should not fetch its 5,000 line items or its customer's full profile unless somebody looks. The ORM returns a generated proxy subclass for each association. The first access to `order.lines()` triggers the query inside the proxy, caches the result, and later calls hit the loaded data. Callers write ordinary code against the entity type."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "Order order = em.find(Order.class, id);",
+      "// order.customer() is a proxy: no SQL yet",
+      "String name = order.customer().name(); // loads now"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: unused associations cost nothing, and data-access concerns stay out of the domain model."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "subject",
+       "name": "Documents",
+       "kind": "interface",
+       "role": "Subject",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ read(id): String"
+       ]
+      },
+      {
+       "id": "real",
+       "name": "RemoteDocuments",
+       "kind": "class",
+       "role": "RealSubject",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ read(id): String"
+       ]
+      },
+      {
+       "id": "proxy",
+       "name": "GuardedDocuments",
+       "kind": "class",
+       "role": "Proxy",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "- real: Documents",
+        "- allowed: Set",
+        "+ read(id): String"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "real",
+       "to": "subject",
+       "rel": "realizes"
+      },
+      {
+       "from": "proxy",
+       "to": "subject",
+       "rel": "realizes"
+      },
+      {
+       "from": "proxy",
+       "to": "real",
+       "rel": "association",
+       "label": "creates lazily"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "proxy",
+       "name": "GuardedDocuments",
+       "role": "Proxy"
+      },
+      {
+       "id": "real",
+       "name": "RemoteDocuments",
+       "role": "RealSubject"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "proxy",
+       "label": "read(\"a1\")",
+       "style": "call"
+      },
+      {
+       "from": "proxy",
+       "to": "proxy",
+       "label": "check allowed",
+       "style": "call"
+      },
+      {
+       "from": "proxy",
+       "to": "real",
+       "label": "new RemoteDocuments()",
+       "style": "create"
+      },
+      {
+       "from": "proxy",
+       "to": "real",
+       "label": "read(\"a1\")",
+       "style": "call"
+      },
+      {
+       "from": "real",
+       "to": "proxy",
+       "label": "body",
+       "style": "return"
+      },
+      {
+       "from": "proxy",
+       "to": "client",
+       "label": "body",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Creating or reaching the real object is expensive and often unnecessary.",
+      "Callers must be checked, metered or audited without changing them.",
+      "Cross-cutting concerns (transactions, caching) apply to many interfaces."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The real object is cheap, local and unrestricted.",
+      "You only want stackable features: a decorator states that intent better."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Self-invocation bypasses framework proxies: `this.save()` skips the interceptor.",
+      "Final classes and methods cannot be subclassed by bytecode proxies.",
+      "Lazy initialization is not thread-safe unless you make it so.",
+      "A proxy hides that a call may now be slow or fail."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "A proxy that only forwards.",
+      "Hand-written proxies for wide interfaces; generate them."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "`java.lang.reflect.Proxy` handles interfaces only; classes need ByteBuddy or CGLIB.",
+      "Virtual proxies are often just a `Supplier` with memoization."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "decorator",
+     "relation": "lookAlike",
+     "difference": "Both wrap with the same interface. A proxy controls access to its subject and often creates it; a decorator is handed a component and adds stackable responsibilities."
+    },
+    {
+     "ref": "adapter",
+     "relation": "oftenConfused",
+     "difference": "An adapter changes the interface. A proxy keeps it identical to the subject's."
+    },
+    {
+     "ref": "facade",
+     "relation": "oftenConfused",
+     "difference": "A facade has its own, simpler interface over many objects. A proxy mirrors one subject's interface."
+    },
+    {
+     "ref": "circuit-breaker",
+     "relation": "combines",
+     "difference": "A circuit breaker is typically implemented as a proxy around a remote call that fails fast when the target is unhealthy."
+    },
+    {
+     "ref": "ambassador",
+     "relation": "specializes",
+     "difference": "An ambassador is a remote proxy lifted into a separate process beside the client, handling retries, TLS and routing."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "java.lang.reflect.Proxy",
+     "detail": "Generates a class at runtime that implements given interfaces and routes every call to an `InvocationHandler`."
+    },
+    {
+     "where": "Spring",
+     "name": "ProxyFactory",
+     "detail": "Spring AOP wraps beans in JDK or CGLIB proxies to apply `@Transactional`, `@Cacheable` and `@Async`."
+    },
+    {
+     "where": "Hibernate",
+     "name": "EntityManager.getReference",
+     "detail": "Returns an uninitialized proxy that loads the row on first access to a field."
+    },
+    {
+     "where": "JDK",
+     "name": "java.rmi.server.UnicastRemoteObject",
+     "detail": "`exportObject` returns a stub that forwards calls over the network to the remote object."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class LazyReport implements Report {",
+    "    private final Supplier<Report> source;",
+    "    private Report loaded;",
+    "",
+    "    LazyReport(Supplier<Report> source) { this.source = source; }",
+    "",
+    "    public String render() {",
+    "        if (loaded == null) loaded = source.get();",
+    "        return loaded.render();",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "proxy",
+     "correct": true,
+     "why": "It shares the subject's interface and controls when the real object is created, on first use."
+    },
+    {
+     "ref": "decorator",
+     "why": "A decorator adds behavior to a component it is given. This one adds none; it only defers creation."
+    },
+    {
+     "ref": "adapter",
+     "why": "The interface on both sides is `Report`; nothing is translated."
+    },
+    {
+     "ref": "flyweight",
+     "why": "Nothing is shared between many users; one object is simply created late."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.function.Supplier;",
+     "interface Report { String render(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A mobile app calls a REST inventory service. Business code should keep using an `Inventory` interface as if it were local, while the stand-in serializes calls, attaches auth tokens and fails fast when offline.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "proxy",
+     "correct": true,
+     "why": "A remote proxy implements the local interface and hides where and how the real object is reached."
+    },
+    {
+     "ref": "adapter",
+     "why": "The interface already matches what callers want; the problem is location and access, not shape."
+    },
+    {
+     "ref": "facade",
+     "why": "It simplifies many objects behind a new interface; here one service keeps its own interface."
+    },
+    {
+     "ref": "decorator",
+     "why": "Optional stackable features are not the issue; the stand-in is the only way to reach the remote object."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Proxy pattern.",
+   "lines": [
+    "final class Guarded implements Documents {",
+    "    private final Documents real;",
+    "    private final Set<String> allowed;",
+    "",
+    "    Guarded(Documents r, Set<String> a) { real = r; allowed = a; }",
+    "",
+    "    public String read(String id) {",
+    "        if (!allowed.contains(id)) throw new SecurityException(id);",
+    "        return real.read(id);",
+    "    }",
+    "",
+    "    Documents unwrap() { return real; }",
+    "}"
+   ],
+   "flawLines": [
+    12
+   ],
+   "explanation": "Handing out the real subject lets any caller bypass the permission check. A protection proxy must never expose the object it guards; remove `unwrap`.",
+   "compile": {
+    "template": [
+     "import java.util.Set;",
+     "interface Documents { String read(String id); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the body of the proxy's method so that denied calls never reach or create the real subject.",
+   "blocks": [
+    [
+     "if (!allowed.contains(id)) throw new SecurityException(id);"
+    ],
+    [
+     "if (real == null) real = factory.get();"
+    ],
+    [
+     "String body = real.read(id);"
+    ],
+    [
+     "log.add(id + \" ok\");"
+    ],
+    [
+     "return body;"
+    ]
+   ],
+   "explanation": "The check comes first so a denied call never builds the subject. The real object must exist before it is called, and success is logged only after the call returns.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "import java.util.function.Supplier;",
+     "interface Documents { String read(String id); }",
+     "class Snippet {",
+     "  Supplier<Documents> factory; Documents real; Set<String> allowed; List<String> log;",
+     "  String read(String id) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Proxy in your own words: what can it control, and how does it differ from Decorator?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A proxy implements the same interface as the real subject and decides whether and when calls reach it. That enables lazy creation, access checks, remote access, caching or metering without changing callers. It usually owns the subject's lifecycle. A decorator looks the same but adds stackable features to a component it is given."
+    }
+   ],
+   "keyPoints": [
+    "Same interface as the real subject; callers cannot tell",
+    "Controls access, timing or location of the subject",
+    "Kinds: virtual, protection, remote, smart",
+    "Usually creates and owns the real subject",
+    "Decorator adds features; proxy controls access"
+   ]
+  }
+ ]
+}

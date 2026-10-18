@@ -1,0 +1,426 @@
+{
+ "id": "data-mapper",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Move data between domain objects and storage with a separate mapper, so neither side knows about the other."
+    },
+    {
+     "type": "p",
+     "text": "A **data mapper** translates between rich domain objects and the storage shape: rows, documents, columns with other names. The domain class has no `save` and no SQL. Storage has no business rules. Both can evolve independently, which is the whole value."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Domain side:** invariants, value objects, behavior, no persistence code.",
+      "**Storage side:** schema, column names, denormalization.",
+      "**Mapper:** the only code that knows both shapes."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "This is how JPA/Hibernate works. The mapping metadata plays the mapper's role."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "DataMapper.java",
+   "expectedOutput": "Ada <ada@old.org>\nRow[id=1, name=Ada, emailAddr=ada@new.org]\ncorrupt row: broken",
+   "walkthrough": [
+    {
+     "region": "domain",
+     "note": "A domain object with an invariant-checking value object. It imports nothing about storage and has no `save`."
+    },
+    {
+     "region": "row",
+     "note": "The storage shape: a flat record whose field `emailAddr` differs from the domain's `Email` type, standing in for a table row."
+    },
+    {
+     "region": "mapper",
+     "note": "The mapper owns both directions. `find` hydrates a `Customer`; `save` flattens it to a `Row`. Private methods keep conversions in one place."
+    },
+    {
+     "region": "client",
+     "note": "The domain object is loaded, changed through its own behavior and handed back to the mapper. It never sees the table."
+    },
+    {
+     "region": "guard",
+     "note": "Hydration goes through the domain constructors, so a corrupt row fails loudly instead of creating an invalid object."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Clean domain model over a legacy billing table."
+    },
+    {
+     "type": "p",
+     "text": "A twenty-year-old table has columns like `CUST_NM`, `STAT_CD` ('A', 'S', 'C') and a split address. The new domain wants a `Customer` with a `Status` enum and an `Address` value object. A mapper converts codes to enums and merges columns into value objects. When the schema is later refactored, only the mapper changes. MyBatis result maps do the same declaratively."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "Customer toDomain(BillingRow r) {",
+      "    var status = Status.fromCode(r.statCd());",
+      "    var addr = new Address(r.street(), r.zip());",
+      "    return new Customer(r.id(), r.custNm(), status, addr);",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the legacy schema leaks nowhere into business code, and the table can be migrated without touching the domain."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "svc",
+       "name": "Service",
+       "kind": "class",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ rename(id, name)"
+       ],
+       "role": "Client"
+      },
+      {
+       "id": "map",
+       "name": "CustomerMapper",
+       "kind": "class",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ find(id): Optional",
+        "+ save(customer)",
+        "- toDomain(row)",
+        "- toRow(customer)"
+       ],
+       "role": "Mapper"
+      },
+      {
+       "id": "cust",
+       "name": "Customer",
+       "kind": "class",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "- name, email",
+        "+ changeEmail(e)"
+       ],
+       "role": "Domain object"
+      },
+      {
+       "id": "row",
+       "name": "Row",
+       "kind": "record",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "id, name, emailAddr"
+       ],
+       "role": "Storage shape"
+      }
+     ],
+     "edges": [
+      {
+       "from": "svc",
+       "to": "map",
+       "rel": "association",
+       "label": "calls"
+      },
+      {
+       "from": "map",
+       "to": "cust",
+       "rel": "dependency",
+       "label": "builds"
+      },
+      {
+       "from": "map",
+       "to": "row",
+       "rel": "dependency",
+       "label": "reads/writes"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "cust",
+       "text": "knows nothing of Row or the mapper"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "The domain model is rich and shaped differently from the schema.",
+      "Domain logic must be testable without a database.",
+      "Schema and model evolve at different speeds."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Classes and tables are nearly identical and logic is thin; the mapper is pure overhead.",
+      "A small team needs rapid CRUD (see Active Record)."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Hand-written mappers drifting out of sync with the schema; cover them with round-trip tests.",
+      "Lazy loading hidden in the mapper causing N+1 queries.",
+      "Mapping that bypasses constructors and builds invalid objects."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Hand-rolled mapper for a model an ORM could map in minutes.",
+      "A mapper per class that merely copies identically named fields."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Records and compact constructors keep hydration validated; MapStruct can generate repetitive conversions.",
+      "Records make good storage rows and DTO shapes, with the mapper converting to richer domain classes."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "active-record",
+     "relation": "alternative",
+     "difference": "Active Record puts persistence in the entity, coupling it to the row. A data mapper keeps the entity ignorant, at the price of an extra layer."
+    },
+    {
+     "ref": "repository",
+     "relation": "combines",
+     "difference": "The repository offers the domain-facing collection API; a mapper is typically what it calls to turn rows into objects."
+    },
+    {
+     "ref": "unit-of-work",
+     "relation": "combines",
+     "difference": "The unit of work tracks which objects changed; mappers perform the writes for those objects at commit."
+    },
+    {
+     "ref": "dto",
+     "relation": "oftenConfused",
+     "difference": "A DTO carries data across a boundary and has no behavior. A mapper converts between shapes and may build behavior-rich domain objects."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Hibernate / JPA",
+     "name": "EntityManager",
+     "detail": "Entity mappings translate classes to tables; entities need no save method and no base class."
+    },
+    {
+     "where": "MyBatis",
+     "name": "Mapper interfaces and result maps",
+     "detail": "Explicit SQL plus mapping rules turn result sets into plain objects."
+    },
+    {
+     "where": "Spring Data JDBC",
+     "name": "Aggregate mapping",
+     "detail": "Maps aggregate roots to tables without a persistence context or lazy loading."
+    },
+    {
+     "where": "SQLAlchemy",
+     "name": "Classical mapping",
+     "detail": "Python's ORM maps plain classes to tables separately, in the data-mapper style."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class PlayerStore {",
+    "    private final Map<Long, Object[]> table = new HashMap<>();",
+    "",
+    "    Player load(long id) {",
+    "        Object[] row = table.get(id);",
+    "        return new Player(id, (String) row[0], Rank.valueOf((String) row[1]));",
+    "    }",
+    "",
+    "    void store(Player p) {",
+    "        table.put(p.id(), new Object[] {p.name(), p.rank().name()});",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "data-mapper",
+     "correct": true,
+     "why": "A separate class converts between the domain `Player` and the storage row, in both directions."
+    },
+    {
+     "ref": "active-record",
+     "why": "`Player` does not load or save itself; persistence lives in another class."
+    },
+    {
+     "ref": "repository",
+     "why": "There is no domain-worded collection interface with queries; the class only translates shapes."
+    },
+    {
+     "ref": "dto",
+     "why": "A DTO is a passive carrier; this class contains the conversion logic."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "enum Rank { A, B }",
+     "record Player(long id, String name, Rank rank) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A domain model uses value objects, enums and no setters. The legacy table has cryptic columns and denormalized fields, and the schema will be refactored separately next quarter. The model should not change when it does.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "data-mapper",
+     "correct": true,
+     "why": "A mapper isolates both shapes so schema changes touch only the mapping."
+    },
+    {
+     "ref": "active-record",
+     "why": "Entities would mirror the table's shape and carry persistence, so schema changes ripple into the model."
+    },
+    {
+     "ref": "dto",
+     "why": "A DTO carries data over a boundary but does not translate to and from storage."
+    },
+    {
+     "ref": "repository",
+     "why": "A repository defines the access API but still needs a translation mechanism inside."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Data Mapper pattern.",
+   "lines": [
+    "final class Customer {",
+    "    private final long id;",
+    "    private Email email;",
+    "",
+    "    Customer(long id, Email email) { this.id = id; this.email = email; }",
+    "",
+    "    void changeEmail(Email next) { this.email = next; }",
+    "",
+    "    void save(CustomerMapper mapper) { mapper.save(this); }",
+    "",
+    "    long id() { return id; }",
+    "    Email email() { return email; }",
+    "}"
+   ],
+   "flawLines": [
+    9
+   ],
+   "explanation": "The domain object now depends on its mapper, which is the coupling the pattern removes. Drop the method and let a service call `mapper.save(customer)`.",
+   "compile": {
+    "template": [
+     "record Email(String v) {}",
+     "interface CustomerMapper { void save(Customer c); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the update flow so each line only uses what came before.",
+   "blocks": [
+    [
+     "long id = request.customerId();"
+    ],
+    [
+     "Row row = table.get(id);"
+    ],
+    [
+     "Customer customer = new Customer(row.id(), new Email(row.emailAddr()));"
+    ],
+    [
+     "customer.changeEmail(new Email(request.newEmail()));"
+    ],
+    [
+     "table.put(id, new Row(customer.id(), customer.email().value()));"
+    ]
+   ],
+   "explanation": "Resolve the key, read the row, hydrate the domain object, change it through behavior, then flatten it back. The mapper sits at both ends.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Email(String value) {}",
+     "record Row(long id, String emailAddr) {}",
+     "record Request(long customerId, String newEmail) {}",
+     "final class Customer { Customer(long id, Email e) {} long id() { return 0; } Email email() { return null; } void changeEmail(Email e) {} }",
+     "class Snippet { void run(Request request, Map<Long, Row> table) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Data Mapper in your own words: who knows what, and how does it differ from Active Record?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A data mapper is a layer that converts between domain objects and storage shapes in both directions. The domain object knows nothing about persistence and storage knows nothing about behavior. Active Record instead lets the entity load and save itself, which is simpler but couples the class to its table."
+    }
+   ],
+   "keyPoints": [
+    "Mapper translates both directions",
+    "Domain objects are persistence-ignorant",
+    "Schema and model evolve independently",
+    "Active Record couples entity and table",
+    "Cost: extra layer and mapping code"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,454 @@
+{
+ "id": "fork-join",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Recursively split a problem until the pieces are small, solve them in parallel, then combine the results."
+    },
+    {
+     "type": "p",
+     "text": "A **task** either computes directly (below a **threshold**) or splits itself in two, **forks** one half onto the pool, computes the other itself, and **joins**. A `ForkJoinPool` runs these tasks with **work stealing**: idle workers take tasks from the tails of busy workers' deques."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Fits:** CPU-bound, divisible, side-effect-free work.",
+      "**Threshold:** too small and overhead dominates; too large and cores sit idle.",
+      "**Combine:** results must be mergeable, such as sums, merges or counts."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Parallel streams and `Arrays.parallelSort` run on the common fork-join pool."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "ForkJoin.java",
+   "expectedOutput": "parallelism: 4\nsum: 49500000\nmatches: true",
+   "walkthrough": [
+    {
+     "region": "task",
+     "note": "A `RecursiveTask<Long>` describes a slice of the array. It holds indices, not copies, so splitting costs nothing."
+    },
+    {
+     "region": "compute",
+     "note": "Below the threshold it sums directly. Otherwise it forks the left half, computes the right half itself, then joins. Computing one half inline avoids queuing a task just to wait for it."
+    },
+    {
+     "region": "invoke",
+     "note": "`invoke` submits the root task and waits. Each task's fork and join is a happens-before edge, so results are visible without extra synchronization."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Counting error lines across a large set of log files."
+    },
+    {
+     "type": "p",
+     "text": "A nightly job scans thousands of log files of very different sizes. Splitting by file leaves cores idle when one file is huge. A task over a list of files splits the list; a task over one large file splits its byte range. Work stealing keeps all cores busy, and the counts are merged by addition."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "record Scan(List<Path> files) extends RecursiveTask<Long> { /* ... */ }",
+      "",
+      "long errors = pool.invoke(new Scan(allFiles));"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: near-linear speedup on skewed input without hand-tuning how files are assigned to threads."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "pool",
+       "name": "ForkJoinPool",
+       "kind": "class",
+       "role": "Pool",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ invoke(task): T",
+        "- work-stealing deques"
+       ]
+      },
+      {
+       "id": "task",
+       "name": "RecursiveTask<V>",
+       "kind": "abstract",
+       "role": "Task",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "# compute(): V",
+        "+ fork()",
+        "+ join(): V"
+       ]
+      },
+      {
+       "id": "sum",
+       "name": "SumTask",
+       "kind": "class",
+       "role": "ConcreteTask",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "- from, to: int",
+        "- THRESHOLD: int"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "pool",
+       "to": "task",
+       "rel": "dependency",
+       "label": "runs"
+      },
+      {
+       "from": "sum",
+       "to": "task",
+       "rel": "extends"
+      },
+      {
+       "from": "sum",
+       "to": "sum",
+       "rel": "composition",
+       "label": "subtasks"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "sum",
+       "text": "split below THRESHOLD? no: compute"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "root",
+       "name": "Root task",
+       "role": "Task"
+      },
+      {
+       "id": "left",
+       "name": "Left half",
+       "role": "Subtask"
+      },
+      {
+       "id": "right",
+       "name": "Right half",
+       "role": "Subtask"
+      }
+     ],
+     "messages": [
+      {
+       "from": "root",
+       "to": "left",
+       "label": "fork()",
+       "style": "async"
+      },
+      {
+       "from": "root",
+       "to": "right",
+       "label": "compute()",
+       "style": "call"
+      },
+      {
+       "from": "right",
+       "to": "root",
+       "label": "partial sum",
+       "style": "return"
+      },
+      {
+       "from": "root",
+       "to": "left",
+       "label": "join()",
+       "style": "call"
+      },
+      {
+       "from": "left",
+       "to": "root",
+       "label": "partial sum",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "The problem divides into independent, similar subproblems.",
+      "Work is CPU-bound and sizes are uneven, so stealing helps."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Tasks block on I/O or locks; this starves the pool's few threads.",
+      "The data is small: splitting overhead exceeds the work."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Calling `join()` on the first fork before computing the other half serializes the work.",
+      "Shared mutable state between subtasks needs care; prefer returning values.",
+      "A poor threshold yields tiny tasks or too few of them."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Parallel streams and `Arrays.parallelSort` use the common pool, so a hand-written task is often unnecessary.",
+      "Virtual threads suit blocking I/O; fork-join remains the tool for CPU-bound divide and conquer."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "thread-pool",
+     "relation": "specializes",
+     "difference": "A fork-join pool is a thread pool specialized for tasks that spawn and join subtasks, with per-worker deques and work stealing."
+    },
+    {
+     "ref": "future-promise",
+     "relation": "combines",
+     "difference": "`ForkJoinTask` is a future: `fork` starts it and `join` waits for the result. The pattern adds recursive splitting."
+    },
+    {
+     "ref": "producer-consumer",
+     "relation": "alternative",
+     "difference": "Producer-consumer streams independent items through a queue. Fork-join breaks one large item into pieces and merges the answers."
+    },
+    {
+     "ref": "composite",
+     "relation": "lookAlike",
+     "difference": "Both recurse over a tree of parts. Composite is about uniform treatment of structure; fork-join is about parallel execution and combining."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "java.util.concurrent.ForkJoinPool",
+     "detail": "`commonPool()` is shared by parallel streams, `CompletableFuture` async methods without an executor, and `parallelSort`."
+    },
+    {
+     "where": "JDK",
+     "name": "RecursiveTask / RecursiveAction",
+     "detail": "The base classes for value-returning and void divide-and-conquer tasks."
+    },
+    {
+     "where": "JDK",
+     "name": "Arrays.parallelSort",
+     "detail": "Splits the array, sorts the pieces in parallel on the common pool, and merges them."
+    },
+    {
+     "where": "JDK",
+     "name": "Stream.parallel()",
+     "detail": "The stream is split with spliterators and the pieces are processed as fork-join tasks."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "protected Long compute() {",
+    "    if (hi - lo <= 2_000) {",
+    "        return scanSequentially(lo, hi);",
+    "    }",
+    "    int mid = (lo + hi) >>> 1;",
+    "    var left = new Scan(lo, mid);",
+    "    var right = new Scan(mid, hi);",
+    "    left.fork();",
+    "    return right.compute() + left.join();",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "fork-join",
+     "correct": true,
+     "why": "The task splits itself, forks one half, computes the other, and joins to combine results."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "A pool runs tasks, but this task creates and waits for its own subtasks, which a plain pool task should not."
+    },
+    {
+     "ref": "composite",
+     "why": "Composite treats a tree of parts uniformly. Here the recursion exists to run parts in parallel."
+    },
+    {
+     "ref": "future-promise",
+     "why": "The fork returns a future-like handle, but the defining feature is recursive split and combine."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.concurrent.RecursiveTask;",
+     "@SuppressWarnings(\"serial\")",
+     "class Scan extends RecursiveTask<Long> {",
+     "    final int lo, hi;",
+     "    Scan(int lo, int hi) { this.lo = lo; this.hi = hi; }",
+     "    long scanSequentially(int a, int b) { return b - a; }",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A service must find the maximum value in a 200-million-element array and wants all cores used. The data is in memory, the work is pure computation, and results from parts combine with `Math.max`.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "fork-join",
+     "correct": true,
+     "why": "Split the range recursively, compute partial maxima in parallel, and combine with `max`."
+    },
+    {
+     "ref": "producer-consumer",
+     "why": "There is no stream of independent jobs; one large input has to be divided."
+    },
+    {
+     "ref": "active-object",
+     "why": "Funneling every request through one thread would use a single core."
+    },
+    {
+     "ref": "reactor",
+     "why": "The work is CPU-bound, not waiting on I/O readiness; a single event loop would run on one core."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that defeats the parallelism.",
+   "lines": [
+    "protected Long compute() {",
+    "    if (to - from <= THRESHOLD) {",
+    "        return sequentialSum(from, to);",
+    "    }",
+    "    int mid = (from + to) >>> 1;",
+    "    var left = new SumTask(data, from, mid);",
+    "    var right = new SumTask(data, mid, to);",
+    "    left.fork();",
+    "    long l = left.join();",
+    "    long r = right.compute();",
+    "    return l + r;",
+    "}"
+   ],
+   "flawLines": [
+    9
+   ],
+   "explanation": "Joining the left half before computing the right half makes the current thread wait, so the halves run one after the other. Compute the right half first, then join the left.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.RecursiveTask;",
+     "@SuppressWarnings(\"serial\")",
+     "class SumTask extends RecursiveTask<Long> {",
+     "    static final int THRESHOLD = 1000;",
+     "    int[] data; int from, to;",
+     "    SumTask(int[] d, int f, int t) { data = d; from = f; to = t; }",
+     "    long sequentialSum(int a, int b) { return b - a; }",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the split step so that each line only uses what came before.",
+   "blocks": [
+    [
+     "int mid = (from + to) >>> 1;"
+    ],
+    [
+     "var left = new SumTask(data, from, mid);",
+     "var right = new SumTask(data, mid, to);"
+    ],
+    [
+     "left.fork();"
+    ],
+    [
+     "return right.compute() + left.join();"
+    ]
+   ],
+   "explanation": "Find the midpoint, build both halves, start one asynchronously, then compute the other inline and join the forked one last. A join before the fork would wait on an unstarted task.",
+   "compile": {
+    "template": [
+     "import java.util.concurrent.RecursiveTask;",
+     "@SuppressWarnings(\"serial\")",
+     "class SumTask extends RecursiveTask<Long> {",
+     "    int[] data; int from, to;",
+     "    SumTask(int[] d, int f, int t) { data = d; from = f; to = t; }",
+     "    protected Long compute() {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Fork-Join in your own words: how a task splits, what work stealing does, and how to choose a threshold.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A task solves small inputs directly and otherwise splits in two, forks one half, computes the other, and joins to combine. Each worker has a deque of tasks; idle workers steal from busy ones, balancing uneven work. The threshold balances overhead against parallelism: small enough to spread across cores, large enough to amortize task costs."
+    }
+   ],
+   "keyPoints": [
+    "Split until below a threshold, then compute directly",
+    "Fork one half, compute the other inline, then join",
+    "Work stealing balances uneven subtasks across workers",
+    "Threshold trades task overhead against parallelism",
+    "Best for CPU-bound, side-effect-free work"
+   ]
+  }
+ ]
+}

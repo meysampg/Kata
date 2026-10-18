@@ -1,0 +1,164 @@
+{
+  "id": "guarded-suspension",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Make a thread wait until a condition on shared state holds before it proceeds."},
+      {"type": "p", "text": "A **guarded method** checks a **precondition** under a lock. While it is false, the thread **suspends** and releases the lock. Another thread changes the state and **signals**; the waiter wakes, reacquires the lock, and checks the guard again. State and guard live together in one monitor."},
+      {"type": "bullets", "items": [
+        "**Guard:** a boolean condition over state protected by the lock.",
+        "**Wait in a loop:** `while`, never `if`; wakeups can be spurious or stolen.",
+        "**Signal on every change** that can make some guard true."]},
+      {"type": "callout", "tone": "info", "text": "`wait` releases the monitor and reacquires it before returning. Writes made before `notifyAll` by the signaler are visible to the waiter afterwards."}
+    ]},
+    {"role": "implementation", "file": "GuardedSuspension.java",
+     "expectedOutput": "[m1, m2, m3]",
+     "walkthrough": [
+      {"region": "take", "note": "The guard `item == null` is rechecked in a `while` loop after every wakeup. `wait()` releases the monitor, so a producer can enter `put`."},
+      {"region": "put", "note": "The producer has its own guard: the slot must be empty. Changing `item` and then calling `notifyAll()` wakes threads whose guard may now hold."},
+      {"region": "consumer", "note": "The consumer starts first and blocks on the empty slot. Restoring the interrupt flag keeps cancellation visible to callers."},
+      {"region": "producer", "note": "The main thread produces. Whatever order the scheduler picks, each guard is evaluated under the lock, so the result is the same."},
+      {"region": "join", "note": "`join` gives a happens-before edge, so reading `received` here is safe. The list needed no extra synchronization."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Borrowing a connection from a database pool."},
+      {"type": "p", "text": "A request thread calls `borrow()` when all connections are in use. It must block until one is returned, but not forever: after 30 seconds the call fails so the request can return an error instead of hanging. The guard is `!idle.isEmpty()`, `return()` signals, and the wait is a timed `awaitNanos` that survives spurious wakeups by recomputing the remaining time."},
+      {"type": "code", "language": "java", "lines": [
+        "lock.lock(); try {",
+        "    long left = timeout.toNanos();",
+        "    while (idle.isEmpty()) {",
+        "        if (left <= 0) throw new TimeoutException();",
+        "        left = notEmpty.awaitNanos(left);",
+        "    }",
+        "    return idle.removeFirst();",
+        "} finally { lock.unlock(); }"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: waiters sleep without burning CPU, and the bounded wait turns pool exhaustion into a fast, handled failure."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "box", "name": "Mailbox<T>", "kind": "class", "role": "GuardedObject", "col": 0.5, "row": 0,
+         "members": ["- item: T", "+ take(): T", "+ put(value)"]},
+        {"id": "cons", "name": "Consumer", "kind": "class", "role": "WaitingThread", "col": 0, "row": 1,
+         "members": ["blocks until item != null"]},
+        {"id": "prod", "name": "Producer", "kind": "class", "role": "SignalingThread", "col": 1, "row": 1,
+         "members": ["sets item, notifyAll()"]}],
+       "edges": [
+        {"from": "cons", "to": "box", "rel": "dependency", "label": "take"},
+        {"from": "prod", "to": "box", "rel": "dependency", "label": "put"}],
+       "notes": [{"attachTo": "box", "text": "guard + state share one lock"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "cons", "name": "Consumer"}, {"id": "box", "name": "Mailbox", "role": "GuardedObject"},
+        {"id": "prod", "name": "Producer"}],
+       "messages": [
+        {"from": "cons", "to": "box", "label": "take()", "style": "call"},
+        {"from": "box", "to": "box", "label": "item == null: wait()", "style": "call"},
+        {"from": "prod", "to": "box", "label": "put(v)", "style": "call"},
+        {"from": "box", "to": "box", "label": "item = v; notifyAll()", "style": "call"},
+        {"from": "box", "to": "box", "label": "recheck guard: true", "style": "call"},
+        {"from": "box", "to": "cons", "label": "v", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A thread cannot proceed until another thread changes shared state.",
+        "The wait should consume no CPU, unlike polling.",
+        "Several conditions share one lock and need separate wait sets."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "A `BlockingQueue`, `CountDownLatch` or `Future` already expresses the wait.",
+        "The caller can proceed without the result: use a callback or a non-blocking check."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Using `if` instead of `while`: spurious or stolen wakeups break the guard.",
+        "Forgetting to signal after a state change, which leaves waiters stuck forever.",
+        "Unbounded waits and swallowed `InterruptedException`."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "Hand-written `wait`/`notify` where a `java.util.concurrent` class fits.",
+        "One lock with many unrelated guards and `notifyAll` storming every waiter."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "`ReentrantLock` with `Condition` gives several wait sets and timed waits.",
+        "Blocking inside `synchronized` pins a virtual thread in Java 21; prefer `ReentrantLock` conditions or `java.util.concurrent` types there."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "producer-consumer", "relation": "combines", "difference": "A blocking queue is guarded suspension on both ends: `take` waits while empty, `put` waits while full."},
+      {"ref": "future-promise", "relation": "alternative", "difference": "A future packages one result and lets the caller wait for it, or compose without waiting. Guarded suspension waits on arbitrary shared state, repeatedly."},
+      {"ref": "timeout", "relation": "combines", "difference": "A guard should be bounded. A timed wait with remaining-time bookkeeping stops a missed signal becoming a hung thread."},
+      {"ref": "active-object", "relation": "alternative", "difference": "An active object takes the request on its own thread, so the caller need not block on a condition at all."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "Object.wait / notifyAll", "detail": "The primitive form: `wait` releases the monitor, and the javadoc requires calling it in a loop."},
+      {"where": "JDK", "name": "java.util.concurrent.locks.Condition", "detail": "`await`, `awaitNanos` and `signalAll` provide multiple wait sets per `ReentrantLock`."},
+      {"where": "JDK", "name": "ArrayBlockingQueue", "detail": "`take` and `put` wait on `Condition` objects (`notEmpty`, `notFull`) guarded by one lock."},
+      {"where": "JDK", "name": "CountDownLatch", "detail": "`await` blocks until the count reaches zero, a one-shot guard."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Gate {",
+      "    private boolean open;",
+      "",
+      "    synchronized void pass() throws InterruptedException {",
+      "        while (!open) wait();",
+      "    }",
+      "    synchronized void release() {",
+      "        open = true;",
+      "        notifyAll();",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "guarded-suspension", "correct": true, "why": "Threads block while a condition on shared state is false and are woken when another thread changes it."},
+      {"ref": "double-checked-locking", "why": "It looks like a repeated check, but this waits for a signal; DCL avoids locking for one-time initialization."},
+      {"ref": "producer-consumer", "why": "There is no queue of work items moving between threads, only a single flag."},
+      {"ref": "read-write-lock", "why": "All access takes the same exclusive monitor; there is no shared read mode."}],
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A worker thread must not start sending until a separate thread finishes the handshake. The handshake flag is shared state; the worker should sleep, not poll, and may be reused for many handshakes.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "guarded-suspension", "correct": true, "why": "The worker waits on a condition over shared state and is signaled when the handshake changes it."},
+      {"ref": "thread-pool", "why": "A pool reuses threads for tasks; it does not make one thread wait for a condition."},
+      {"ref": "immutable-object", "why": "Immutable data needs no waiting, but here the point is waiting for a change."},
+      {"ref": "read-write-lock", "why": "It governs concurrent access modes and has no way to wait until a condition becomes true."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks Guarded Suspension.",
+     "lines": [
+      "final class Slot<T> {",
+      "    private T item;",
+      "",
+      "    synchronized T take() throws InterruptedException {",
+      "        if (item == null) wait();",
+      "        T value = item;",
+      "        item = null;",
+      "        return value;",
+      "    }",
+      "",
+      "    synchronized void put(T value) {",
+      "        item = value;",
+      "        notifyAll();",
+      "    }",
+      "}"],
+     "flawLines": [5],
+     "explanation": "The guard is checked once. After a spurious wakeup, or if another consumer took the item first, the thread proceeds with `null`. Use `while (item == null) wait();`.",
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the body of the guarded take so that the state stays consistent.",
+     "blocks": [
+      ["while (item == null) wait();"],
+      ["T value = item;"],
+      ["item = null;"],
+      ["notifyAll();"],
+      ["return value;"]],
+     "explanation": "Wait for the guard first, read the item, then clear it. Signal after the state change so woken threads see it, and return last.",
+     "compile": {"template": [
+      "final class Slot<T> {",
+      "  private T item;",
+      "  synchronized T take() throws InterruptedException {",
+      "{{code}}",
+      "  } }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Guarded Suspension in your own words: why a loop, and what wait does with the lock.",
+     "modelAnswer": [
+      {"type": "p", "text": "A thread tests a condition on shared state under a lock and, if false, waits, which releases the lock. Another thread changes the state and signals. The waiter reacquires the lock and rechecks in a loop, because wakeups can be spurious or the condition may already be consumed."}],
+     "keyPoints": [
+      "Guard and state protected by the same lock",
+      "wait releases the lock and reacquires it before returning",
+      "Always recheck the guard in a while loop",
+      "Signal after every state change that can satisfy a guard",
+      "Bound the wait and handle interruption"]}
+  ]
+}

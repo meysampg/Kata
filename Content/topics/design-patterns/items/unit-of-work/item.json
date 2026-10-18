@@ -1,0 +1,488 @@
+{
+ "id": "unit-of-work",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Track every change made during one business transaction, then write them all to storage together or not at all."
+    },
+    {
+     "type": "p",
+     "text": "A **unit of work** records objects that were created, modified or removed. Nothing hits storage until `commit()`, which writes all changes in the right order within one transaction. It also keeps each entity written once, however often it changed, and it is where rollback lives."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Tracks:** new, dirty and removed objects (`registerNew/Dirty/Removed`).",
+      "**Commits:** one batch, one transaction, in dependency order.",
+      "**Scope:** one request or business transaction, then discarded."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "A unit of work is not thread-safe or long-lived. Share a repository, never a unit of work, across requests."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "UnitOfWork.java",
+   "expectedOutput": "committed 3 changes\n{a=60, c=10}\nrolled back: missing zzz\n{a=60, c=10}",
+   "walkthrough": [
+    {
+     "region": "changes",
+     "note": "Pending work as a sealed hierarchy of records. The compiler checks that commit handles every kind of change."
+    },
+    {
+     "region": "register",
+     "note": "A map keyed by id coalesces repeats: two updates become one, an update after an insert stays an insert, and removing a new object cancels it."
+    },
+    {
+     "region": "commit",
+     "note": "Apply changes to a copy, then swap it in. A failing change throws before anything is published, which stands in for a database rollback."
+    },
+    {
+     "region": "client",
+     "note": "Three business operations, four registrations, one commit. `a` is written once with its final value."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Cancelling an order in a shop backend."
+    },
+    {
+     "type": "p",
+     "text": "Cancelling must flip the order status, release reserved stock and credit the loyalty balance. Doing this with three independent saves leaves a half-cancelled order when the third fails. With a unit of work, the handler loads entities through it, mutates them as plain objects, and calls one `commit()`. Hibernate's persistence context detects the changes and flushes them in a single transaction."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "try (var work = factory.open()) {",
+      "    Order o = work.orders().get(id);",
+      "    o.cancel();",
+      "    work.stock().release(o.lines());",
+      "    work.loyalty().credit(o.customer(), o.points());",
+      "    work.commit();",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the three writes succeed or fail together, and each row is written at most once."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "svc",
+       "name": "CancelOrder",
+       "kind": "class",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ handle(id)"
+       ],
+       "role": "Client"
+      },
+      {
+       "id": "uow",
+       "name": "UnitOfWork",
+       "kind": "class",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "- pending: Map",
+        "+ registerNew(e)",
+        "+ registerDirty(e)",
+        "+ registerRemoved(e)",
+        "+ commit()"
+       ],
+       "role": "UnitOfWork"
+      },
+      {
+       "id": "chg",
+       "name": "Change",
+       "kind": "interface",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "Insert | Update | Delete"
+       ],
+       "role": "Change"
+      },
+      {
+       "id": "db",
+       "name": "Database",
+       "kind": "interface",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "+ begin()",
+        "+ commit()",
+        "+ rollback()"
+       ],
+       "role": "Resource"
+      }
+     ],
+     "edges": [
+      {
+       "from": "svc",
+       "to": "uow",
+       "rel": "association",
+       "label": "uses"
+      },
+      {
+       "from": "uow",
+       "to": "chg",
+       "rel": "aggregation",
+       "label": "pending"
+      },
+      {
+       "from": "uow",
+       "to": "db",
+       "rel": "dependency",
+       "label": "flushes to"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "c",
+       "name": "Handler"
+      },
+      {
+       "id": "u",
+       "name": "UnitOfWork",
+       "role": "UnitOfWork"
+      },
+      {
+       "id": "d",
+       "name": "Database",
+       "role": "Resource"
+      }
+     ],
+     "messages": [
+      {
+       "from": "c",
+       "to": "u",
+       "label": "registerDirty(a)",
+       "style": "call"
+      },
+      {
+       "from": "c",
+       "to": "u",
+       "label": "registerNew(c)",
+       "style": "call"
+      },
+      {
+       "from": "c",
+       "to": "u",
+       "label": "commit()",
+       "style": "call"
+      },
+      {
+       "from": "u",
+       "to": "d",
+       "label": "begin()",
+       "style": "call"
+      },
+      {
+       "from": "u",
+       "to": "d",
+       "label": "insert, update, delete",
+       "style": "call"
+      },
+      {
+       "from": "u",
+       "to": "d",
+       "label": "commit()",
+       "style": "call"
+      },
+      {
+       "from": "u",
+       "to": "c",
+       "label": "3 changes",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Several entities change in one business operation and must succeed together.",
+      "You want to batch writes and write each changed entity once.",
+      "You need a single place for transaction boundaries."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Each request touches one row: a plain transactional `save` is enough.",
+      "Work spans services; a local transaction cannot cover it (see Saga)."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Long-lived units of work that hold stale objects and balloon in memory.",
+      "Sharing one across threads or requests.",
+      "Order of inserts and deletes violating foreign keys on flush."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Hand-writing change tracking when your ORM already provides it.",
+      "A custom unit of work wrapping a framework that already tracks changes."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Declarative `@Transactional` plus a JPA persistence context is a unit of work you rarely write by hand.",
+      "Try-with-resources on an `AutoCloseable` unit of work guarantees rollback when `commit()` is not reached."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "repository",
+     "relation": "combines",
+     "difference": "Repositories read and register aggregates; the unit of work decides when those changes are written, and in what order."
+    },
+    {
+     "ref": "data-mapper",
+     "relation": "combines",
+     "difference": "The unit of work chooses what to write and when; mappers perform the actual row translation for each change."
+    },
+    {
+     "ref": "active-record",
+     "relation": "alternative",
+     "difference": "Active Record saves each object immediately on `save()`, so there is no shared transaction scope or batching unless you add one."
+    },
+    {
+     "ref": "saga",
+     "relation": "oftenConfused",
+     "difference": "A unit of work is one local transaction in one store. A saga coordinates several transactions across services with compensations."
+    },
+    {
+     "ref": "domain-event",
+     "relation": "combines",
+     "difference": "Events raised by entities during the unit of work are usually dispatched after a successful commit."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JPA / Hibernate",
+     "name": "EntityManager and Session",
+     "detail": "The persistence context tracks managed entities, detects dirty ones and flushes them at commit."
+    },
+    {
+     "where": "Spring",
+     "name": "@Transactional",
+     "detail": "Opens a transaction boundary around a method; the JPA unit of work is flushed when it commits."
+    },
+    {
+     "where": "Spring",
+     "name": "TransactionTemplate",
+     "detail": "Programmatic transaction scope: callback body runs, then commit or rollback."
+    },
+    {
+     "where": "Entity Framework",
+     "name": "DbContext.SaveChanges",
+     "detail": "A change tracker collects entity states and writes them in one transaction."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Tx {",
+    "    private final List<Object> added = new ArrayList<>();",
+    "    private final List<Object> changed = new ArrayList<>();",
+    "",
+    "    void add(Object o) { added.add(o); }",
+    "    void touch(Object o) { if (!added.contains(o)) changed.add(o); }",
+    "",
+    "    void flush(Db db) {",
+    "        db.begin();",
+    "        added.forEach(db::insert);",
+    "        changed.forEach(db::update);",
+    "        db.commit();",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "unit-of-work",
+     "correct": true,
+     "why": "It collects new and changed objects and writes them together inside one transaction."
+    },
+    {
+     "ref": "command",
+     "why": "Operations are not reified as undoable request objects; it records object sets, not actions."
+    },
+    {
+     "ref": "repository",
+     "why": "There is no collection-like query interface; the class batches writes."
+    },
+    {
+     "ref": "transactional-outbox",
+     "why": "No message is written alongside the data; nothing is published afterwards."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Db { void begin(); void insert(Object o); void update(Object o); void commit(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "An application service cancels an order: it updates the order, releases stock and writes an audit row, all in one database. If any write fails, none may persist, and an entity touched twice should be written once.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "unit-of-work",
+     "correct": true,
+     "why": "It collects changes across entities and commits them as a single transaction, coalescing repeated edits."
+    },
+    {
+     "ref": "repository",
+     "why": "A repository gives access per aggregate but does not coordinate a cross-entity atomic commit."
+    },
+    {
+     "ref": "active-record",
+     "why": "Each `save()` writes immediately, so a mid-way failure leaves partial changes."
+    },
+    {
+     "ref": "saga",
+     "why": "Everything is in one database and one local transaction; compensation is unnecessary overhead."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Unit of Work pattern.",
+   "lines": [
+    "final class Work {",
+    "    private final Map<String, Integer> dirty = new LinkedHashMap<>();",
+    "    private final Db db;",
+    "    Work(Db db) { this.db = db; }",
+    "    void markDirty(String id, int v) { dirty.put(id, v); }",
+    "    void commit() {",
+    "        for (var e : dirty.entrySet()) {",
+    "            db.write(e.getKey(), e.getValue());",
+    "            db.commit();",
+    "        }",
+    "        dirty.clear();",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    9
+   ],
+   "explanation": "Committing inside the loop makes each write its own transaction, so a failure halfway leaves earlier rows persisted. Write all entries, then call `db.commit()` once after the loop.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Db { void write(String id, int v); void commit(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the use case so each line only uses what came before.",
+   "blocks": [
+    [
+     "var work = new UnitOfWork(db);"
+    ],
+    [
+     "Order order = work.load(id);"
+    ],
+    [
+     "order.cancel();"
+    ],
+    [
+     "work.registerDirty(order);"
+    ],
+    [
+     "work.commit();"
+    ]
+   ],
+   "explanation": "Create the scope, load through it, mutate, register the change, and commit last. Commit publishes everything registered before it.",
+   "compile": {
+    "template": [
+     "interface Db {}",
+     "final class Order { void cancel() {} }",
+     "final class UnitOfWork { UnitOfWork(Db db) {} Order load(String id) { return new Order(); } void registerDirty(Order o) {} void commit() {} }",
+     "class Snippet { void run(Db db, String id) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Unit of Work in your own words: what does it track, when does it write, and what is it not?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A unit of work records new, changed and removed objects during one business transaction and writes them together at commit, in a valid order, in one transaction. It coalesces repeated edits and owns rollback. It is request-scoped and local to one store, so it is not a saga and not a cache."
+    }
+   ],
+   "keyPoints": [
+    "Tracks new, dirty and removed objects",
+    "Nothing is written until commit",
+    "One transaction, batched and ordered",
+    "Short-lived and request-scoped",
+    "Local to one store; a saga spans services"
+   ]
+  }
+ ]
+}

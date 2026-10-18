@@ -1,0 +1,168 @@
+{
+  "id": "interpreter",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Model a small language as a class per grammar rule, so a sentence becomes a tree that evaluates itself."},
+      {"type": "p", "text": "Each rule of the grammar becomes a node type. **Terminal** nodes (numbers, variables) answer directly; **nonterminal** nodes (sums, comparisons) combine their children. Parsing builds the tree once, then `eval(context)` runs it as often as needed against different inputs."},
+      {"type": "bullets", "items": [
+        "**Fits:** small, stable grammars such as rules, filters, formulas and queries.",
+        "**Cost:** one class per rule; a large grammar becomes unmanageable.",
+        "**Separate concerns:** parsing builds the tree, the nodes only evaluate."]},
+      {"type": "callout", "tone": "warning", "text": "GoF Interpreter does not include the parser. For anything beyond a toy grammar, reach for a parser generator or an existing expression library."}
+    ]},
+    {"role": "implementation", "file": "Interpreter.java",
+     "expectedOutput": "Add[left=Num[value=2], right=Mul[left=Var[name=x], right=Num[value=3]]]\n17",
+     "walkthrough": [
+      {"region": "grammar", "note": "The abstract expression. `sealed` closes the grammar: the compiler knows every node type, so adding a rule is a visible, deliberate change."},
+      {"region": "terminals", "note": "Terminal expressions end the recursion. `Var` reads from the context (the environment map), which is what makes one tree reusable across inputs."},
+      {"region": "nonterminals", "note": "Nonterminal expressions hold sub-expressions and delegate to them. Evaluation is a recursive walk with no central switch."},
+      {"region": "parser", "note": "A tiny prefix parser builds the tree. It is separate from the nodes: the pattern defines the tree, not how you obtain it."},
+      {"region": "client", "note": "Parse once, evaluate with any environment. The printed record shows the abstract syntax tree the sentence became."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Operator-defined eligibility rules for a promotion."},
+      {"type": "p", "text": "Marketing wants to write conditions such as `plan = 'pro' and seats > 10` without a deploy. The rule text is parsed once at save time into an AST of `And`, `Equals` and `GreaterThan` nodes, validated, and cached. Each request evaluates the cached tree against a `Customer` context. The grammar has six rules and rarely grows, which is where Interpreter pays off."},
+      {"type": "code", "language": "java", "lines": [
+        "Rule rule = parser.parse(\"plan = 'pro' and seats > 10\");",
+        "cache.put(promo.id(), rule);",
+        "",
+        "boolean eligible = cache.get(promo.id()).eval(customer);"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: non-engineers change rules at runtime, and the same validated tree is evaluated on every request without reparsing."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "role": "Client", "col": 0.5, "row": 0,
+         "members": ["+ eval(ast, env)"]},
+        {"id": "expr", "name": "Expr", "kind": "interface", "role": "AbstractExpression", "col": 0.5, "row": 1,
+         "members": ["+ eval(env): int"]},
+        {"id": "num", "name": "Num", "kind": "record", "role": "TerminalExpression", "col": 0, "row": 2,
+         "members": ["+ value: int"]},
+        {"id": "add", "name": "Add", "kind": "record", "role": "NonterminalExpression", "col": 1, "row": 2,
+         "members": ["+ left: Expr", "+ right: Expr"]}],
+       "edges": [
+        {"from": "client", "to": "expr", "rel": "association"},
+        {"from": "num", "to": "expr", "rel": "realizes"},
+        {"from": "add", "to": "expr", "rel": "realizes"},
+        {"from": "add", "to": "expr", "rel": "composition", "label": "children"}],
+       "notes": [{"attachTo": "client", "text": "builds the tree, supplies env"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "add", "name": "Add", "role": "Nonterminal"},
+        {"id": "num", "name": "Num", "role": "Terminal"}, {"id": "mul", "name": "Mul", "role": "Nonterminal"}],
+       "messages": [
+        {"from": "client", "to": "add", "label": "eval(env)", "style": "call"},
+        {"from": "add", "to": "num", "label": "eval(env)", "style": "call"},
+        {"from": "num", "to": "add", "label": "2", "style": "return"},
+        {"from": "add", "to": "mul", "label": "eval(env)", "style": "call"},
+        {"from": "mul", "to": "add", "label": "15", "style": "return"},
+        {"from": "add", "to": "client", "label": "17", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "The grammar is small and stable, and sentences are evaluated repeatedly.",
+        "Users or config supply the rules, so they cannot be compiled in.",
+        "You want the tree itself to be inspectable, printable and testable."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "The grammar is large or evolving: class count and maintenance explode.",
+        "Performance is critical; tree walking is slower than compiled code.",
+        "A lambda, `Predicate` or existing expression engine already does the job."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Treating hand-written string splitting as a parser and getting precedence wrong.",
+        "Evaluating untrusted input with unbounded recursion depth or cost.",
+        "Mixing parsing into the nodes, which couples syntax to semantics."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Sealed interfaces plus records give a closed, immutable AST.",
+        "A `switch` over the sealed type can host several operations outside the nodes, like Visitor."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "composite", "relation": "specializes", "difference": "An interpreter tree is a Composite whose leaves and branches carry grammar meaning. Composite is about treating parts and wholes uniformly; Interpreter adds evaluation of a language."},
+      {"ref": "visitor", "relation": "combines", "difference": "Visitor moves operations such as eval, print and optimize out of the nodes, so you can add them without editing every node class. Natural once the grammar is stable."},
+      {"ref": "flyweight", "relation": "combines", "difference": "Terminal symbols that repeat (constants, keywords) can be shared as flyweights to save memory in big trees."},
+      {"ref": "strategy", "relation": "alternative", "difference": "If you only need to pick one of a few algorithms, a strategy or lambda is enough. Interpreter is for sentences with structure that users compose."},
+      {"ref": "iterator", "relation": "combines", "difference": "An iterator can walk the tree for tooling such as pretty-printing or validation, without adding methods to each node."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.regex.Pattern", "detail": "Compiles a regular expression into an internal node graph that `Matcher` then evaluates against input."},
+      {"where": "JDK", "name": "java.text.MessageFormat", "detail": "Parses a format pattern once into segments, then formats arguments against it."},
+      {"where": "Spring", "name": "SpelExpressionParser", "detail": "Spring Expression Language parses text into an `Expression` AST that is evaluated against an `EvaluationContext`."},
+      {"where": "Spring Data", "name": "PartTree", "detail": "Parses repository method names such as `findByLastnameAndAge` into a query tree."},
+      {"where": "Apache Lucene", "name": "QueryParser", "detail": "Parses query strings into a tree of `Query` objects that are then executed."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "sealed interface Rule permits Eq, And, Not {",
+      "    boolean test(Map<String, String> row);",
+      "}",
+      "record Eq(String col, String val) implements Rule {",
+      "    public boolean test(Map<String, String> row) {",
+      "        return val.equals(row.get(col));",
+      "    }",
+      "}",
+      "record And(Rule a, Rule b) implements Rule {",
+      "    public boolean test(Map<String, String> row) {",
+      "        return a.test(row) && b.test(row);",
+      "    }",
+      "}",
+      "record Not(Rule r) implements Rule {",
+      "    public boolean test(Map<String, String> row) { return !r.test(row); }",
+      "}"],
+     "options": [
+      {"ref": "interpreter", "correct": true, "why": "Each grammar rule is a node type, and the tree evaluates itself recursively against a context row."},
+      {"ref": "composite", "why": "The shape is similar, but the nodes encode a language with meaning (equals, and, not), not a uniform part-whole tree."},
+      {"ref": "chain-of-responsibility", "why": "Every node is evaluated; none decides to handle or pass a request along."},
+      {"ref": "strategy", "why": "The rules are not alternatives chosen from outside; they compose each other into one sentence."}],
+     "compile": {"template": [
+      "import java.util.Map;",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "Ops engineers define alert conditions in a config file, such as `cpu > 90 and region = 'eu'`. There are about eight operators, they rarely change, and a condition is evaluated thousands of times per minute against fresh metrics.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "interpreter", "correct": true, "why": "A small stable grammar, parsed once into a tree and evaluated repeatedly against changing context."},
+      {"ref": "strategy", "why": "A strategy picks one algorithm; here users compose arbitrary nested conditions, which needs a tree."},
+      {"ref": "visitor", "why": "Visitor adds operations to an existing hierarchy. You first need the hierarchy that represents the language."},
+      {"ref": "command", "why": "Nothing is being queued, undone or logged; the need is evaluating a user-written condition."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Interpreter pattern.",
+     "lines": [
+      "interface Expr { int eval(Map<String, Integer> env); }",
+      "record Num(int v) implements Expr {",
+      "    public int eval(Map<String, Integer> env) { return v; }",
+      "}",
+      "record Add(Expr l, Expr r) implements Expr {",
+      "    public int eval(Map<String, Integer> env) {",
+      "        int left = l.eval(env);",
+      "        int right = r instanceof Num n ? n.v() : r.eval(env);",
+      "        return left + right;",
+      "    }",
+      "}"],
+     "flawLines": [8],
+     "explanation": "The nonterminal inspects the concrete type of its child. Nodes should only call `eval` on sub-expressions, so any new node type behaves correctly. Replace the line with `r.eval(env)`.",
+     "compile": {"template": [
+      "import java.util.Map;",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the steps for evaluating a rule from text.",
+     "blocks": [
+      ["Rule rule = parser.parse(text);"],
+      ["Map<String, Integer> env = Map.of(\"x\", 5);"],
+      ["int result = rule.eval(env);"],
+      ["System.out.println(result);"]],
+     "explanation": "Parsing produces the tree first, the environment supplies the context, and evaluation needs both before its result can be used.",
+     "compile": {"template": [
+      "import java.util.Map;",
+      "interface Rule { int eval(Map<String, Integer> env); }",
+      "interface RuleParser { Rule parse(String text); }",
+      "class Snippet { void run(RuleParser parser, String text) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Interpreter in your own words: what the classes represent, where parsing fits, and when you would not use it.",
+     "modelAnswer": [
+      {"type": "p", "text": "Interpreter turns each rule of a small grammar into a class. A parsed sentence is a tree of those nodes, and evaluating the root recursively evaluates the whole sentence against a context. Parsing is separate from the pattern. It suits small, stable grammars; for large ones use a parser generator or an existing engine."}],
+     "keyPoints": [
+      "One class per grammar rule: terminals and nonterminals",
+      "The sentence is an AST that evaluates itself against a context",
+      "Parsing builds the tree and is not part of the pattern",
+      "Does not scale to large or changing grammars",
+      "Structurally a Composite with language semantics"]}
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "id": "observer",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Let a subject notify any number of dependents when it changes, without knowing who they are."},
+      {"type": "p", "text": "A **subject** keeps a list of **observers** that registered with it. When its state changes it calls each one through a small interface. Subject and observers are loosely coupled: observers can be added or removed at runtime, and the subject needs no knowledge of what they do."},
+      {"type": "bullets", "items": [
+        "**Subject:** owns the state and the subscriber list.",
+        "**Observer:** reacts to a notification, through one interface.",
+        "**Direction:** push from subject, subscribe from observer."]},
+      {"type": "callout", "tone": "warning", "text": "Every observer you forget to unsubscribe is a memory leak (the lapsed listener problem)."}
+    ]},
+    {"role": "implementation", "file": "Observer.java",
+     "expectedOutput": "ALERT ACME at 120\n[ACME 100->105, ACME 105->120]",
+     "walkthrough": [
+      {"region": "observer", "note": "The observer is a one-method functional interface. The subject depends only on this contract, so a lambda is a complete observer."},
+      {"region": "subject", "note": "`subscribe` returns a cancellation handle, which makes unsubscribing explicit. `CopyOnWriteArrayList` lets listeners subscribe or cancel during a notification without a concurrent modification error."},
+      {"region": "subscribe", "note": "Two unrelated observers register. The ticker knows neither: one records history, the other raises alerts above a threshold."},
+      {"region": "unsubscribe", "note": "Cancelling removes only the logger. The later change to `90` notifies the alert listener alone and the log stays unchanged."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Reacting to configuration changes in a running service."},
+      {"type": "p", "text": "A config service reloads feature flags and rate limits from a remote store. The HTTP client pool, the cache and the metrics exporter each need to adapt when values change, but the service should not know about any of them. Each component subscribes to the keys it cares about and applies the change itself. Components that shut down cancel their subscription so they can be collected."},
+      {"type": "code", "language": "java", "lines": [
+        "Runnable cancel = config.subscribe(\"http.maxConnections\", v -> {",
+        "    pool.resize(Integer.parseInt(v));",
+        "});",
+        "",
+        "// on shutdown",
+        "cancel.run();"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: new consumers of a setting need no change to the config service, and settings update live with no restart."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "subj", "name": "Ticker", "kind": "class", "role": "Subject", "col": 0, "row": 0,
+         "members": ["- listeners: List", "+ subscribe(l): Runnable", "+ set(price)"]},
+        {"id": "obs", "name": "PriceListener", "kind": "interface", "role": "Observer", "col": 1, "row": 0,
+         "members": ["+ onChange(sym, old, new)"]},
+        {"id": "log", "name": "HistoryLog", "kind": "class", "role": "ConcreteObserver", "col": 0, "row": 1,
+         "members": ["+ onChange(...)"]},
+        {"id": "alert", "name": "AlertRule", "kind": "class", "role": "ConcreteObserver", "col": 1, "row": 1,
+         "members": ["+ onChange(...)"]}],
+       "edges": [
+        {"from": "subj", "to": "obs", "rel": "aggregation", "label": "notifies"},
+        {"from": "log", "to": "obs", "rel": "realizes"},
+        {"from": "alert", "to": "obs", "rel": "realizes"}],
+       "notes": [{"attachTo": "obs", "text": "a lambda also implements it"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "c", "name": "Client"}, {"id": "s", "name": "Ticker", "role": "Subject"},
+        {"id": "a", "name": "HistoryLog", "role": "Observer"}, {"id": "b", "name": "AlertRule", "role": "Observer"}],
+       "messages": [
+        {"from": "a", "to": "s", "label": "subscribe(this)", "style": "call"},
+        {"from": "b", "to": "s", "label": "subscribe(this)", "style": "call"},
+        {"from": "c", "to": "s", "label": "set(120)", "style": "call"},
+        {"from": "s", "to": "a", "label": "onChange(...)", "style": "call"},
+        {"from": "s", "to": "b", "label": "onChange(...)", "style": "call"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "A change in one object must update several others you cannot enumerate.",
+        "Dependents come and go at runtime.",
+        "The subject should stay ignorant of what its listeners do."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "There is a single, fixed dependent: call it directly.",
+        "Order or atomicity across reactions matters; hidden chains are hard to reason about."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Lapsed listeners: forgotten subscriptions keep objects alive and leak memory.",
+        "A slow or throwing observer blocks or breaks notification for the rest.",
+        "Observers that mutate the subject cause re-entrant cascades and loops.",
+        "Notification order is unspecified; do not depend on it."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "`java.util.Observable` and `Observer` are deprecated since Java 9; use your own interface or `java.beans.PropertyChangeListener`.",
+        "`java.util.concurrent.Flow` and reactive libraries add back-pressure to the same idea."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "mediator", "relation": "oftenConfused", "difference": "Observer is one-to-many broadcast with no coordination logic. A mediator knows its participants and holds the rules of who talks to whom. Mediators are often built on observers."},
+      {"ref": "chain-of-responsibility", "relation": "alternative", "difference": "A chain gives a request to one handler that may claim it. Observer informs all subscribers, and each reacts independently."},
+      {"ref": "domain-event", "relation": "specializes", "difference": "A domain event is a notification expressing something that happened in the business model, often published to many handlers inside or across boundaries."},
+      {"ref": "iterator", "relation": "oftenConfused", "difference": "An iterator is pulled by the client. An observer is pushed to by the subject when something happens."},
+      {"ref": "command", "relation": "combines", "difference": "Notifications can carry commands or events as payloads, which observers queue, log or replay."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.beans.PropertyChangeSupport", "detail": "Beans fire `PropertyChangeEvent`s to registered `PropertyChangeListener`s."},
+      {"where": "JDK", "name": "java.util.concurrent.Flow", "detail": "`Publisher` and `Subscriber` interfaces define asynchronous observation with back-pressure."},
+      {"where": "JDK", "name": "java.awt.event.ActionListener", "detail": "Swing and AWT components notify registered listeners via `addActionListener`."},
+      {"where": "Spring", "name": "ApplicationListener", "detail": "Beans receive `ApplicationEvent`s published through `ApplicationEventPublisher`, including `@EventListener` methods."},
+      {"where": "Kubernetes", "name": "Watch API", "detail": "Clients and controllers subscribe to resource changes and receive an event stream instead of polling."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Thermostat {",
+      "    private final List<Consumer<Double>> hooks = new ArrayList<>();",
+      "    private double celsius;",
+      "",
+      "    void onChange(Consumer<Double> hook) { hooks.add(hook); }",
+      "",
+      "    void set(double c) {",
+      "        celsius = c;",
+      "        for (var h : hooks) h.accept(c);",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "observer", "correct": true, "why": "Callers register callbacks, and a state change pushes to all of them without the source knowing them."},
+      {"ref": "mediator", "why": "No central object coordinates multiple peers or holds interaction rules; it only broadcasts."},
+      {"ref": "strategy", "why": "The callbacks are not alternatives for one algorithm; all of them run on every change."},
+      {"ref": "command", "why": "Nothing is queued or undone; callbacks are notified of a change as it happens."}],
+     "compile": {"template": [
+      "import java.util.*;", "import java.util.function.Consumer;",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "An order service must tell inventory, billing emails and analytics when an order is placed. New consumers appear every sprint, and the order service team does not want to change code or know about them.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "observer", "correct": true, "why": "A one-to-many notification with subscribers added independently; the publisher stays unchanged."},
+      {"ref": "mediator", "why": "The consumers do not need to talk to each other; a mediator would centralize rules nobody asked for."},
+      {"ref": "chain-of-responsibility", "why": "Every consumer must react, not just the first one that handles the request."},
+      {"ref": "template-method", "why": "A fixed skeleton with inherited steps would force the order service to name every consumer."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Observer pattern.",
+     "lines": [
+      "final class Stock {",
+      "    private final List<Runnable> listeners = new ArrayList<>();",
+      "    private int level;",
+      "",
+      "    void subscribe(Runnable r) { listeners.add(r); }",
+      "",
+      "    void set(int level) {",
+      "        this.level = level;",
+      "        for (Runnable r : listeners) {",
+      "            if (r != null) r.run();",
+      "            listeners.remove(r);",
+      "        }",
+      "    }",
+      "}"],
+     "flawLines": [11],
+     "explanation": "Removing from the list while iterating throws `ConcurrentModificationException` and also silently drops observers after one notification. Keep subscriptions until cancelled; use `CopyOnWriteArrayList` if observers may unsubscribe during a callback.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the lifecycle of a subscription.",
+     "blocks": [
+      ["Runnable cancel = ticker.subscribe(listener);"],
+      ["ticker.set(105);"],
+      ["cancel.run();"],
+      ["ticker.set(90);"]],
+     "explanation": "A subscription must exist before it can receive events or be cancelled. Changes made after cancelling no longer reach the listener, so the last set comes last.",
+     "compile": {"template": [
+      "interface PriceListener { void onChange(String s, int o, int n); }",
+      "final class Ticker { Runnable subscribe(PriceListener l) { return () -> {}; } void set(int p) {} }",
+      "class Snippet { void run(Ticker ticker, PriceListener listener) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Observer in your own words: who knows whom, how observers come and go, and the biggest runtime risk.",
+     "modelAnswer": [
+      {"type": "p", "text": "A subject keeps a list of observers behind a small interface and notifies them on change. The subject does not know what they do, and observers subscribe and unsubscribe at runtime. The classic risk is the lapsed listener: forgotten subscriptions leak memory, and slow or throwing observers affect others."}],
+     "keyPoints": [
+      "Subject knows only the observer interface",
+      "Observers subscribe and unsubscribe at runtime",
+      "Push-based, one-to-many",
+      "Lapsed listeners leak memory",
+      "Mediator coordinates; Observer only notifies"]}
+  ]
+}

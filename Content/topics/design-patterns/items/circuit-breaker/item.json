@@ -1,0 +1,489 @@
+{
+ "id": "circuit-breaker",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Stop calling a failing dependency for a while, failing fast or falling back, then probe carefully to see whether it recovered."
+    },
+    {
+     "type": "p",
+     "text": "A **breaker** wraps calls and counts failures. In **closed** state calls pass through. After enough consecutive failures it **opens**: calls are rejected instantly, which spares the dependency and frees your threads. After a cool-down it goes **half-open** and lets one probe through to decide."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Closed:** normal; failures are counted.",
+      "**Open:** reject immediately or use a fallback.",
+      "**Half-open:** one trial call; success closes, failure reopens."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Breakers react to measured failure, unlike a timeout that bounds one call. Production breakers usually trip on a failure rate over a sliding window."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "CircuitBreaker.java",
+   "expectedOutput": "0 cached CLOSED 1\n0 cached CLOSED 2\n0 cached OPEN 3\n100 cached OPEN 3\n1000 cached OPEN 4\n1500 cached OPEN 4\n2000 live CLOSED 5\n2100 live CLOSED 6",
+   "walkthrough": [
+    {
+     "region": "state",
+     "note": "Three states are the whole model. Closed passes calls, open rejects them, half-open admits a single probe."
+    },
+    {
+     "region": "call",
+     "note": "The operation runs outside any lock. Success or failure is reported back; a rejected call gets the fallback without touching the dependency."
+    },
+    {
+     "region": "permit",
+     "note": "The admission gate. An open breaker whose cool-down elapsed flips to half-open, and only that caller is the probe. Concurrent callers see half-open and are rejected."
+    },
+    {
+     "region": "record",
+     "note": "Success closes and clears the count. A failed probe, or the threshold-th consecutive failure, opens and stamps the time from the injected clock."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A product page that shows recommendations."
+    },
+    {
+     "type": "p",
+     "text": "The page calls a recommendation service that sometimes degrades and answers in ten seconds. Without a breaker every page view burns a thread waiting. With one, after a few failures the page stops asking and shows a static bestseller list for thirty seconds. Then a single request probes the service, and the personalized list returns when it is healthy again."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "var reco = new CircuitBreaker(5, 30_000, System::currentTimeMillis);",
+      "List<Item> items = reco.call(",
+      "    () -> recommender.forUser(userId),",
+      "    () -> bestsellers.top(10));"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: a degraded dependency costs the page some personalization instead of its latency and its thread pool."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "cb",
+       "name": "CircuitBreaker",
+       "kind": "class",
+       "role": "Breaker",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "- state: State",
+        "- failures: int",
+        "+ call(op, fallback): T"
+       ]
+      },
+      {
+       "id": "state",
+       "name": "State",
+       "kind": "enum",
+       "role": "State",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "CLOSED",
+        "OPEN",
+        "HALF_OPEN"
+       ]
+      },
+      {
+       "id": "op",
+       "name": "Supplier<T>",
+       "kind": "interface",
+       "role": "Protected call",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ get(): T"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "cb",
+       "to": "state",
+       "rel": "composition",
+       "label": "current"
+      },
+      {
+       "from": "cb",
+       "to": "op",
+       "rel": "dependency",
+       "label": "guards"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "cb",
+       "text": "clock injected for tests"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "cb",
+       "name": "Breaker",
+       "role": "Breaker"
+      },
+      {
+       "id": "dep",
+       "name": "Dependency"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "cb",
+       "label": "call() while closed",
+       "style": "call"
+      },
+      {
+       "from": "cb",
+       "to": "dep",
+       "label": "get()",
+       "style": "call"
+      },
+      {
+       "from": "dep",
+       "to": "cb",
+       "label": "failure x N",
+       "style": "return"
+      },
+      {
+       "from": "cb",
+       "to": "cb",
+       "label": "trip to OPEN",
+       "style": "call"
+      },
+      {
+       "from": "client",
+       "to": "cb",
+       "label": "call() while open",
+       "style": "call"
+      },
+      {
+       "from": "cb",
+       "to": "client",
+       "label": "fallback, no call",
+       "style": "return"
+      },
+      {
+       "from": "client",
+       "to": "cb",
+       "label": "call() after cool-down",
+       "style": "call"
+      },
+      {
+       "from": "cb",
+       "to": "dep",
+       "label": "probe (half-open)",
+       "style": "call"
+      },
+      {
+       "from": "dep",
+       "to": "cb",
+       "label": "ok: close",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "A dependency can fail slowly and drag callers down with it.",
+      "A reasonable fallback exists: cache, default, degraded feature.",
+      "Many callers share one dependency and should react together."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The call is local or cannot meaningfully fail independently.",
+      "There is no acceptable fallback and failing fast is no better than waiting."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Tripping on application errors like 404 instead of infrastructure failures.",
+      "One breaker for many endpoints, so a bad one blocks the healthy ones.",
+      "A fallback that itself calls the failing system.",
+      "Multi-instance breakers disagree; each instance learns on its own."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Breakers around in-process calls.",
+      "Thresholds never tuned, so the breaker flaps or never opens."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Use a library for sliding windows, slow-call thresholds and metrics; hand-rolled counters rarely get these right.",
+      "Combine it with [Timeout](kata:timeout): without one, a hung call never registers as a failure."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "retry-backoff",
+     "relation": "combines",
+     "difference": "Retry hides brief failures; the breaker stops the retrying when failures persist. Place the breaker so each retry attempt is counted."
+    },
+    {
+     "ref": "timeout",
+     "relation": "combines",
+     "difference": "Timeouts convert hangs into failures the breaker can count. Without them a slow dependency never looks failed."
+    },
+    {
+     "ref": "bulkhead",
+     "relation": "combines",
+     "difference": "A bulkhead caps concurrent calls to protect your resources; a breaker uses outcomes to stop calling. Use both."
+    },
+    {
+     "ref": "state",
+     "relation": "lookAlike",
+     "difference": "The breaker is a small state machine, but its transitions are driven by call outcomes and a clock, and its states only gate access."
+    },
+    {
+     "ref": "proxy",
+     "relation": "specializes",
+     "difference": "A breaker is a protection proxy around a remote call that decides whether the call may happen."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Resilience4j",
+     "name": "CircuitBreaker",
+     "detail": "Sliding window by count or time, `failureRateThreshold`, `waitDurationInOpenState`, and `HALF_OPEN` trial calls."
+    },
+    {
+     "where": "Spring Cloud",
+     "name": "Spring Cloud CircuitBreaker",
+     "detail": "A common abstraction (`CircuitBreakerFactory`) over Resilience4j and other implementations."
+    },
+    {
+     "where": "Envoy",
+     "name": "circuit_breakers and outlier_detection",
+     "detail": "Cluster-level limits plus ejection of hosts that return consecutive 5xx errors."
+    },
+    {
+     "where": "Istio",
+     "name": "DestinationRule outlierDetection",
+     "detail": "`consecutive5xxErrors` and `baseEjectionTime` eject unhealthy endpoints from the load-balancing pool."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "<T> T guarded(Supplier<T> op, Supplier<T> other) {",
+    "    if (blockedUntil > clock.getAsLong()) return other.get();",
+    "    try {",
+    "        T r = op.get();",
+    "        misses = 0;",
+    "        return r;",
+    "    } catch (RuntimeException e) {",
+    "        if (++misses >= 5) blockedUntil = clock.getAsLong() + 30_000;",
+    "        return other.get();",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "circuit-breaker",
+     "correct": true,
+     "why": "Consecutive failures trip a blocked window during which the call is skipped and a substitute is used."
+    },
+    {
+     "ref": "retry-backoff",
+     "why": "The operation is never re-invoked after a failure; a substitute result is returned instead."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "Blocking depends on failure counts, not on how many requests arrived per unit of time."
+    },
+    {
+     "ref": "bulkhead",
+     "why": "Nothing limits concurrency; the gate is driven by past failures."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.function.*;",
+     "class Snippet {",
+     "    LongSupplier clock = System::nanoTime;",
+     "    long blockedUntil;",
+     "    int misses;",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A payments gateway starts answering every request after 20 seconds. Your checkout service keeps sending traffic, its worker threads are all blocked, and unrelated pages are timing out too. Once the gateway recovers, you want traffic to resume without operator action.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "circuit-breaker",
+     "correct": true,
+     "why": "It detects the sustained failure, fails fast to free threads, and probes automatically for recovery."
+    },
+    {
+     "ref": "retry-backoff",
+     "why": "Retrying a dependency that is slow for everyone adds load and ties up even more threads."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "The problem is not too much inbound traffic; it is a dependency that stopped answering."
+    },
+    {
+     "ref": "cache-aside",
+     "why": "Payment authorization cannot be served from a cache."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the half-open state.",
+   "lines": [
+    "synchronized boolean permit() {",
+    "    if (state == State.OPEN && elapsed() >= openMs) {",
+    "        state = State.HALF_OPEN;",
+    "    }",
+    "    return state != State.OPEN;",
+    "}",
+    "// HALF_OPEN is meant to admit exactly one probe"
+   ],
+   "flawLines": [
+    5
+   ],
+   "explanation": "`state != OPEN` also admits every caller while half-open, so a flood hits the still-unhealthy dependency. Return true only for the caller that flipped the state, and false for others until the probe finishes.",
+   "compile": {
+    "template": [
+     "class Snippet {",
+     "    enum State { CLOSED, OPEN, HALF_OPEN }",
+     "    State state = State.OPEN;",
+     "    long openMs = 1000;",
+     "    long elapsed() { return 2000; }",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the breaker's call path for a closed breaker.",
+   "blocks": [
+    [
+     "if (!permit()) return fallback.get();"
+    ],
+    [
+     "try {",
+     "    T result = op.get();"
+    ],
+    [
+     "    record(true);",
+     "    return result;"
+    ],
+    [
+     "} catch (RuntimeException e) {",
+     "    record(false);"
+    ],
+    [
+     "    return fallback.get();",
+     "}"
+    ]
+   ],
+   "explanation": "Ask permission first, then run the operation. Success is recorded before returning; failure is recorded in the catch before the fallback is used.",
+   "compile": {
+    "template": [
+     "import java.util.function.Supplier;",
+     "class Snippet {",
+     "    boolean permit() { return true; }",
+     "    void record(boolean ok) {}",
+     "    <T> T call(Supplier<T> op, Supplier<T> fallback) {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Describe the three breaker states and what a breaker adds beyond a timeout and a retry.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Closed passes calls and counts failures; open rejects calls immediately or uses a fallback; half-open admits one probe after a cool-down. A timeout bounds one call and a retry repeats it. The breaker uses accumulated failures to stop calling at all, protecting the dependency and your threads."
+    }
+   ],
+   "keyPoints": [
+    "Closed, open and half-open",
+    "Trips on accumulated failures, not one call",
+    "Open means fail fast or fallback",
+    "Half-open admits a single probe",
+    "Complements timeouts and retries, not replaces them"
+   ]
+  }
+ ]
+}

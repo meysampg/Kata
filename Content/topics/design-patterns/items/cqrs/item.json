@@ -1,0 +1,490 @@
+{
+ "id": "cqrs",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Use one model to change state and a different one to read it, each shaped for its job."
+    },
+    {
+     "type": "p",
+     "text": "**CQRS** splits the write side, which validates commands and protects invariants, from the read side, which serves queries from denormalized models built for the screens. Queries never change state, commands return little. The read model is usually updated from events and may lag behind the write model."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Commands:** intent to change state; may be rejected.",
+      "**Queries:** side-effect free, shaped for the consumer.",
+      "**Bridge:** events or change feeds update read models, often asynchronously."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Eventual consistency is the price: a user may read stale data right after writing it."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Cqrs.java",
+   "expectedOutput": "before: 0\nafter: 2500\n[ada=2500, bob=700]\nrejected: duplicate o1",
+   "walkthrough": [
+    {
+     "region": "messages",
+     "note": "Two message kinds: a command states intent and may fail; an event states a fact. They are separate types because they have different lifetimes."
+    },
+    {
+     "region": "write",
+     "note": "The write side validates, enforces uniqueness and appends an event. It has no query methods apart from exposing its event log."
+    },
+    {
+     "region": "read",
+     "note": "The read side is a denormalized revenue-per-customer map. `catchUp` applies only events it has not seen, like a projector following a feed."
+    },
+    {
+     "region": "client",
+     "note": "Reading before `catchUp` returns 0: the read model lags by design. After it catches up, queries see all three orders."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Seat availability search for an airline."
+    },
+    {
+     "type": "p",
+     "text": "Booking a seat needs strict locking, fare rules and payment checks on a normalized relational model. Search must answer 'which flights have two adjacent seats on Friday' in milliseconds for thousands of users. The booking service stays authoritative, and each confirmed booking emits an event that updates a denormalized search index. Search tolerates a second of lag, booking never accepts one."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "bookingService.handle(new HoldSeat(flight, seat, user));",
+      "// event: SeatHeld -> projector -> search index",
+      "List<FlightHit> hits = searchIndex.findAdjacent(date, 2);"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: each side scales and evolves independently; search latency no longer competes with booking correctness."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "ui",
+       "name": "Client",
+       "kind": "class",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "sends commands",
+        "asks queries"
+       ],
+       "role": "Client"
+      },
+      {
+       "id": "cmd",
+       "name": "OrderCommands",
+       "kind": "class",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ handle(PlaceOrder)",
+        "- ids: Set",
+        "- log: List"
+       ],
+       "role": "Command side"
+      },
+      {
+       "id": "qry",
+       "name": "RevenueView",
+       "kind": "class",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ revenue(customer)",
+        "+ top(n)",
+        "+ catchUp(log)"
+       ],
+       "role": "Query side"
+      },
+      {
+       "id": "evt",
+       "name": "OrderPlaced",
+       "kind": "record",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "orderId, customer, cents"
+       ],
+       "role": "Event"
+      }
+     ],
+     "edges": [
+      {
+       "from": "ui",
+       "to": "cmd",
+       "rel": "association",
+       "label": "commands"
+      },
+      {
+       "from": "ui",
+       "to": "qry",
+       "rel": "association",
+       "label": "queries"
+      },
+      {
+       "from": "cmd",
+       "to": "evt",
+       "rel": "dependency",
+       "label": "emits"
+      },
+      {
+       "from": "qry",
+       "to": "evt",
+       "rel": "dependency",
+       "label": "projects"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "c",
+       "name": "Client"
+      },
+      {
+       "id": "w",
+       "name": "Commands",
+       "role": "Command side"
+      },
+      {
+       "id": "r",
+       "name": "RevenueView",
+       "role": "Query side"
+      }
+     ],
+     "messages": [
+      {
+       "from": "c",
+       "to": "w",
+       "label": "handle(PlaceOrder)",
+       "style": "call"
+      },
+      {
+       "from": "w",
+       "to": "w",
+       "label": "validate, append event",
+       "style": "call"
+      },
+      {
+       "from": "c",
+       "to": "r",
+       "label": "revenue(ada)",
+       "style": "call"
+      },
+      {
+       "from": "r",
+       "to": "c",
+       "label": "0 (stale)",
+       "style": "return"
+      },
+      {
+       "from": "w",
+       "to": "r",
+       "label": "catchUp(log)",
+       "style": "async"
+      },
+      {
+       "from": "c",
+       "to": "r",
+       "label": "revenue(ada)",
+       "style": "call"
+      },
+      {
+       "from": "r",
+       "to": "c",
+       "label": "2500",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Read and write workloads differ sharply in shape or scale.",
+      "Queries need joins or aggregates the write model would struggle to serve.",
+      "Different teams own the command and query sides."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The domain is plain CRUD; one model is simpler and enough.",
+      "Users must read their own writes immediately everywhere."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Showing stale data after a write without telling the user.",
+      "Read models that cannot be rebuilt from a source of truth.",
+      "Separate stores adopted before a real need appears.",
+      "Queries that quietly mutate state."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Two services and a message bus for a screen that one SQL view would serve.",
+      "A command bus and projections for an app with five CRUD screens."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "You can apply CQRS in one process: separate command handlers and query classes over a single database first.",
+      "Records fit commands, events and read-model rows; virtual threads make simple synchronous projectors cheap."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "event-sourcing",
+     "relation": "combines",
+     "difference": "CQRS needs a feed to update read models; event sourcing supplies it. Each works alone: CQRS with plain state tables, event sourcing with one read model."
+    },
+    {
+     "ref": "domain-event",
+     "relation": "combines",
+     "difference": "Domain events are the usual bridge that updates the read model after a command succeeds."
+    },
+    {
+     "ref": "transactional-outbox",
+     "relation": "combines",
+     "difference": "An outbox makes the write-to-read feed reliable without losing events on crash."
+    },
+    {
+     "ref": "cache-aside",
+     "relation": "lookAlike",
+     "difference": "A cache is a disposable copy filled on demand. A read model is a purpose-built store that is kept current by projections."
+    },
+    {
+     "ref": "command",
+     "relation": "oftenConfused",
+     "difference": "A CQRS command is a message expressing intent. The GoF Command is an object encapsulating an operation to run or undo."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Axon Framework",
+     "name": "CommandGateway and QueryGateway",
+     "detail": "Route commands to aggregates and queries to projections as separate messaging paths."
+    },
+    {
+     "where": "MediatR (.NET)",
+     "name": "IRequest and INotification",
+     "detail": "Separate command and query handlers in one process, a common starting point for CQRS."
+    },
+    {
+     "where": "PostgreSQL",
+     "name": "MATERIALIZED VIEW",
+     "detail": "A precomputed read model refreshed with `REFRESH MATERIALIZED VIEW`."
+    },
+    {
+     "where": "Kafka Streams",
+     "name": "KTable",
+     "detail": "Materializes a queryable read model from an event topic."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class ProfileCommands {",
+    "    private final Map<UUID, Profile> writeStore = new HashMap<>();",
+    "    private final List<Renamed> feed = new ArrayList<>();",
+    "    void rename(UUID id, String name) {",
+    "        Profile p = writeStore.get(id).renamed(name);",
+    "        writeStore.put(id, p);",
+    "        feed.add(new Renamed(id, name));",
+    "    }",
+    "}",
+    "final class ProfileQueries {",
+    "    private final Map<UUID, ProfileCard> cards = new HashMap<>();",
+    "    ProfileCard card(UUID id) { return cards.get(id); }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "cqrs",
+     "correct": true,
+     "why": "State changes go through a write model, reads come from a separate, denormalized model fed by the changes."
+    },
+    {
+     "ref": "repository",
+     "why": "A repository offers one collection-like abstraction for both loading and storing; here they are split."
+    },
+    {
+     "ref": "event-sourcing",
+     "why": "State is stored directly in `writeStore`; the feed is a notification, not the source of truth."
+    },
+    {
+     "ref": "dto",
+     "why": "`ProfileCard` is a read shape, but the pattern is the split of models, not the carrier."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Profile(String name) { Profile renamed(String n) { return new Profile(n); } }",
+     "record Renamed(UUID id, String name) {}",
+     "record ProfileCard(String name) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A reporting dashboard is slow: it joins six tables on the same normalized model that serves transactional writes. Reads outnumber writes 100 to 1, and the business accepts a few seconds of staleness.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "cqrs",
+     "correct": true,
+     "why": "A separate, denormalized read model tuned for the dashboard removes read load from the write model."
+    },
+    {
+     "ref": "repository",
+     "why": "A repository hides storage but does not change the model, so the six-table join remains."
+    },
+    {
+     "ref": "event-sourcing",
+     "why": "It changes how state is stored, not how reads are served; you would still need read models."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "Mapping is orthogonal; it does not provide a faster read shape."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the CQRS pattern.",
+   "lines": [
+    "final class StockView {",
+    "    private final Map<String, Integer> onHand = new HashMap<>();",
+    "",
+    "    int available(String sku) {",
+    "        onHand.merge(sku, -1, Integer::sum);",
+    "        return onHand.getOrDefault(sku, 0);",
+    "    }",
+    "",
+    "    void on(Received e) { onHand.merge(e.sku(), e.qty(), Integer::sum); }",
+    "}"
+   ],
+   "flawLines": [
+    5
+   ],
+   "explanation": "A query decrements stock, so reading changes state. Queries must be side-effect free; make reserving a command on the write side and let the view update from its event.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record Received(String sku, int qty) {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the flow so each line only uses what came before.",
+   "blocks": [
+    [
+     "var commands = new OrderCommands();",
+     "var view = new RevenueView();"
+    ],
+    [
+     "commands.handle(new PlaceOrder(\"o9\", \"ada\", 500));"
+    ],
+    [
+     "view.catchUp(commands.log());"
+    ],
+    [
+     "int total = view.revenue(\"ada\");"
+    ],
+    [
+     "System.out.println(total);"
+    ]
+   ],
+   "explanation": "A command appends an event first; the view can only project events that exist; the query reads the projected result.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "record PlaceOrder(String id, String customer, int cents) {}",
+     "final class OrderCommands { void handle(PlaceOrder c) {} List<String> log() { return List.of(); } }",
+     "final class RevenueView { void catchUp(List<String> log) {} int revenue(String c) { return 0; } }",
+     "class Snippet { void run() {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain CQRS in your own words: what is split, what keeps the two sides in sync, and what is the cost?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "CQRS separates the model that handles commands and protects invariants from the models that serve queries. Read models are denormalized for consumers and updated from events or a change feed. The cost is eventual consistency and extra moving parts, so use it only when read and write needs genuinely diverge."
+    }
+   ],
+   "keyPoints": [
+    "Separate write model and read models",
+    "Commands change state; queries never do",
+    "Events or feeds update read models",
+    "Cost: eventual consistency and complexity",
+    "Useful only when read and write needs diverge"
+   ]
+  }
+ ]
+}

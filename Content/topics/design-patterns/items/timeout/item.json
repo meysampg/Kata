@@ -1,0 +1,166 @@
+{
+  "id": "timeout",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Bound how long a caller waits for an operation, so a slow dependency cannot hold its threads and its own callers hostage."},
+      {"type": "p", "text": "Every remote call needs an upper bound, because a hung call holds a thread, a connection and a user. Per-call timeouts are not enough: a request that makes five calls needs one **deadline** for the whole request, and each call gets what is left of it."},
+      {"type": "bullets", "items": [
+        "**Connect timeout:** how long to establish the connection; usually short.",
+        "**Read (socket) timeout:** the longest gap without data, not the total time.",
+        "**Deadline:** an absolute point in time, propagated downstream."]},
+      {"type": "callout", "tone": "warning", "text": "A timeout abandons the wait, not the work. The remote side may still complete, so a timed-out write has an unknown outcome."}
+    ]},
+    {"role": "implementation", "file": "Timeout.java",
+     "expectedOutput": "auth:ok left=260\nstock:ok left=140\ntimeout: price > 140ms\ntimeout: deadline exceeded",
+     "walkthrough": [
+      {"region": "deadline", "note": "A deadline is an absolute instant read from an injected `Clock`. `remaining()` is what the request may still spend."},
+      {"region": "dependency", "note": "A scripted fake: if its latency exceeds the timeout it burns exactly the timeout on the fake clock and fails, otherwise it burns its latency."},
+      {"region": "client", "note": "Each call receives `cap(perCall)`: the smaller of its own limit and the remaining budget. No call can outlive the request."},
+      {"region": "budget", "note": "A 300 ms budget: auth leaves 260, stock leaves 140, price is capped at 140 ms rather than its own 250 ms, and audit fails fast without calling."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A checkout page that fans out to four services."},
+      {"type": "p", "text": "The gateway promises the browser a response within two seconds. It calls pricing, stock, loyalty and fraud in sequence. Without a shared deadline, four calls with a 1.5 s limit each can take six seconds, long after the browser gave up. The gateway stamps a deadline on the request and every outbound call carries the remaining budget, in gRPC as the deadline itself."},
+      {"type": "code", "language": "java", "lines": [
+        "Deadline d = Deadline.in(clock, Duration.ofSeconds(2));",
+        "Price p = pricing.quote(cart, d.cap(Duration.ofMillis(800)));",
+        "Stock s = stock.check(cart, d.cap(Duration.ofMillis(800)));",
+        "// loyalty and fraud get whatever is left, or fail fast"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: worst-case latency is the budget, and work for a caller that has already left is never started."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "role": "Caller", "col": 0, "row": 0,
+         "members": ["+ fetch(deadline, dep)"]},
+        {"id": "deadline", "name": "Deadline", "kind": "record", "role": "Budget", "col": 1, "row": 0,
+         "members": ["+ remaining(): Duration", "+ cap(perCall): Duration"]},
+        {"id": "dep", "name": "Dependency", "kind": "interface", "role": "Remote", "col": 0, "row": 1,
+         "members": ["+ call(timeout)"]},
+        {"id": "clock", "name": "Clock", "kind": "abstract", "role": "Time source", "col": 1, "row": 1,
+         "members": ["+ instant(): Instant"]}],
+       "edges": [
+        {"from": "client", "to": "deadline", "rel": "dependency", "label": "cap"},
+        {"from": "client", "to": "dep", "rel": "dependency", "label": "call"},
+        {"from": "deadline", "to": "clock", "rel": "association", "label": "reads"}],
+       "notes": [{"attachTo": "dep", "text": "throws on timeout"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "deadline", "name": "Deadline", "role": "Budget"},
+        {"id": "dep", "name": "Dependency", "role": "Remote"}],
+       "messages": [
+        {"from": "client", "to": "deadline", "label": "cap(250ms)", "style": "call"},
+        {"from": "deadline", "to": "client", "label": "140ms left", "style": "return"},
+        {"from": "client", "to": "dep", "label": "call(140ms)", "style": "call"},
+        {"from": "dep", "to": "client", "label": "TimeoutException", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Any call crosses a process or network boundary.",
+        "A request fans out and must answer within a promised latency.",
+        "A slow dependency is worse than a failed one."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "The operation is a local, bounded computation.",
+        "Cancelling mid-way leaves a non-idempotent write in an unknown state."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "No timeout at all: many default clients wait forever.",
+        "Stacked timeouts where the inner exceeds the outer, so the inner never fires first.",
+        "Retrying a timed-out call that is not idempotent."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "One global 30 s timeout copied everywhere regardless of real latency.",
+        "Timeouts so tight that normal tail latency trips them constantly."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "`HttpRequest.timeout`, `HttpClient.connectTimeout` and `CompletableFuture.orTimeout` cover most cases.",
+        "`StructuredTaskScope.joinUntil(Instant)` applies one deadline to a whole group of subtasks (preview API)."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "retry-backoff", "relation": "combines", "difference": "A timeout turns an unbounded wait into a failure; a retry decides what to do with that failure. Each attempt needs its own timeout inside the overall deadline."},
+      {"ref": "circuit-breaker", "relation": "combines", "difference": "Timeouts are the failures a breaker counts. The timeout bounds one call; the breaker stops making calls once timeouts pile up."},
+      {"ref": "bulkhead", "relation": "oftenConfused", "difference": "A bulkhead limits how many calls run at once; a timeout limits how long one call may run. Without timeouts, a bulkhead's permits are held forever."},
+      {"ref": "rate-limiter", "relation": "oftenConfused", "difference": "A rate limiter bounds how often requests start. A timeout bounds how long each one may take."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "HttpRequest.Builder.timeout", "detail": "Bounds the wait for a response; `HttpClient.Builder.connectTimeout` bounds connection setup."},
+      {"where": "JDK", "name": "CompletableFuture.orTimeout", "detail": "Completes the future exceptionally with `TimeoutException` after the given delay."},
+      {"where": "JDK", "name": "Future.get(long, TimeUnit)", "detail": "Waits at most the given time and throws `TimeoutException`; the task itself keeps running unless cancelled."},
+      {"where": "gRPC", "name": "Deadline", "detail": "`io.grpc.Deadline` is an absolute point in time that is propagated to servers and downstream calls."},
+      {"where": "Resilience4j", "name": "TimeLimiter", "detail": "Wraps a `Future` or `CompletionStage` and fails it with `TimeoutException` after the configured duration."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "Duration call(Remote remote, Instant giveUpAt, Clock clock) throws Exception {",
+      "    Duration left = Duration.between(clock.instant(), giveUpAt);",
+      "    if (left.isNegative() || left.isZero()) {",
+      "        throw new TimeoutException(\"out of time\");",
+      "    }",
+      "    Future<String> f = pool.submit(remote::fetch);",
+      "    try {",
+      "        f.get(left.toMillis(), TimeUnit.MILLISECONDS);",
+      "    } catch (TimeoutException e) {",
+      "        f.cancel(true);",
+      "        throw e;",
+      "    }",
+      "    return left;",
+      "}"],
+     "options": [
+      {"ref": "timeout", "correct": true, "why": "The wait is bounded by an absolute give-up time, and the call is cancelled when the budget runs out."},
+      {"ref": "retry-backoff", "why": "Nothing is attempted again after the failure; the exception is rethrown."},
+      {"ref": "circuit-breaker", "why": "There is no failure counter or open/closed state; each call is judged only by its own budget."},
+      {"ref": "bulkhead", "why": "No permits or pools limit concurrency; the code only limits how long one call may take."}],
+     "compile": {"template": [
+      "import java.time.*;", "import java.util.concurrent.*;",
+      "interface Remote { String fetch() throws Exception; }",
+      "class Snippet {", "    ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();",
+      "{{code}}", "}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A search endpoint promises answers within 500 ms and queries three shards one after another. When one shard is slow, the endpoint's own callers pile up and their threads are all blocked waiting.",
+     "prompt": "What is the first thing to add?",
+     "options": [
+      {"ref": "timeout", "correct": true, "why": "A request deadline split across the shard calls bounds the wait, so threads are freed on time."},
+      {"ref": "retry-backoff", "why": "Retrying a slow shard adds load and latency to a request that is already out of time."},
+      {"ref": "rate-limiter", "why": "Callers are not sending too many requests; they are waiting too long on one dependency."},
+      {"ref": "cache-aside", "why": "Caching might hide the slow shard for hot queries, but does nothing for cold ones."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that defeats the deadline.",
+     "lines": [
+      "String search(Deadline d, Shard a, Shard b) throws TimeoutException {",
+      "    Duration left = d.remaining();",
+      "    String x = a.query(left);",
+      "    String y = b.query(left);",
+      "    return x + y;",
+      "}",
+      "// Deadline.remaining() is evaluated once",
+      "// a.query(t) and b.query(t) may each wait up to t"],
+     "flawLines": [4],
+     "explanation": "The remaining budget was read once, before the first call. After `a` consumes part of it, `b` still gets the full amount. Call `d.remaining()` again before each call.",
+     "compile": {"template": [
+      "import java.time.Duration;", "import java.util.concurrent.TimeoutException;",
+      "interface Deadline { Duration remaining(); }",
+      "interface Shard { String query(Duration t) throws TimeoutException; }",
+      "class Snippet {", "{{code}}", "}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the steps of one call guarded by a request deadline.",
+     "blocks": [
+      ["Duration left = deadline.remaining();"],
+      ["if (left.isNegative()) throw new TimeoutException();"],
+      ["Duration limit = left.compareTo(perCall) < 0 ? left : perCall;"],
+      ["String body = client.fetch(url, limit);"],
+      ["return parse(body);"]],
+     "explanation": "Read the remaining budget, fail fast when it is gone, derive this call's limit from it, make the call with that limit, then use the result.",
+     "compile": {"template": [
+      "import java.time.Duration;", "import java.util.concurrent.TimeoutException;",
+      "interface Deadline { Duration remaining(); }",
+      "interface Client { String fetch(String url, Duration t) throws TimeoutException; }",
+      "class Snippet {",
+      "  Object run(Deadline deadline, Duration perCall, Client client, String url) throws TimeoutException {",
+      "{{code}}", "  }", "  Object parse(String s) { return s; }", "}"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain why per-call timeouts are not enough, and what a timeout does not do.",
+     "modelAnswer": [
+      {"type": "p", "text": "Sequential calls each within their own limit can add up to far more than the caller will wait, so the request needs one deadline that every call is capped by. A timeout only stops waiting; the remote work may still finish, so a timed-out write has an unknown outcome and needs idempotency before any retry."}],
+     "keyPoints": [
+      "Every remote call needs an upper bound",
+      "One request deadline, with each call capped by the remaining budget",
+      "Connect, read and total time are different limits",
+      "A timeout abandons the wait, not the remote work",
+      "Timed-out writes have unknown outcome"]}
+  ]
+}

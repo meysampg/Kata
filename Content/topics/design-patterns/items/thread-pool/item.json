@@ -1,0 +1,486 @@
+{
+  "id": "thread-pool",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Reuse a fixed set of long-lived worker threads to run many short tasks, instead of starting a thread per task."
+        },
+        {
+          "type": "p",
+          "text": "A **thread pool** couples a task queue with N workers. Submitting a task is an enqueue; a free worker dequeues and runs it. Thread creation is paid once, and the pool size caps concurrency, so a flood of work waits in the queue instead of overwhelming the CPU, or the database behind it."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Sizing:** about the core count for CPU-bound work; larger only when tasks block.",
+            "**Queue and rejection policy** decide what happens under overload.",
+            "**Lifecycle:** shut the pool down, or its non-daemon threads keep the JVM alive."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "With virtual threads, one thread per task is cheap again for blocking I/O. Use a pool to cap concurrency or run CPU-bound work, not merely to save thread creation."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "ThreadPool.java",
+      "expectedOutput": "[0, 1, 4, 9, 16, 25, 36, 49]\nthreads used <= 3: true",
+      "walkthrough": [
+        {
+          "region": "pool",
+          "note": "The pool is an `Executor`: a bounded queue plus a fixed set of platform threads started in the constructor and reused for every task."
+        },
+        {
+          "region": "worker",
+          "note": "Each worker blocks on `take()` and runs tasks until it dequeues `STOP`. Catching `RuntimeException` keeps one failing task from killing its worker."
+        },
+        {
+          "region": "shutdown",
+          "note": "One `STOP` per worker is queued behind the pending tasks, so accepted work finishes first. Then every worker is joined."
+        },
+        {
+          "region": "submit",
+          "note": "Eight tasks, three workers. `execute` blocks when the 4-slot queue is full, throttling the submitter. `put` happens-before the worker's `take`."
+        },
+        {
+          "region": "join",
+          "note": "`Thread.join` makes the workers' writes to `squares` visible here, so the plain array is safe to read. Which worker ran which task is never printed."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A report service rendering PDFs with a licensed library."
+        },
+        {
+          "type": "p",
+          "text": "Each render is CPU heavy, and the vendor library tolerates at most eight concurrent calls. A pool of eight workers with a queue of 50 enforces that limit by construction. When the queue is full, `CallerRunsPolicy` makes the submitting request thread render the PDF itself, which slows new arrivals instead of failing them or buffering without limit. The pool is built once at startup and shared by all request threads."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "var pool = new ThreadPoolExecutor(",
+            "    8, 8, 0, TimeUnit.SECONDS,",
+            "    new ArrayBlockingQueue<>(50),",
+            "    new ThreadPoolExecutor.CallerRunsPolicy());",
+            "Future<Pdf> pdf = pool.submit(() -> renderer.render(order));"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: the vendor limit holds under any load, and overload slows callers down rather than crashing the service."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "client",
+              "name": "Client",
+              "kind": "class",
+              "role": "Client",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ execute(task)"
+              ]
+            },
+            {
+              "id": "exec",
+              "name": "Executor",
+              "kind": "interface",
+              "role": "Pool",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ execute(Runnable)"
+              ]
+            },
+            {
+              "id": "pool",
+              "name": "ThreadPool",
+              "kind": "class",
+              "role": "Pool",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "- workers: List<Thread>",
+                "+ shutdown()"
+              ]
+            },
+            {
+              "id": "queue",
+              "name": "BlockingQueue",
+              "kind": "interface",
+              "role": "TaskQueue",
+              "col": 0,
+              "row": 3,
+              "members": [
+                "+ put(task)",
+                "+ take(): Runnable"
+              ]
+            },
+            {
+              "id": "worker",
+              "name": "Worker",
+              "kind": "class",
+              "role": "Worker",
+              "col": 1,
+              "row": 3,
+              "members": [
+                "+ loop()"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "client",
+              "to": "exec",
+              "rel": "dependency",
+              "label": "submits to"
+            },
+            {
+              "from": "pool",
+              "to": "exec",
+              "rel": "realizes"
+            },
+            {
+              "from": "pool",
+              "to": "queue",
+              "rel": "composition",
+              "label": "tasks"
+            },
+            {
+              "from": "pool",
+              "to": "worker",
+              "rel": "composition",
+              "label": "N workers"
+            },
+            {
+              "from": "worker",
+              "to": "queue",
+              "rel": "dependency",
+              "label": "take"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "client",
+              "name": "Client"
+            },
+            {
+              "id": "pool",
+              "name": "Pool",
+              "role": "Pool"
+            },
+            {
+              "id": "queue",
+              "name": "Queue",
+              "role": "TaskQueue"
+            },
+            {
+              "id": "worker",
+              "name": "Worker",
+              "role": "Worker"
+            }
+          ],
+          "messages": [
+            {
+              "from": "client",
+              "to": "pool",
+              "label": "execute(task)",
+              "style": "call"
+            },
+            {
+              "from": "pool",
+              "to": "queue",
+              "label": "put(task)",
+              "style": "call"
+            },
+            {
+              "from": "worker",
+              "to": "queue",
+              "label": "take()",
+              "style": "call"
+            },
+            {
+              "from": "queue",
+              "to": "worker",
+              "label": "task",
+              "style": "return"
+            },
+            {
+              "from": "worker",
+              "to": "queue",
+              "label": "take()",
+              "style": "call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Many short tasks would otherwise spawn unbounded threads.",
+            "You need a hard cap on concurrency toward a database or API.",
+            "CPU-bound work should run with about one thread per core."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Tasks block for long on I/O: prefer one virtual thread per task.",
+            "Tasks wait on other tasks submitted to the same pool."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Pool starvation deadlock: a task blocks on a subtask queued behind it.",
+            "`newFixedThreadPool` has an unbounded queue, so overload becomes memory growth.",
+            "A forgotten `shutdown()` leaves non-daemon workers running.",
+            "`submit` stores exceptions in the `Future`; nobody reads them."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "`Executors.newVirtualThreadPerTaskExecutor()` replaces pools for blocking tasks; cap with a `Semaphore`.",
+            "`ExecutorService` is `AutoCloseable` since Java 19: try-with-resources waits for tasks."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "producer-consumer",
+          "relation": "combines",
+          "difference": "A pool is Producer-Consumer packaged: submitters produce `Runnable`s onto one queue, interchangeable workers consume them."
+        },
+        {
+          "ref": "fork-join",
+          "relation": "alternative",
+          "difference": "A fork-join pool gives each worker its own deque and steals work, which suits recursive subtasks. A plain pool shares one queue and suits independent tasks."
+        },
+        {
+          "ref": "active-object",
+          "relation": "alternative",
+          "difference": "A single-thread executor is the engine of an active object: one thread owning one object's state, rather than N workers sharing a load."
+        },
+        {
+          "ref": "future-promise",
+          "relation": "combines",
+          "difference": "`submit` returns a `Future`, the handle through which a caller collects the result or failure of a pooled task."
+        },
+        {
+          "ref": "bulkhead",
+          "relation": "combines",
+          "difference": "Separate pools per dependency isolate failures: a slow payment API can exhaust only its own threads."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.ThreadPoolExecutor",
+          "detail": "Core and maximum size, a work queue and a `RejectedExecutionHandler`, with the policy classes `AbortPolicy` and `CallerRunsPolicy`."
+        },
+        {
+          "where": "JDK",
+          "name": "ScheduledThreadPoolExecutor",
+          "detail": "A pool whose queue is ordered by trigger time; behind `Executors.newScheduledThreadPool`."
+        },
+        {
+          "where": "Spring",
+          "name": "ThreadPoolTaskExecutor",
+          "detail": "Spring's configurable wrapper over `ThreadPoolExecutor`, used by `@Async` when configured."
+        },
+        {
+          "where": "Apache Tomcat",
+          "name": "Connector maxThreads",
+          "detail": "The size of the request-processing thread pool; the default is 200."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Batcher {",
+        "    private final BlockingQueue<Runnable> inbox = new ArrayBlockingQueue<>(64);",
+        "",
+        "    Batcher(int n) {",
+        "        for (int i = 0; i < n; i++) Thread.ofPlatform().start(this::run);",
+        "    }",
+        "",
+        "    private void run() {",
+        "        try { while (true) inbox.take().run(); } catch (InterruptedException e) { }",
+        "    }",
+        "",
+        "    void submit(Runnable job) throws InterruptedException { inbox.put(job); }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "thread-pool",
+          "correct": true,
+          "why": "N interchangeable workers share one queue of arbitrary tasks and run them. That is an executor."
+        },
+        {
+          "ref": "producer-consumer",
+          "why": "It is the underlying mechanism, but here the queue carries executable tasks, not data for one typed consumer. The shape is an executor."
+        },
+        {
+          "ref": "active-object",
+          "why": "Several anonymous workers share the load; no single thread owns an object's state, and callers get no futures."
+        },
+        {
+          "ref": "reactor",
+          "why": "Nothing waits on I/O readiness events; workers just run queued tasks."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A service calls a licensed PDF library that tolerates at most 8 concurrent renders. Requests are CPU heavy, arrive in bursts, and extra requests should wait their turn rather than fail.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "thread-pool",
+          "correct": true,
+          "why": "A pool of 8 workers enforces the concurrency limit by construction, and a queue holds the overflow."
+        },
+        {
+          "ref": "reactor",
+          "why": "It multiplexes I/O events on few threads. CPU-heavy renders would block the event loop for everyone."
+        },
+        {
+          "ref": "fork-join",
+          "why": "It splits one large job into recursive parts. These are independent requests with no subtasks to combine."
+        },
+        {
+          "ref": "active-object",
+          "why": "It serializes everything onto one thread, giving a concurrency of 1 instead of 8."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that can deadlock the pool.",
+      "lines": [
+        "ExecutorService pool = Executors.newFixedThreadPool(2);",
+        "List<Future<Integer>> results = new ArrayList<>();",
+        "for (int i = 0; i < 2; i++) {",
+        "    results.add(pool.submit(() -> {",
+        "        Future<Integer> part = pool.submit(() -> 21);",
+        "        return part.get() * 2;",
+        "    }));",
+        "}"
+      ],
+      "flawLines": [
+        6
+      ],
+      "explanation": "Both workers sit in `part.get()` waiting for subtasks that are queued behind them, and nobody is left to run them. Compute the part inline, or use a separate pool or non-blocking composition.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.concurrent.*;",
+          "class Snippet { void run() throws Exception {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the lines of a clean pool lifecycle.",
+      "blocks": [
+        [
+          "var seen = new AtomicInteger();",
+          "var pool = Executors.newFixedThreadPool(2);"
+        ],
+        [
+          "pool.submit(() -> seen.incrementAndGet());"
+        ],
+        [
+          "pool.shutdown();"
+        ],
+        [
+          "boolean finished = pool.awaitTermination(1, TimeUnit.SECONDS);"
+        ]
+      ],
+      "explanation": "Create before submit. A shut-down pool rejects new tasks, so shutdown follows the submit. awaitTermination blocks until its timeout unless shutdown was already requested.",
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "import java.util.concurrent.atomic.AtomicInteger;",
+          "class Snippet { void run() throws InterruptedException {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain a thread pool in your own words: what it saves, what it bounds, and what can go wrong under overload.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "A pool keeps N workers alive and feeds them from a queue, so creating threads is paid once and concurrency is capped at N. Overload then shows up in the queue, so its bound and the rejection policy matter. A task that blocks on another task in the same pool can starve it."
+        }
+      ],
+      "keyPoints": [
+        "Reuses N long-lived workers fed from a queue",
+        "The size caps concurrency; the queue absorbs bursts",
+        "An unbounded queue or missing rejection policy hides overload",
+        "Tasks waiting on same-pool tasks cause starvation deadlock",
+        "Virtual threads replace pools for blocking I/O, not for limits"
+      ]
+    }
+  ]
+}

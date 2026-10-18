@@ -1,0 +1,479 @@
+{
+ "id": "event-sourcing",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Store the sequence of events that happened, and derive current state by replaying them."
+    },
+    {
+     "type": "p",
+     "text": "In **event sourcing** the append-only event log is the source of truth. An aggregate's state is a fold over its events. New state comes from commands that validate against the current state and append new events. You gain a full audit trail and the ability to rebuild state at any point in time. Current state is a projection, not the record."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Write:** append events; never update or delete.",
+      "**Read state:** replay events, or start from a snapshot.",
+      "**Concurrency:** append with an expected version."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Events are immutable facts. Mistakes are corrected by appending compensating events."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "EventSourcing.java",
+   "expectedOutput": "70 at v2\n100 at v1\nconflict: expected v2, at v3",
+   "walkthrough": [
+    {
+     "region": "events",
+     "note": "Events are immutable records in a sealed hierarchy: what happened, in the past tense. No event says 'set balance'."
+    },
+    {
+     "region": "store",
+     "note": "An append-only stream per aggregate. `append` takes the version the writer saw and rejects the write if the stream moved: optimistic concurrency."
+    },
+    {
+     "region": "replay",
+     "note": "State is never stored. `replay` folds the history through `apply`, and the exhaustive `switch` guarantees every event type is handled."
+    },
+    {
+     "region": "commands",
+     "note": "A command checks the invariant against current state, then records an event, which both updates state and queues it as new. `saveTo` appends only the new events."
+    },
+    {
+     "region": "client",
+     "note": "Replaying all events gives the present; replaying a prefix gives the past. That time travel is a one-liner."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Warehouse stock ledger with a regulatory audit."
+    },
+    {
+     "type": "p",
+     "text": "Auditors ask 'how many units of SKU 42 were on the shelf on 3 March, and why did the count change?' An update-in-place table can only answer the first part for today. As a stream of `Received`, `Picked` and `Adjusted` events, any date is a replay up to a timestamp, and every number carries its reason. EventStoreDB and Axon Server store such streams."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "List<StockEvent> upTo = store.load(sku42).stream()",
+      "    .filter(e -> e.at().isBefore(march4))",
+      "    .toList();",
+      "int onShelf = Stock.replay(upTo).quantity();"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: any past state is reproducible and each change carries its cause, which satisfies auditors and enables debugging by replay."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "acct",
+       "name": "Account",
+       "kind": "class",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "- balance, version",
+        "- fresh: List",
+        "+ replay(history)",
+        "+ deposit(n)",
+        "+ saveTo(store, id)"
+       ],
+       "role": "Aggregate"
+      },
+      {
+       "id": "evt",
+       "name": "Event",
+       "kind": "interface",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "Deposited",
+        "Withdrawn"
+       ],
+       "role": "Event"
+      },
+      {
+       "id": "store",
+       "name": "EventStore",
+       "kind": "class",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "+ load(id): List",
+        "+ append(id, expected,",
+        "    events)"
+       ],
+       "role": "Event store"
+      }
+     ],
+     "edges": [
+      {
+       "from": "acct",
+       "to": "evt",
+       "rel": "dependency",
+       "label": "applies"
+      },
+      {
+       "from": "store",
+       "to": "evt",
+       "rel": "aggregation",
+       "label": "stream"
+      },
+      {
+       "from": "acct",
+       "to": "store",
+       "rel": "dependency",
+       "label": "loads, appends"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "c",
+       "name": "Client"
+      },
+      {
+       "id": "a",
+       "name": "Account",
+       "role": "Aggregate"
+      },
+      {
+       "id": "s",
+       "name": "EventStore",
+       "role": "Event store"
+      }
+     ],
+     "messages": [
+      {
+       "from": "c",
+       "to": "s",
+       "label": "load(id)",
+       "style": "call"
+      },
+      {
+       "from": "s",
+       "to": "c",
+       "label": "history",
+       "style": "return"
+      },
+      {
+       "from": "c",
+       "to": "a",
+       "label": "replay(history)",
+       "style": "create"
+      },
+      {
+       "from": "c",
+       "to": "a",
+       "label": "withdraw(30)",
+       "style": "call"
+      },
+      {
+       "from": "a",
+       "to": "a",
+       "label": "check, record event",
+       "style": "call"
+      },
+      {
+       "from": "c",
+       "to": "a",
+       "label": "saveTo(store)",
+       "style": "call"
+      },
+      {
+       "from": "a",
+       "to": "s",
+       "label": "append(id, version, events)",
+       "style": "call"
+      },
+      {
+       "from": "s",
+       "to": "a",
+       "label": "ok or conflict",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "You need a complete audit trail or must answer 'what was true then'.",
+      "Behaviour depends on history, not just current state.",
+      "You want to rebuild or add read models from the past."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Plain CRUD with no audit need; the extra moving parts do not pay off.",
+      "Data must be erased on request (GDPR) and you cannot crypto-shred."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Changing event schemas: old events live forever, so version and upcast them.",
+      "Replaying long streams without snapshots.",
+      "Putting derived state in events or exposing the stream as a public API.",
+      "Reads that need immediate consistency from projections."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Event sourcing everywhere when only one aggregate needs history.",
+      "Events named after CRUD verbs like `Updated`, which carry no business meaning."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Sealed event hierarchies and switch patterns make `apply` exhaustive; the compiler flags unhandled new events.",
+      "Sealed event hierarchies and switch patterns make `apply` exhaustive; the compiler flags unhandled new events."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "cqrs",
+     "relation": "combines",
+     "difference": "Event sourcing gives CQRS a natural feed for read models. Each stands alone: CQRS with state tables, event sourcing with one query model."
+    },
+    {
+     "ref": "domain-event",
+     "relation": "oftenConfused",
+     "difference": "A domain event notifies others and the state still lives elsewhere. In event sourcing the events are the state."
+    },
+    {
+     "ref": "memento",
+     "relation": "lookAlike",
+     "difference": "A memento snapshots state to restore it later. Event sourcing keeps every change, and a snapshot is only an optimization."
+    },
+    {
+     "ref": "transactional-outbox",
+     "relation": "combines",
+     "difference": "Events in the store can be published reliably to other systems via an outbox or a change-feed relay."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Axon Framework",
+     "name": "@EventSourcingHandler",
+     "detail": "Rebuilds event-sourced aggregates by applying stored events to handler methods."
+    },
+    {
+     "where": "EventStoreDB",
+     "name": "Streams with expected revision",
+     "detail": "Append-only streams; appends can require an expected stream revision for optimistic concurrency."
+    },
+    {
+     "where": "Akka Persistence",
+     "name": "EventSourcedBehavior",
+     "detail": "Typed actors persist events and recover state by replaying them, with optional snapshots."
+    },
+    {
+     "where": "Git",
+     "name": "Commit history",
+     "detail": "State of the tree is derived from the chain of commits; the history is the record."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "int balance = 0;",
+    "for (Event e : log.read(streamId)) {",
+    "    balance = switch (e) {",
+    "        case Credited c -> balance + c.cents();",
+    "        case Debited d -> balance - d.cents();",
+    "    };",
+    "}",
+    "System.out.println(balance);"
+   ],
+   "options": [
+    {
+     "ref": "event-sourcing",
+     "correct": true,
+     "why": "Current state is computed by folding the stored sequence of events; no balance is stored."
+    },
+    {
+     "ref": "domain-event",
+     "why": "Events here are the stored record of truth, not transient notifications to listeners."
+    },
+    {
+     "ref": "memento",
+     "why": "Nothing is a snapshot of state; the state is derived from all changes."
+    },
+    {
+     "ref": "cqrs",
+     "why": "There is no split between command and query models in this snippet."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "sealed interface Event permits Credited, Debited {}",
+     "record Credited(int cents) implements Event {}",
+     "record Debited(int cents) implements Event {}",
+     "interface Log { List<Event> read(String id); }",
+     "class Snippet { void run(Log log, String streamId) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A regulator requires proof of an account's balance on any past date and the reason behind every change. Today's design updates balances in place and keeps a separate audit table that has drifted from reality.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "event-sourcing",
+     "correct": true,
+     "why": "An append-only log of changes is the single source of truth; any past state is a replay and every change has its cause."
+    },
+    {
+     "ref": "domain-event",
+     "why": "Notifications leave state overwritten elsewhere; the history would still be separate and could drift."
+    },
+    {
+     "ref": "cqrs",
+     "why": "Splitting read and write models does not by itself retain history."
+    },
+    {
+     "ref": "data-mapper",
+     "why": "Mapping changes how rows become objects, not what history is kept."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Event Sourcing pattern.",
+   "lines": [
+    "final class Ledger {",
+    "    private final List<Event> log = new ArrayList<>();",
+    "",
+    "    void append(Event e) { log.add(e); }",
+    "",
+    "    void correct(int index, Event fixed) {",
+    "        log.set(index, fixed);",
+    "    }",
+    "",
+    "    List<Event> history() { return List.copyOf(log); }",
+    "}"
+   ],
+   "flawLines": [
+    7
+   ],
+   "explanation": "Rewriting a past event destroys the audit trail and invalidates projections already built from it. Append a compensating event instead, such as `Reversed` followed by the correct event.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Event {}",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the use case so each line only uses what came before.",
+   "blocks": [
+    [
+     "var history = store.load(id);"
+    ],
+    [
+     "var account = Account.replay(history);"
+    ],
+    [
+     "account.withdraw(30);"
+    ],
+    [
+     "account.saveTo(store, id);"
+    ],
+    [
+     "System.out.println(account.balance());"
+    ]
+   ],
+   "explanation": "Load the stream, rebuild state from it, validate and record a new event against that state, append the new events, then read the result.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Event {}",
+     "final class EventStore { List<Event> load(String id) { return List.of(); } }",
+     "final class Account { static Account replay(List<Event> h) { return new Account(); } void withdraw(int c) {} void saveTo(EventStore s, String id) {} int balance() { return 0; } }",
+     "class Snippet { void run(EventStore store, String id) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Event Sourcing in your own words: what is stored, how is state obtained, and how do you handle concurrent writers?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Event sourcing stores an append-only stream of immutable events as the source of truth. Current state is obtained by replaying them, optionally from a snapshot. Writers append with the expected version; a mismatch means someone else wrote first, so the command reloads and retries. Mistakes are fixed with compensating events."
+    }
+   ],
+   "keyPoints": [
+    "Append-only stream of immutable events",
+    "State is a fold over the events",
+    "Expected version gives optimistic concurrency",
+    "Corrections are new events, never edits",
+    "Snapshots only speed up replay"
+   ]
+  }
+ ]
+}

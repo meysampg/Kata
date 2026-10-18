@@ -1,0 +1,480 @@
+{
+  "id": "mvvm",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Give each screen a view model that exposes observable state and commands, and let a thin view bind to it."
+        },
+        {
+          "type": "p",
+          "text": "The **view model** holds presentation state (field values, enabled flags, messages) and the actions the user can trigger. It imports no UI classes. The **view** only binds: widgets observe properties, and user events call commands. The UI logic therefore becomes plain objects that tests drive directly."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Model:** domain and services.",
+            "**ViewModel:** state + commands, UI-free.",
+            "**View:** declarative binding, no logic."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Binding needs an observable type. Most platforms provide one: JavaFX properties, Android `StateFlow`, SwiftUI `@Published`."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Mvvm.java",
+      "expectedOutput": "submit enabled=false\nstatus=\nsubmit enabled=true\nstatus=Welcome\nsubmit enabled=false",
+      "walkthrough": [
+        {
+          "region": "observable",
+          "note": "A minimal observable value. `bind` delivers the current value immediately and every later change, and `set` ignores no-op writes."
+        },
+        {
+          "region": "viewmodel",
+          "note": "The view model derives `canSubmit` from two inputs and exposes a command. It depends on a model-side `BiPredicate`, never on a widget."
+        },
+        {
+          "region": "binding",
+          "note": "The view's whole job: subscribe widgets to properties. Println stands in for button and label updates."
+        },
+        {
+          "region": "input",
+          "note": "User events are just `set` calls on properties. Only the password that crosses 8 characters flips `canSubmit`, so no redundant events appear."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A mobile checkout screen with asynchronous price updates."
+        },
+        {
+          "type": "p",
+          "text": "The checkout view model exposes `lines`, `total`, `isLoading`, `error` and a `placeOrder` command. The price service updates `total`; the screen redraws because it observes state. Rotating the device recreates the view while the view model survives, and tests assert on `canPlaceOrder` without launching an emulator."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "class CheckoutViewModel : ViewModel() {",
+            "    val state: StateFlow<CheckoutState>",
+            "    fun placeOrder() { /* ... */ }",
+            "}",
+            "// the screen: collect state, call placeOrder()"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: screen logic is unit-tested as plain objects, and the view survives configuration changes without losing state."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "view",
+              "name": "SignInView",
+              "kind": "class",
+              "role": "View",
+              "col": 0.5,
+              "row": 0,
+              "members": [
+                "+ bind(vm)"
+              ]
+            },
+            {
+              "id": "vm",
+              "name": "SignInViewModel",
+              "kind": "class",
+              "role": "ViewModel",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ email: Observable",
+                "+ canSubmit: Observable",
+                "+ submit()"
+              ]
+            },
+            {
+              "id": "obs",
+              "name": "Observable<T>",
+              "kind": "class",
+              "role": "Observable",
+              "col": 0,
+              "row": 2,
+              "members": [
+                "+ get(): T",
+                "+ set(T)",
+                "+ bind(Consumer)"
+              ]
+            },
+            {
+              "id": "auth",
+              "name": "BiPredicate",
+              "kind": "interface",
+              "role": "Model",
+              "col": 1,
+              "row": 2,
+              "members": [
+                "+ test(email, pw)"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "view",
+              "to": "vm",
+              "rel": "association",
+              "label": "binds to"
+            },
+            {
+              "from": "vm",
+              "to": "obs",
+              "rel": "composition"
+            },
+            {
+              "from": "vm",
+              "to": "auth",
+              "rel": "association"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "vm",
+              "text": "imports no widget type"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "v",
+              "name": "View",
+              "role": "View"
+            },
+            {
+              "id": "vm",
+              "name": "SignInViewModel",
+              "role": "ViewModel"
+            },
+            {
+              "id": "m",
+              "name": "Authenticator",
+              "role": "Model"
+            }
+          ],
+          "messages": [
+            {
+              "from": "v",
+              "to": "vm",
+              "label": "password.set(text)",
+              "style": "call"
+            },
+            {
+              "from": "vm",
+              "to": "v",
+              "label": "canSubmit=true",
+              "style": "return"
+            },
+            {
+              "from": "v",
+              "to": "vm",
+              "label": "submit()",
+              "style": "call"
+            },
+            {
+              "from": "vm",
+              "to": "m",
+              "label": "test(email, pw)",
+              "style": "call"
+            },
+            {
+              "from": "m",
+              "to": "vm",
+              "label": "true",
+              "style": "return"
+            },
+            {
+              "from": "vm",
+              "to": "v",
+              "label": "status=Welcome",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "The UI framework supports data binding or reactive state.",
+            "Screen logic is substantial and deserves fast unit tests.",
+            "State must outlive the view, as on rotation."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "The platform lacks binding and you'd hand-write synchronization everywhere.",
+            "The screen is static; a view model is ceremony."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "The view model holding a reference to the view or context, leaking it.",
+            "Binding logic hidden in markup, where tests can't reach it.",
+            "Exposing mutable state so the view can corrupt it."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "A view model per widget instead of per screen.",
+            "Fields mirrored in model, view model and DTO with no transformation."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "JavaFX properties and `java.util.concurrent.Flow` are the standard JVM binding tools.",
+            "Records suit immutable state snapshots exposed by a view model."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "mvc",
+          "relation": "alternative",
+          "difference": "MVC's controller pushes updates into the view. MVVM's view pulls through binding, so the view model needs no reference to the view at all."
+        },
+        {
+          "ref": "observer",
+          "relation": "combines",
+          "difference": "Binding is Observer: the view subscribes to view-model properties. MVVM adds the role split around that mechanism."
+        },
+        {
+          "ref": "command",
+          "relation": "combines",
+          "difference": "View-model actions are often exposed as command objects that the view can invoke and enable or disable."
+        },
+        {
+          "ref": "adapter",
+          "relation": "lookAlike",
+          "difference": "The view model adapts domain data to what a screen needs, but it also owns presentation state and behavior, which an adapter doesn't."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JavaFX",
+          "name": "javafx.beans.property.StringProperty",
+          "detail": "Properties support `bind` and `addListener`, the basis of JavaFX view-model code."
+        },
+        {
+          "where": "Android",
+          "name": "androidx.lifecycle.ViewModel",
+          "detail": "Holds UI state across configuration changes and exposes it as `StateFlow` or `LiveData`."
+        },
+        {
+          "where": "SwiftUI",
+          "name": "ObservableObject and @Published",
+          "detail": "Views re-render when published properties of a view model change."
+        },
+        {
+          "where": ".NET WPF",
+          "name": "INotifyPropertyChanged",
+          "detail": "The interface that data binding uses to observe view-model changes."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class LoginState {",
+        "    final Prop<String> email = new Prop<>(\"\");",
+        "    final Prop<Boolean> enabled = new Prop<>(false);",
+        "    LoginState(Api api) {",
+        "        email.listen(e -> enabled.set(e.contains(\"@\")));",
+        "        this.api = api;",
+        "    }",
+        "    private final Api api;",
+        "    void submit() { if (enabled.get()) api.login(email.get()); }",
+        "}",
+        "// screen: state.enabled.listen(button::setEnabled);",
+        "// screen: field.onChange(state.email::set);"
+      ],
+      "options": [
+        {
+          "ref": "mvvm",
+          "correct": true,
+          "why": "Observable state plus a command, with a screen that merely subscribes and forwards events."
+        },
+        {
+          "ref": "mvc",
+          "why": "No controller translates input and the screen is not updated by code from a controller; the screen subscribes to state."
+        },
+        {
+          "ref": "observer",
+          "why": "Observer is the mechanism, but the class also owns presentation state and an action for the view."
+        },
+        {
+          "ref": "state",
+          "why": "The enabled flag is data, not a swappable object that changes the class's behavior."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "import java.util.function.Consumer;",
+          "interface Api { void login(String e); }",
+          "final class Prop<T> { T v; Prop(T v) { this.v = v; } T get() { return v; } void set(T n) { v = n; } void listen(Consumer<T> c) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A mobile form screen enables its button depending on four fields, shows async validation results, and must keep its state across rotation. The team wants most screen logic unit-tested without a device.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "mvvm",
+          "correct": true,
+          "why": "A UI-free view model holds the state and survives view recreation, and the view just binds."
+        },
+        {
+          "ref": "mvc",
+          "why": "A controller that pokes widgets ties logic to the view and makes rotation handling manual."
+        },
+        {
+          "ref": "observer",
+          "why": "Observer is just the notification part; it doesn't say where screen state and commands live."
+        },
+        {
+          "ref": "facade",
+          "why": "A facade would simplify the backend call, not organize presentation state."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the MVVM pattern.",
+      "lines": [
+        "final class SignInViewModel {",
+        "    final Prop<String> email = new Prop<>(\"\");",
+        "    final Prop<Boolean> canSubmit = new Prop<>(false);",
+        "",
+        "    SignInViewModel() {",
+        "        email.listen(e -> canSubmit.set(e.contains(\"@\")));",
+        "    }",
+        "",
+        "    void onTextChanged(TextField field) {",
+        "        email.set(field.getText());",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "The view model accepts a widget, so it now depends on the UI toolkit and can't be unit-tested alone. Take `String text` and let the view pass the value.",
+      "compile": {
+        "template": [
+          "import java.util.function.Consumer;",
+          "interface TextField { String getText(); }",
+          "final class Prop<T> { T v; Prop(T v) { this.v = v; } T get() { return v; } void set(T n) { v = n; } void listen(Consumer<T> c) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the statements so that each one only uses what came before.",
+      "blocks": [
+        [
+          "var vm = new SignInViewModel((e, p) -> true);"
+        ],
+        [
+          "vm.email.set(\"ana@x.org\");"
+        ],
+        [
+          "vm.password.set(\"hunter22!\");"
+        ],
+        [
+          "vm.submit();"
+        ],
+        [
+          "System.out.println(vm.status.get());"
+        ]
+      ],
+      "explanation": "`submit()` is gated by `canSubmit`, which depends on both inputs, so both must be set before submitting. Status is read last.",
+      "compile": {
+        "template": [
+          "import java.util.function.BiPredicate;",
+          "final class Prop<T> { T v; Prop(T v) { this.v = v; } T get() { return v; } void set(T n) { v = n; } }",
+          "final class SignInViewModel {",
+          "  Prop<String> email = new Prop<>(\"\"), password = new Prop<>(\"\"), status = new Prop<>(\"\");",
+          "  SignInViewModel(BiPredicate<String, String> a) {} void submit() {} }",
+          "class Snippet { void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain MVVM: what the view model contains, what the view does, and why it helps testing.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "The view model holds presentation state as observable properties and exposes commands for user actions, with no reference to any widget. The view only binds widgets to those properties and forwards events. Because the view model is plain code, tests set inputs and assert on outputs without a UI."
+        }
+      ],
+      "keyPoints": [
+        "View model: observable state plus commands",
+        "No UI classes in the view model",
+        "View only binds and forwards events",
+        "Tests drive the view model directly",
+        "Differs from MVC: no controller pushing into the view"
+      ]
+    }
+  ]
+}

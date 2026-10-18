@@ -1,0 +1,438 @@
+{
+ "id": "double-checked-locking",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Check a lazily created shared object without locking, and lock only to create it."
+    },
+    {
+     "type": "p",
+     "text": "Test the field without a lock; if it is `null`, enter a `synchronized` block, test **again**, and only then construct. After creation every caller takes the unsynchronized fast path. It is correct in Java only if the field is **volatile** (or the object is built from final fields only)."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Goal:** avoid paying for a lock on every access.",
+      "**First check:** cheap and racy by design.",
+      "**Second check:** under the lock, to stop duplicate construction."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Without `volatile` it is broken: another thread can see the reference before the object's fields are visible."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "DoubleCheckedLocking.java",
+   "expectedOutput": "same instance: true\nconstructed: 1\nmode: prod\nholder: true",
+   "walkthrough": [
+    {
+     "region": "dcl",
+     "note": "`instance` is `volatile`. The write that publishes it happens-before any later read that sees it, so all constructor writes are visible."
+    },
+    {
+     "region": "holder",
+     "note": "The holder idiom gets lazy, thread-safe initialization from class loading. The JVM runs `Holder`'s initializer once, on first use, with no locks in your code."
+    },
+    {
+     "region": "race",
+     "note": "Eight threads race to call `get`. `join` makes their writes to the array visible to the main thread."
+    },
+    {
+     "region": "report",
+     "note": "Exactly one construction happened and every thread got the same instance. The holder gives the same guarantee with less code."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A reporting service builds an expensive template engine."
+    },
+    {
+     "type": "p",
+     "text": "Compiling thousands of report templates takes seconds, and most requests never need the engine. A `TemplateEngineHolder` creates it on first use. Request threads read the cached engine on every call, so a lock per read would be a visible hotspot. DCL with a volatile field keeps reads lock-free after startup."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "private static volatile Engine engine;",
+      "static Engine engine() {",
+      "    Engine e = engine;",
+      "    if (e == null) {",
+      "        synchronized (Holder.class) { /* re-check, build */ }",
+      "    }",
+      "    return e;",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: the lock is taken at most a few times, then every read is a single volatile load."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "client",
+       "name": "Client threads",
+       "kind": "class",
+       "role": "Client",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ call get()"
+       ]
+      },
+      {
+       "id": "lazy",
+       "name": "Config",
+       "kind": "class",
+       "role": "LazyHolder",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "- volatile instance",
+        "- lock: Config.class",
+        "+ get(): Config"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "client",
+       "to": "lazy",
+       "rel": "dependency",
+       "label": "get()"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "lazy",
+       "text": "volatile publishes safely"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "a",
+       "name": "Thread A"
+      },
+      {
+       "id": "cfg",
+       "name": "Config",
+       "role": "LazyHolder"
+      },
+      {
+       "id": "b",
+       "name": "Thread B"
+      }
+     ],
+     "messages": [
+      {
+       "from": "a",
+       "to": "cfg",
+       "label": "get(): read, null",
+       "style": "call"
+      },
+      {
+       "from": "a",
+       "to": "cfg",
+       "label": "lock, re-check, create",
+       "style": "create"
+      },
+      {
+       "from": "a",
+       "to": "cfg",
+       "label": "volatile write instance",
+       "style": "call"
+      },
+      {
+       "from": "b",
+       "to": "cfg",
+       "label": "get(): volatile read",
+       "style": "call"
+      },
+      {
+       "from": "cfg",
+       "to": "b",
+       "label": "instance, fully visible",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "A rarely created object is read very often by many threads.",
+      "Initialization is costly and you cannot use a holder class."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Creation is cheap: initialize eagerly in a `static final` field.",
+      "A holder class or enum works; they are simpler and provably correct."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Forgetting `volatile` compiles, usually works, and fails rarely on weak memory models.",
+      "Before Java 5, `volatile` was too weak to fix it, so old advice is wrong.",
+      "Reading the field twice on the fast path costs an extra volatile read."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "The initialization-on-demand holder idiom is lazy, thread-safe and lock-free in your code.",
+      "An `enum` singleton or a `static final` field covers most needs; reach for DCL last."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "singleton",
+     "relation": "combines",
+     "difference": "Singleton says there is one instance. DCL is just one way to create it lazily; a holder class or enum usually does the same job better."
+    },
+    {
+     "ref": "immutable-object",
+     "relation": "alternative",
+     "difference": "If the object has only `final` fields, the JMM publishes them safely even through a racy read. Mutable state is what makes `volatile` necessary."
+    },
+    {
+     "ref": "read-write-lock",
+     "relation": "alternative",
+     "difference": "A read lock still costs a memory write per read. DCL's fast path is a plain volatile read, but it only covers one-time initialization."
+    },
+    {
+     "ref": "guarded-suspension",
+     "relation": "oftenConfused",
+     "difference": "Guarded suspension makes threads wait until a condition holds. DCL threads never wait for a condition; they only contend once, to create the object."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "Holder idiom in the JDK",
+     "detail": "Several JDK classes use a private nested holder class, such as lazily initialized caches built on class initialization."
+    },
+    {
+     "where": "JDK",
+     "name": "java.util.concurrent.atomic.AtomicReference",
+     "detail": "`updateAndGet` or `compareAndSet` achieve lock-free lazy publication when duplicate construction is tolerable."
+    },
+    {
+     "where": "Guava",
+     "name": "Suppliers.memoize",
+     "detail": "Wraps a `Supplier` and computes its value once, using double-checked locking with a volatile field."
+    },
+    {
+     "where": "JMM",
+     "name": "JSR-133 (Java 5)",
+     "detail": "The revised memory model gave `volatile` acquire/release semantics, which made volatile-based DCL correct."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which technique is this?",
+   "lines": [
+    "static Settings get() {",
+    "    Settings s = cached;",
+    "    if (s == null) {",
+    "        synchronized (Settings.class) {",
+    "            s = cached;",
+    "            if (s == null) {",
+    "                cached = s = load();",
+    "            }",
+    "        }",
+    "    }",
+    "    return s;",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "double-checked-locking",
+     "correct": true,
+     "why": "An unlocked check, then a lock and a second check before creating, so later calls skip the lock."
+    },
+    {
+     "ref": "singleton",
+     "why": "Singleton states the goal of one instance. This is the specific locking protocol used to create it lazily."
+    },
+    {
+     "ref": "read-write-lock",
+     "why": "There is no reader/writer lock; one plain monitor is used, and only for creation."
+    },
+    {
+     "ref": "guarded-suspension",
+     "why": "No thread waits for a condition to become true; each simply creates or reads the value."
+    }
+   ],
+   "compile": {
+    "template": [
+     "final class Settings { }",
+     "class Snippet {",
+     "    static volatile Settings cached;",
+     "    static Settings load() { return new Settings(); }",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A shared client is built on first use from a path known only at runtime, so a static holder class cannot construct it. Thousands of threads read it on a hot path, and it must be created exactly once.",
+   "prompt": "Which technique fits best?",
+   "options": [
+    {
+     "ref": "double-checked-locking",
+     "correct": true,
+     "why": "Lock-free reads after creation with a volatile field; the lock is taken only while the first caller builds it."
+    },
+    {
+     "ref": "singleton",
+     "why": "It names the goal of one instance but gives no safe, cheap way to create it lazily."
+    },
+    {
+     "ref": "read-write-lock",
+     "why": "Even a read lock adds a memory write and contention on every hot-path read, for a value created once."
+    },
+    {
+     "ref": "guarded-suspension",
+     "why": "Nobody needs to wait for a condition; callers simply create or read the value."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the technique.",
+   "lines": [
+    "final class Config {",
+    "    private static Config instance;",
+    "    private int retries = 3;",
+    "",
+    "    static Config get() {",
+    "        if (instance == null) {",
+    "            synchronized (Config.class) {",
+    "                if (instance == null) {",
+    "                    instance = new Config();",
+    "                }",
+    "            }",
+    "        }",
+    "        return instance;",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    2
+   ],
+   "explanation": "Without `volatile`, nothing orders the write of `instance` against the constructor's writes, so a thread can see a non-null reference with `retries` still 0. Declare it `volatile`, or use a holder class.",
+   "compile": {
+    "template": [
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines of get() so that each line only uses what came before.",
+   "blocks": [
+    [
+     "Config local = instance;"
+    ],
+    [
+     "if (local == null) {"
+    ],
+    [
+     "    synchronized (Config.class) {"
+    ],
+    [
+     "        local = instance;"
+    ],
+    [
+     "        if (local == null) instance = local = new Config();"
+    ],
+    [
+     "    }",
+     "}"
+    ],
+    [
+     "return local;"
+    ]
+   ],
+   "explanation": "Read once into a local, check without the lock, lock, re-read and re-check under the lock, create and publish, then close both blocks and return the local.",
+   "compile": {
+    "template": [
+     "final class Config {",
+     "    private static volatile Config instance;",
+     "    static Config get() {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain why double-checked locking needs volatile, and what usually replaces it today.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "The first check reads the field without a lock, so it races with the creating thread. Without volatile there is no happens-before edge between the publishing write and that read, so a thread can see the reference but stale fields. Volatile adds the edge (correct since Java 5). A holder class or enum is simpler."
+    }
+   ],
+   "keyPoints": [
+    "Unlocked first check, locked second check, create once",
+    "The unlocked read is a data race without volatile",
+    "Volatile gives a happens-before edge from publish to read (JMM, Java 5)",
+    "Partially visible objects are the failure, not double creation",
+    "Holder class or enum is the usual modern replacement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,310 @@
+{
+  "id": "lsp",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Code written against a supertype must keep working, unchanged, when handed any subtype."
+        },
+        {
+          "type": "p",
+          "text": "Liskov's rule concerns **behavioral** compatibility, not signatures. A subtype may weaken preconditions and strengthen postconditions and invariants, never the reverse, and must not allow state changes the supertype forbids. Substitutability is judged by what clients **rely on**, which is why real-world 'is-a' is a poor guide."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Preconditions:** a subtype may accept more, never less.",
+            "**Postconditions and invariants:** may promise more, never less.",
+            "**History:** no new state transitions the supertype disallows."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "The compiler checks signatures only. LSP violations compile cleanly and surface later as `instanceof` checks, thrown `UnsupportedOperationException` or wrong results."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "Lsp.java",
+      "expectedOutput": "Rect: 10\nSquare: 4\ntotal area: 19\n5",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "A mutable `Square` extends `Rect` and keeps its sides equal. It compiles, and geometry says it is a rectangle."
+        },
+        {
+          "region": "client",
+          "note": "`stretch` relies on a contract the supertype implies: setting width and height independently gives `5 * 2`."
+        },
+        {
+          "region": "after",
+          "note": "Substitutability is restored by removing mutation. Both shapes are immutable records behind a sealed `Shape` that promises only `area()`."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A payment gateway where one method cannot refund."
+        },
+        {
+          "type": "p",
+          "text": "A `PaymentMethod` interface had `charge` and `refund`. A `GiftCard` implementation threw on `refund`, and the nightly reconciliation job, which reverses failed orders through the same interface, crashed. The fix was not a `try/catch` in the job. Refund moved to a `Refundable` sub-interface, so the job's signature states exactly what it can rely on."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "interface PaymentMethod { Receipt charge(Money amount); }",
+            "interface Refundable extends PaymentMethod {",
+            "    void refund(Receipt r);",
+            "}",
+            "",
+            "void reverse(Order o, Refundable method) { method.refund(o.receipt()); }"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: the unsupported case becomes a compile error instead of a 3 a.m. exception."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Designing an abstract type that third parties will implement.",
+            "Reviewing a subclass that overrides a method to throw, no-op or narrow its inputs.",
+            "Writing contract tests every implementation must pass."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "Using inheritance as taxonomy: a square \"is a\" rectangle only in geometry.",
+            "Patching a violation with `instanceof` in the client."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "Overrides that throw `UnsupportedOperationException` for an inherited method.",
+            "A subclass rejecting inputs the parent accepted, such as `null`.",
+            "Mutable subtypes breaking an invariant clients assumed."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Records and sealed interfaces remove most of the mutation that causes LSP breaks.",
+            "`equals`, `hashCode` and `compareTo` have contracts that every override must honor."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "isp",
+          "relation": "combines",
+          "difference": "Fat interfaces force implementers to stub methods and thereby break substitutability; narrow roles prevent it."
+        },
+        {
+          "ref": "composition-over-inheritance",
+          "relation": "alternative",
+          "difference": "Composition avoids the subtype relationship altogether, so there is no supertype contract to violate."
+        },
+        {
+          "ref": "ocp",
+          "relation": "combines",
+          "difference": "OCP extends through new subtypes; LSP is what keeps those extensions safe for existing clients."
+        },
+        {
+          "ref": "immutable-object",
+          "relation": "alternative",
+          "difference": "Immutability removes the history-rule violations that make mutable subtypes unsafe."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "List.of / Collections.unmodifiableList",
+          "detail": "`add` throws `UnsupportedOperationException`: the JDK documents these as optional operations, a known compromise."
+        },
+        {
+          "where": "JDK",
+          "name": "Object.equals and Comparable.compareTo",
+          "detail": "Their documented contracts (symmetry, transitivity, consistency) are LSP rules every subclass must keep."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.Properties",
+          "detail": "Extends `Hashtable<Object,Object>`, so callers can insert non-`String` entries that `getProperty` ignores."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.Stack",
+          "detail": "Extends `Vector`, so a stack can be indexed and inserted into at any position, violating stack discipline."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which principle does this subclass break?",
+      "lines": [
+        "class ReadOnlyStore extends FileStore {",
+        "    @Override",
+        "    void write(String data) {",
+        "        throw new UnsupportedOperationException(\"read-only\");",
+        "    }",
+        "}",
+        "// callers elsewhere: store.write(report); String s = store.read();"
+      ],
+      "options": [
+        {
+          "ref": "lsp",
+          "correct": true,
+          "why": "Callers of `FileStore` expect `write` to work; the subtype refuses a promise of its supertype."
+        },
+        {
+          "ref": "isp",
+          "why": "Splitting read and write would be the remedy, but the violation is the subtype breaking the contract."
+        },
+        {
+          "ref": "ocp",
+          "why": "Nothing was edited in the base class; the extension itself is the problem."
+        },
+        {
+          "ref": "dip",
+          "why": "No concrete dependency is hard-wired anywhere in this code."
+        }
+      ],
+      "compile": {
+        "template": [
+          "class FileStore { String read() { return \"\"; } void write(String d) {} }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A `Queue` interface documents FIFO order. A teammate adds `PriorityQueueAdapter` implementing it so the scheduler can use it. All unit tests pass, but an ordering-sensitive job produces wrong results in production.",
+      "prompt": "Which principle was violated?",
+      "options": [
+        {
+          "ref": "lsp",
+          "correct": true,
+          "why": "The adapter satisfies the signatures but not the documented FIFO contract that clients rely on."
+        },
+        {
+          "ref": "ocp",
+          "why": "Extending without edits is what OCP wants; the issue is that the extension is not substitutable."
+        },
+        {
+          "ref": "dip",
+          "why": "The scheduler depends on an abstraction already; the abstraction was not honored."
+        },
+        {
+          "ref": "isp",
+          "why": "The interface is not too wide; one implementation breaks its promises."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that makes the subtype unsubstitutable.",
+      "lines": [
+        "class Counter {",
+        "    protected int value;",
+        "    void increment() { value++; }   // value() grows by one",
+        "    int value() { return value; }",
+        "}",
+        "",
+        "final class CappedCounter extends Counter {",
+        "    @Override void increment() {",
+        "        if (value < 10) super.increment();",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        9
+      ],
+      "explanation": "`CappedCounter` silently ignores `increment()`, so code expecting `value()` to grow by one breaks. Do not extend `Counter` for a bounded variant; model it as a separate type or put the cap in the base contract.",
+      "compile": {
+        "template": [
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the contract check so that each step only uses what came before.",
+      "blocks": [
+        [
+          "Rect r = factory.get();"
+        ],
+        [
+          "r.setW(5);",
+          "r.setH(2);"
+        ],
+        [
+          "int area = r.area();"
+        ],
+        [
+          "System.out.println(area == 10 ? \"ok\" : \"broken\");"
+        ]
+      ],
+      "explanation": "Obtain the object through the supertype, mutate it, read the derived value, then check the contract. Each step consumes the previous result.",
+      "compile": {
+        "template": [
+          "import java.util.function.Supplier;",
+          "class Rect { int w, h; void setW(int w) { this.w = w; } void setH(int h) { this.h = h; } int area() { return w * h; } }",
+          "class Snippet { void run(Supplier<Rect> factory) {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "State the Liskov Substitution Principle in your own words and explain why a mutable `Square extends Rectangle` breaks it.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Any code written for a supertype must work with any subtype without knowing which. It is about behavior, not signatures: preconditions cannot tighten, postconditions cannot weaken. A mutable Square couples width and height, so code that sets them independently and expects the product gets the wrong area."
+        }
+      ],
+      "keyPoints": [
+        "Substitutability is behavioral, not just type-level",
+        "Preconditions cannot tighten; postconditions cannot weaken",
+        "Mutable Square breaks the independent width/height expectation",
+        "Symptoms: instanceof checks, UnsupportedOperationException",
+        "Fix by redesigning: immutability, composition or narrower interfaces"
+      ]
+    }
+  ]
+}

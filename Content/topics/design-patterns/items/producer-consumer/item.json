@@ -1,0 +1,480 @@
+{
+  "id": "producer-consumer",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Decouple the threads that create work from the threads that perform it by passing the work through a bounded queue."
+        },
+        {
+          "type": "p",
+          "text": "Producers `put` items on a **bounded blocking queue**; consumers `take` them. The queue is the only shared state, so neither side needs to know how many peers exist or how fast they are. When the queue is full, `put` blocks the producer. That is **backpressure**: the system slows at its source instead of exhausting memory."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Decouples:** the rate, count and lifetime of producers and consumers.",
+            "**Bounds:** queue capacity caps memory and queueing delay.",
+            "**Ends by:** a poison pill, or by closing the source."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "info",
+          "text": "Java's memory-consistency rule for `BlockingQueue`: whatever a producer did before `put` happens-before what the consumer does after taking that element."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "ProducerConsumer.java",
+      "expectedOutput": "jobs=10 total=55\nqueue drained=true",
+      "walkthrough": [
+        {
+          "region": "message",
+          "note": "A sealed message type makes end-of-stream part of the protocol. `take()` returns `Msg`, and a type pattern separates work from `Stop`."
+        },
+        {
+          "region": "queue",
+          "note": "Capacity 2 is deliberate. Once two jobs wait, `put` blocks the producer until a consumer frees a slot: backpressure with no extra code."
+        },
+        {
+          "region": "consume",
+          "note": "Each consumer loops on `take()`, which blocks while the queue is empty. The `instanceof Job` pattern ends the loop on the first `Stop`."
+        },
+        {
+          "region": "produce",
+          "note": "One producer enqueues ten jobs, then one `Stop` per consumer. FIFO order puts every job ahead of every stop, so no job is lost."
+        },
+        {
+          "region": "result",
+          "note": "Closing the executor waits for the producer and all three consumers, so the totals are final and the output is deterministic."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Thumbnail generation behind a photo upload endpoint."
+        },
+        {
+          "type": "p",
+          "text": "Uploads arrive in bursts, but thumbnailing is CPU heavy. The request thread stores the original, offers a `ThumbJob` to a bounded queue of 200 and returns. A fixed set of workers sized to the cores drains it. When a burst fills the queue, the endpoint uses `offer` with a short timeout and answers 503, instead of letting memory grow. Throughput is set by the workers, latency by the queue length, and a slow worker never blocks an upload that still has room."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "var queue = new ArrayBlockingQueue<ThumbJob>(200);",
+            "// request thread",
+            "if (!queue.offer(job, 50, TimeUnit.MILLISECONDS)) return tooBusy();",
+            "// worker thread",
+            "while (true) thumbnailer.render(queue.take());"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: bursts are absorbed, memory stays bounded, and overload becomes an explicit 503 rather than an OutOfMemoryError."
+        }
+      ]
+    },
+    {
+      "role": "structure",
+      "diagrams": [
+        {
+          "kind": "class",
+          "title": "Class",
+          "nodes": [
+            {
+              "id": "prod",
+              "name": "Producer",
+              "kind": "class",
+              "role": "Producer",
+              "col": 0,
+              "row": 0,
+              "members": [
+                "+ run()"
+              ]
+            },
+            {
+              "id": "cons",
+              "name": "Consumer",
+              "kind": "class",
+              "role": "Consumer",
+              "col": 1,
+              "row": 0,
+              "members": [
+                "+ run()"
+              ]
+            },
+            {
+              "id": "q",
+              "name": "BlockingQueue<Msg>",
+              "kind": "interface",
+              "role": "Channel",
+              "col": 0.5,
+              "row": 1,
+              "members": [
+                "+ put(msg)",
+                "+ take(): Msg"
+              ]
+            },
+            {
+              "id": "abq",
+              "name": "ArrayBlockingQueue",
+              "kind": "class",
+              "role": "BoundedBuffer",
+              "col": 0.5,
+              "row": 2,
+              "members": [
+                "- capacity: int"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "prod",
+              "to": "q",
+              "rel": "dependency",
+              "label": "put"
+            },
+            {
+              "from": "cons",
+              "to": "q",
+              "rel": "dependency",
+              "label": "take"
+            },
+            {
+              "from": "abq",
+              "to": "q",
+              "rel": "realizes"
+            }
+          ],
+          "notes": [
+            {
+              "attachTo": "q",
+              "text": "put blocks when full, take when empty"
+            }
+          ]
+        },
+        {
+          "kind": "sequence",
+          "title": "Sequence",
+          "participants": [
+            {
+              "id": "prod",
+              "name": "Producer"
+            },
+            {
+              "id": "q",
+              "name": "Queue",
+              "role": "Channel"
+            },
+            {
+              "id": "cons",
+              "name": "Consumer"
+            }
+          ],
+          "messages": [
+            {
+              "from": "cons",
+              "to": "q",
+              "label": "take()",
+              "style": "call"
+            },
+            {
+              "from": "prod",
+              "to": "q",
+              "label": "put(job)",
+              "style": "call"
+            },
+            {
+              "from": "q",
+              "to": "cons",
+              "label": "job",
+              "style": "return"
+            },
+            {
+              "from": "prod",
+              "to": "q",
+              "label": "put(stop)",
+              "style": "call"
+            },
+            {
+              "from": "cons",
+              "to": "q",
+              "label": "take()",
+              "style": "call"
+            },
+            {
+              "from": "q",
+              "to": "cons",
+              "label": "stop",
+              "style": "return"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "Producers and consumers run at different or bursty rates.",
+            "You need backpressure to bound memory under load.",
+            "Items are independent, so any consumer can take any item."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "The caller needs the result right away: use a plain call or a future.",
+            "Strict global ordering is required across several consumers."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "An unbounded queue hides overload until an OutOfMemoryError.",
+            "Too few poison pills: a consumer never gets one and waits forever.",
+            "A consumer that dies on an exception silently stops draining.",
+            "A consumer that also produces into its own bounded queue can deadlock."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "Virtual threads make a blocking `take()` cheap, so a consumer per task is affordable.",
+            "`Flow` and `SubmissionPublisher` add demand signalling for streaming pipelines."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "thread-pool",
+          "relation": "combines",
+          "difference": "A thread pool is this pattern packaged: callers produce `Runnable`s, the workers are interchangeable consumers of one shared queue."
+        },
+        {
+          "ref": "guarded-suspension",
+          "relation": "lookAlike",
+          "difference": "Guarded suspension makes one thread wait for a condition on a shared object. Here the queue encapsulates that wait and decouples two roles."
+        },
+        {
+          "ref": "competing-consumers",
+          "relation": "lookAlike",
+          "difference": "The same shape across processes, with a broker as the queue. It adds acknowledgements, redelivery and idempotency concerns that an in-memory queue lacks."
+        },
+        {
+          "ref": "active-object",
+          "relation": "specializes",
+          "difference": "An active object is one consumer whose queue carries method requests, with futures returned to the callers."
+        },
+        {
+          "ref": "observer",
+          "relation": "alternative",
+          "difference": "Observer pushes events synchronously to subscribers it knows. A queue buffers them and lets the consumer pull at its own pace."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.BlockingQueue",
+          "detail": "`ArrayBlockingQueue`, `LinkedBlockingQueue` and `SynchronousQueue` implement the bounded buffer; `put` and `take` block."
+        },
+        {
+          "where": "JDK",
+          "name": "ThreadPoolExecutor",
+          "detail": "Its `workQueue` is a `BlockingQueue<Runnable>` that worker threads `take` from."
+        },
+        {
+          "where": "Logback",
+          "name": "AsyncAppender",
+          "detail": "Application threads enqueue log events on a bounded queue (default size 256); one worker thread writes them."
+        },
+        {
+          "where": "Apache Kafka",
+          "name": "KafkaProducer / KafkaConsumer",
+          "detail": "The pattern at distributed scale, with a durable partitioned log as the buffer."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which pattern is this?",
+      "lines": [
+        "final class Ingest {",
+        "    private final BlockingQueue<Path> inbox = new ArrayBlockingQueue<>(100);",
+        "",
+        "    void accept(Path file) throws InterruptedException {",
+        "        inbox.put(file);",
+        "    }",
+        "",
+        "    void startWorker(Parser parser) {",
+        "        Thread.startVirtualThread(() -> {",
+        "            try { while (true) parser.parse(inbox.take()); }",
+        "            catch (InterruptedException e) { }",
+        "        });",
+        "    }",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "producer-consumer",
+          "correct": true,
+          "why": "Callers hand data to a bounded queue and a separate thread drains it. `put` blocks when full, which is the backpressure."
+        },
+        {
+          "ref": "thread-pool",
+          "why": "There is one dedicated worker running a fixed operation on typed data, not a set of interchangeable workers executing arbitrary tasks."
+        },
+        {
+          "ref": "guarded-suspension",
+          "why": "The wait is a means to a hand-off between two roles; the point is decoupling them through a buffer, not one object waiting for its own state."
+        },
+        {
+          "ref": "active-object",
+          "why": "Callers do not invoke methods on an object and get futures back; they only drop data into a queue."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.nio.file.Path;",
+          "import java.util.concurrent.*;",
+          "interface Parser { void parse(Path p); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "An endpoint receives bursts of 5,000 audit events per second, but the database sustains about 800 writes per second. Events may be written in any order, and the endpoint must not run out of memory during a burst.",
+      "prompt": "Which pattern fits best?",
+      "options": [
+        {
+          "ref": "producer-consumer",
+          "correct": true,
+          "why": "A bounded queue absorbs the burst, writer threads drain it at their own rate, and a full queue pushes back on the endpoint."
+        },
+        {
+          "ref": "future-promise",
+          "why": "A future stands for one pending result. Nothing here waits for a result, and a future does nothing to bound the backlog."
+        },
+        {
+          "ref": "read-write-lock",
+          "why": "There is no shared mutable structure to protect; the problem is a rate mismatch between two sides."
+        },
+        {
+          "ref": "fork-join",
+          "why": "It splits one large computation into parts. These are independent events arriving continuously, with nothing to recombine."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that breaks the pattern's backpressure.",
+      "lines": [
+        "final class AuditSink {",
+        "    private final BlockingQueue<Event> queue =",
+        "        new ArrayBlockingQueue<>(1000);",
+        "",
+        "    void record(Event e) {",
+        "        queue.add(e);",
+        "    }",
+        "",
+        "    void drain(Db db) throws InterruptedException {",
+        "        while (true) db.write(queue.take());",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        6
+      ],
+      "explanation": "`add` throws IllegalStateException when the queue is full, so overload becomes a crash instead of pressure. Use `put` to block the caller, or `offer` with a timeout to shed load deliberately.",
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "record Event() {}",
+          "interface Db { void write(Event e); }",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the lines so the producer never blocks forever and the consumer ends.",
+      "blocks": [
+        [
+          "BlockingQueue<Integer> queue = new ArrayBlockingQueue<>(2);"
+        ],
+        [
+          "Thread worker = Thread.startVirtualThread(() -> drain(queue));"
+        ],
+        [
+          "for (int i = 1; i <= 3; i++) queue.put(i);"
+        ],
+        [
+          "queue.put(-1); // stop signal"
+        ],
+        [
+          "worker.join();"
+        ]
+      ],
+      "explanation": "The queue must exist first. With capacity 2, putting three jobs before a consumer runs would block forever. The stop signal follows the last job, and join waits for the drain to finish.",
+      "compile": {
+        "template": [
+          "import java.util.concurrent.*;",
+          "class Snippet {",
+          "  static void drain(BlockingQueue<Integer> q) {",
+          "    try { while (q.take() != -1) { } } catch (InterruptedException e) { }",
+          "  }",
+          "  void run() throws InterruptedException {",
+          "{{code}}",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain Producer-Consumer in your own words: what the queue decouples, why it should be bounded, and how consumers know when to stop.",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Producers and consumers share only a blocking queue, so they can differ in speed, count and lifetime. Bounding the queue turns a full buffer into backpressure that blocks producers instead of growing memory. Consumers stop on a poison pill, one per consumer, queued after the last item."
+        }
+      ],
+      "keyPoints": [
+        "The queue is the only shared state; it decouples rate and count",
+        "Bounded capacity gives backpressure instead of unbounded memory",
+        "put blocks when full, take blocks when empty",
+        "Shutdown by a poison pill per consumer, queued last",
+        "Unbounded queues and lost pills are the classic bugs"
+      ]
+    }
+  ]
+}

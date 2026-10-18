@@ -1,0 +1,166 @@
+{
+  "id": "iterator",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Give clients a uniform way to walk a collection's elements without exposing how it stores them."},
+      {"type": "p", "text": "The **aggregate** hands out an **iterator**, a small cursor object that knows the traversal state: where it is and what comes next. Clients depend only on `hasNext` and `next`, so a list, a tree or a lazy generator all look the same, and several traversals can run at once."},
+      {"type": "bullets", "items": [
+        "**Hides:** the internal structure (array, tree, linked nodes, database cursor).",
+        "**Holds:** the traversal position, separate from the collection.",
+        "**Enables:** several independent, lazy traversals over one aggregate."]},
+      {"type": "callout", "tone": "info", "text": "In Java, implementing `Iterable<T>` is what makes a type usable in the enhanced `for` loop."}
+    ]},
+    {"role": "implementation", "file": "Iterator.java",
+     "expectedOutput": "apple fig kiwi pear\napple fig",
+     "walkthrough": [
+      {"region": "aggregate", "note": "The aggregate is a binary search tree. Its node type and links are private: callers can add elements but never see the structure."},
+      {"region": "iterator", "note": "`iterator()` returns a fresh cursor each call. The cursor keeps an explicit stack of pending nodes, so traversal state lives in the iterator, not in the tree."},
+      {"region": "client", "note": "Because the tree implements `Iterable`, the enhanced `for` works. The client sees elements in sorted order and has no idea a tree exists."},
+      {"region": "lazy", "note": "Iteration is lazy: only the nodes needed so far are visited. A second iterator would have its own stack and be independent."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Streaming a large database table to a CSV export."},
+      {"type": "p", "text": "A reporting job must export millions of orders without loading them into memory. A repository returns an iterator that fetches a page at a time through a server-side cursor, hiding the paging and the connection handling. The exporter loops over `orders` and writes rows. Closing the iterator releases the cursor, so it implements `AutoCloseable` as well."},
+      {"type": "code", "language": "java", "lines": [
+        "try (CloseableIterator<Order> it = repo.scanAll()) {",
+        "    while (it.hasNext()) {",
+        "        csv.write(it.next());",
+        "    }",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: constant memory for any table size, and the exporter works unchanged against an in-memory fake in tests."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "client", "name": "Client", "kind": "class", "role": "Client", "col": 0.5, "row": 0,
+         "members": ["+ run()"]},
+        {"id": "agg", "name": "Iterable<T>", "kind": "interface", "role": "Aggregate", "col": 0, "row": 1,
+         "members": ["+ iterator(): Iterator"]},
+        {"id": "it", "name": "Iterator<T>", "kind": "interface", "role": "Iterator", "col": 1, "row": 1,
+         "members": ["+ hasNext(): boolean", "+ next(): T"]},
+        {"id": "tree", "name": "SortedTree", "kind": "class", "role": "ConcreteAggregate", "col": 0, "row": 2,
+         "members": ["+ iterator()"]},
+        {"id": "cur", "name": "TreeCursor", "kind": "class", "role": "ConcreteIterator", "col": 1, "row": 2,
+         "members": ["- path: Deque<Node>"]}],
+       "edges": [
+        {"from": "client", "to": "agg", "rel": "dependency"},
+        {"from": "client", "to": "it", "rel": "dependency"},
+        {"from": "tree", "to": "agg", "rel": "realizes"},
+        {"from": "cur", "to": "it", "rel": "realizes"},
+        {"from": "tree", "to": "cur", "rel": "dependency", "label": "creates"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "agg", "name": "SortedTree", "role": "Aggregate"},
+        {"id": "it", "name": "Cursor", "role": "Iterator"}],
+       "messages": [
+        {"from": "client", "to": "agg", "label": "iterator()", "style": "call"},
+        {"from": "agg", "to": "it", "label": "new Cursor", "style": "create"},
+        {"from": "client", "to": "it", "label": "hasNext()", "style": "call"},
+        {"from": "it", "to": "client", "label": "true", "style": "return"},
+        {"from": "client", "to": "it", "label": "next()", "style": "call"},
+        {"from": "it", "to": "client", "label": "element", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Callers should traverse without depending on the storage structure.",
+        "You need several simultaneous or lazy traversals of one collection.",
+        "Different traversal orders (in-order, level-order) share one interface."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "A plain list or array is enough and random access is needed.",
+        "Operations such as map and filter are the real goal: use streams."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Modifying the collection during traversal: JDK iterators are fail-fast and throw `ConcurrentModificationException`.",
+        "Iterators that hold resources (cursors, files) and are never closed.",
+        "Assuming `Iterator` instances are thread-safe; they are not."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "`Iterable` powers the `for-each` loop; `Stream` and `spliterator()` cover bulk and parallel pipelines.",
+        "Most code writes `for` or streams; you hand-write an `Iterator` only for your own data structures."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "composite", "relation": "combines", "difference": "Iterators are the usual way to traverse a composite tree without exposing its node structure to clients."},
+      {"ref": "visitor", "relation": "alternative", "difference": "An iterator hands out elements and the client decides what to do. A visitor pushes an operation into the elements and picks behavior per element type."},
+      {"ref": "memento", "relation": "combines", "difference": "An iterator can use a memento to save and restore its position, for example to rewind or resume a scan."},
+      {"ref": "factory-method", "relation": "combines", "difference": "`iterator()` is a factory method: each aggregate subclass decides which concrete iterator to create."},
+      {"ref": "observer", "relation": "oftenConfused", "difference": "An iterator is pulled by the client, one element at a time. An observer is pushed to by the subject whenever something happens."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.Iterator and Iterable", "detail": "Every `Collection` returns an `Iterator`; implementing `Iterable` enables the enhanced `for` loop."},
+      {"where": "JDK", "name": "ArrayList.Itr", "detail": "A private inner iterator that tracks `modCount` to fail fast with `ConcurrentModificationException`."},
+      {"where": "JDK", "name": "java.sql.ResultSet", "detail": "A forward cursor over query rows, advanced with `next()`, hiding paging and the wire protocol."},
+      {"where": "JDK", "name": "java.util.Spliterator", "detail": "The splittable iterator behind `Stream`, used for both sequential and parallel traversal."},
+      {"where": "Guava", "name": "AbstractIterator", "detail": "Base class that lets you implement `computeNext()` and get a correct lazy `Iterator`."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Playlist implements Iterable<String> {",
+      "    private final String[] tracks;",
+      "    Playlist(String... tracks) { this.tracks = tracks; }",
+      "",
+      "    public Iterator<String> iterator() {",
+      "        return new Iterator<>() {",
+      "            private int i = 0;",
+      "            public boolean hasNext() { return i < tracks.length; }",
+      "            public String next() { return tracks[i++]; }",
+      "        };",
+      "    }",
+      "}"],
+     "options": [
+      {"ref": "iterator", "correct": true, "why": "A separate cursor holds the position and exposes sequential access while the array stays hidden."},
+      {"ref": "composite", "why": "There is no tree of parts and wholes, only a flat sequence being walked."},
+      {"ref": "memento", "why": "Nothing captures state for later restoration; the index only advances."},
+      {"ref": "observer", "why": "Elements are pulled by the client; nothing is pushed to registered listeners."}],
+     "compile": {"template": [
+      "import java.util.Iterator;",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A metrics library stores samples in a ring buffer to avoid allocations. Callers must read samples oldest to newest without knowing about wrap-around, and a dashboard thread may read while another one also reads.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "iterator", "correct": true, "why": "Each reader gets its own cursor that hides the ring layout and tracks its own position."},
+      {"ref": "visitor", "why": "Samples are one type; there is no need to dispatch per element type, only sequential access."},
+      {"ref": "memento", "why": "Nobody needs to restore earlier buffer states; the need is ordered traversal."},
+      {"ref": "mediator", "why": "No group of objects needs coordinating; one structure needs a traversal API."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Iterator pattern.",
+     "lines": [
+      "final class Bag implements Iterable<String> {",
+      "    private final List<String> items = new ArrayList<>();",
+      "    private int cursor = 0;",
+      "",
+      "    void add(String s) { items.add(s); }",
+      "",
+      "    public Iterator<String> iterator() {",
+      "        return new Iterator<>() {",
+      "            public boolean hasNext() { return cursor < items.size(); }",
+      "            public String next() { return items.get(cursor++); }",
+      "        };",
+      "    }",
+      "}"],
+     "flawLines": [3],
+     "explanation": "The position is stored in the aggregate, so every iterator shares it: a second loop starts where the first ended. Move `cursor` into the anonymous iterator so each traversal has its own state.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the steps of a manual traversal.",
+     "blocks": [
+      ["Iterator<String> it = names.iterator();"],
+      ["while (it.hasNext()) {"],
+      ["    String n = it.next();"],
+      ["    out.append(n);"],
+      ["}"]],
+     "explanation": "The cursor must be created before it is tested, and each next() must follow a successful hasNext(); the body uses the element just returned.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "class Snippet { void run(List<String> names, StringBuilder out) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Iterator in your own words: what it hides, where the traversal state lives, and why that matters.",
+     "modelAnswer": [
+      {"type": "p", "text": "Iterator gives clients sequential access to an aggregate without revealing its structure. The traversal state lives in a separate cursor object, not the collection, so several traversals can run independently and lazily. In Java, Iterable plus the for-each loop is the idiom."}],
+     "keyPoints": [
+      "Hides the internal structure of the aggregate",
+      "Traversal state lives in the iterator, not the collection",
+      "Multiple independent, lazy traversals are possible",
+      "Pull-based, unlike Observer which pushes",
+      "Concurrent modification needs a policy such as fail-fast"]}
+  ]
+}

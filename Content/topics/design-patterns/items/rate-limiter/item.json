@@ -1,0 +1,458 @@
+{
+ "id": "rate-limiter",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Cap how many requests are admitted per unit of time, rejecting or delaying the excess."
+    },
+    {
+     "type": "p",
+     "text": "A rate limiter protects a service from callers, whether buggy, abusive or just popular. The **token bucket** is the common algorithm: tokens refill at a steady rate up to a capacity, and each request spends one. The capacity allows short **bursts**; the refill rate sets the long-run average."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Token bucket:** bursts up to capacity, steady average rate.",
+      "**Fixed or sliding window:** count requests per interval; simpler, with boundary spikes in the fixed form.",
+      "**Leaky bucket:** smooths output to a constant rate."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "A rejection should say when to come back. HTTP 429 with `Retry-After` turns a limit into a protocol the client can follow."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "RateLimiter.java",
+   "expectedOutput": "0ms a 200\n0ms a 200\n0ms a 200\n0ms a 429 retry-after=500ms\n0ms b 200\n500ms a 200\n500ms a 429 retry-after=500ms\n10000ms a 200\n10000ms a 200\n10000ms a 200\n10000ms a 429 retry-after=500ms",
+   "walkthrough": [
+    {
+     "region": "bucket",
+     "note": "Tokens refill lazily from elapsed time on each call, so no timer thread exists. Time comes from an injected supplier, which makes the behavior testable."
+    },
+    {
+     "region": "perClient",
+     "note": "One bucket per client key, created on first use, so one noisy client cannot spend another's allowance. A real map needs eviction."
+    },
+    {
+     "region": "demo",
+     "note": "Capacity 3, refill 2 per second. Client `a` bursts three, is refused with a wait, gets one after 500 ms, and is full again after ten seconds, capped at three."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A public API with per-key quotas."
+    },
+    {
+     "type": "p",
+     "text": "A SaaS API gives each key 100 requests per second with bursts of 200. A customer's retry loop goes wrong and floods the API. The limiter sits at the gateway, keyed by API key, and answers 429 with a `Retry-After` header. Well-behaved clients back off, the runaway customer only hurts itself, and other tenants are unaffected. Limits across several gateway nodes need shared state, usually in Redis."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "long wait = limiter.acquire(apiKey);",
+      "if (wait > 0) {",
+      "    return Response.status(429)",
+      "        .header(\"Retry-After\", (wait + 999) / 1000).build();",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: abuse and accidents are contained per client, and compliant clients get a clear signal for when to retry."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "lim",
+       "name": "Limiter",
+       "kind": "class",
+       "role": "Registry",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ acquire(client): long"
+       ]
+      },
+      {
+       "id": "tb",
+       "name": "TokenBucket",
+       "kind": "class",
+       "role": "Algorithm",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "- tokens: double",
+        "- last: long",
+        "+ acquire(): long"
+       ]
+      },
+      {
+       "id": "clock",
+       "name": "LongSupplier",
+       "kind": "interface",
+       "role": "Time source",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "+ getAsLong()"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "lim",
+       "to": "tb",
+       "rel": "composition",
+       "label": "per client"
+      },
+      {
+       "from": "tb",
+       "to": "clock",
+       "rel": "association",
+       "label": "reads"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "lim",
+       "name": "Limiter"
+      },
+      {
+       "id": "tb",
+       "name": "TokenBucket"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "lim",
+       "label": "acquire(key)",
+       "style": "call"
+      },
+      {
+       "from": "lim",
+       "to": "tb",
+       "label": "acquire()",
+       "style": "call"
+      },
+      {
+       "from": "tb",
+       "to": "tb",
+       "label": "refill from elapsed",
+       "style": "call"
+      },
+      {
+       "from": "tb",
+       "to": "lim",
+       "label": "0 (token spent)",
+       "style": "return"
+      },
+      {
+       "from": "lim",
+       "to": "client",
+       "label": "admitted",
+       "style": "return"
+      },
+      {
+       "from": "client",
+       "to": "lim",
+       "label": "acquire(key) when empty",
+       "style": "call"
+      },
+      {
+       "from": "lim",
+       "to": "client",
+       "label": "429, retry-after",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "You expose an API and must contain abusive or buggy clients.",
+      "A downstream has a known throughput ceiling or a paid quota.",
+      "Fairness among tenants matters more than peak throughput."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The real limit is concurrency, not arrival rate: use a [Bulkhead](kata:bulkhead).",
+      "Rejecting requests is worse than queueing them for a short time."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Fixed windows allow double the rate across a window boundary.",
+      "Per-node limiters multiply the limit by the node count.",
+      "Unbounded per-key maps are a memory leak under key churn.",
+      "Skewed clocks: use a monotonic source such as `System.nanoTime`."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "The JDK has no rate limiter; use Bucket4j, Resilience4j or Guava's `RateLimiter` rather than hand-rolling for production.",
+      "Per-key state is a `ConcurrentHashMap` problem; evict idle keys or use a cache with expiry."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "bulkhead",
+     "relation": "oftenConfused",
+     "difference": "A rate limiter caps arrivals per second; a bulkhead caps concurrent work in progress. A slow dependency can overload you at a low rate, which only a bulkhead catches."
+    },
+    {
+     "ref": "retry-backoff",
+     "relation": "combines",
+     "difference": "The limiter says no; backoff with jitter is how a good client responds, ideally honoring `Retry-After`."
+    },
+    {
+     "ref": "circuit-breaker",
+     "relation": "oftenConfused",
+     "difference": "A limiter protects the callee by shaping incoming load. A breaker protects the caller by reacting to the callee's failures."
+    },
+    {
+     "ref": "api-gateway",
+     "relation": "combines",
+     "difference": "Gateways are the usual place to enforce per-client limits before requests reach services."
+    },
+    {
+     "ref": "timeout",
+     "relation": "oftenConfused",
+     "difference": "Timeouts bound how long a request may take once started; rate limits bound how many may start."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Guava",
+     "name": "RateLimiter",
+     "detail": "`RateLimiter.create(permitsPerSecond)` with `tryAcquire()` and `acquire()`; a smooth, bursty token-bucket style limiter."
+    },
+    {
+     "where": "Resilience4j",
+     "name": "RateLimiter",
+     "detail": "Configured with `limitForPeriod`, `limitRefreshPeriod` and `timeoutDuration` for how long a caller may wait."
+    },
+    {
+     "where": "Bucket4j",
+     "name": "Bucket",
+     "detail": "A token-bucket library for Java with local and distributed (Redis, JCache) backends."
+    },
+    {
+     "where": "Spring Cloud Gateway",
+     "name": "RequestRateLimiter filter",
+     "detail": "Redis-backed token bucket via `RedisRateLimiter`, with `replenishRate` and `burstCapacity`."
+    },
+    {
+     "where": "Envoy",
+     "name": "local_ratelimit HTTP filter",
+     "detail": "Applies a token bucket (`max_tokens`, `tokens_per_fill`, `fill_interval`) per listener or route."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "synchronized boolean allow() {",
+    "    long now = System.nanoTime();",
+    "    double earned = (now - last) * perSecond / 1e9;",
+    "    budget = Math.min(burst, budget + earned);",
+    "    last = now;",
+    "    if (budget < 1) return false;",
+    "    budget -= 1;",
+    "    return true;",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "rate-limiter",
+     "correct": true,
+     "why": "A budget refills with elapsed time up to a burst cap, and each admitted request spends one unit."
+    },
+    {
+     "ref": "bulkhead",
+     "why": "Nothing is released when work finishes; the budget depends on time, not on work in progress."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "Admission does not depend on failures of a downstream, only on the earned budget."
+    },
+    {
+     "ref": "timeout",
+     "why": "No call is being bounded in duration; the method only decides whether a request may start."
+    }
+   ],
+   "compile": {
+    "template": [
+     "class Snippet {",
+     "    double perSecond = 2, burst = 3, budget = 3;",
+     "    long last = System.nanoTime();",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "Your public API has a customer whose script sometimes sends 5,000 requests in a second, degrading latency for everyone. Normal clients send a handful per second. You want to contain the heavy client and tell it when to retry.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "rate-limiter",
+     "correct": true,
+     "why": "A per-key token bucket contains the heavy client and can return 429 with a retry hint."
+    },
+    {
+     "ref": "bulkhead",
+     "why": "It caps concurrency, but a fast stream of cheap requests can still overload you at low concurrency."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "No downstream is failing; the load is the problem, and it comes from one caller."
+    },
+    {
+     "ref": "retry-backoff",
+     "why": "That is the client's side of the story; it does nothing to protect the server."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that lets idle clients take unlimited bursts.",
+   "lines": [
+    "synchronized boolean allow() {",
+    "    long now = clock.getAsLong();",
+    "    tokens += (now - last) * perSecond / 1e9;",
+    "    last = now;",
+    "    if (tokens < 1) return false;",
+    "    tokens -= 1;",
+    "    return true;",
+    "}",
+    "// capacity is the burst size"
+   ],
+   "flawLines": [
+    3
+   ],
+   "explanation": "Tokens accumulate without bound while a client is idle, so after an hour it can burst thousands of requests. Clamp the refill: `tokens = Math.min(capacity, tokens + earned)`.",
+   "compile": {
+    "template": [
+     "import java.util.function.LongSupplier;",
+     "class Snippet {",
+     "    LongSupplier clock = System::nanoTime;",
+     "    double tokens = 3, perSecond = 2, capacity = 3;",
+     "    long last = 0;",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the token bucket's acquire step.",
+   "blocks": [
+    [
+     "long now = nanos.getAsLong();"
+    ],
+    [
+     "tokens = Math.min(capacity, tokens + (now - last) * perSecond / 1e9);"
+    ],
+    [
+     "last = now;"
+    ],
+    [
+     "if (tokens < 1) return false;"
+    ],
+    [
+     "tokens -= 1;",
+     "return true;"
+    ]
+   ],
+   "explanation": "Read the clock, refill from the elapsed time, record the new timestamp, reject if less than one token remains, and only then spend a token.",
+   "compile": {
+    "template": [
+     "import java.util.function.LongSupplier;",
+     "class Snippet {",
+     "    LongSupplier nanos = System::nanoTime;",
+     "    double tokens = 3, perSecond = 2, capacity = 3;",
+     "    long last = 0;",
+     "    boolean acquire() {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain how a token bucket works and what burst capacity and refill rate each control.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A bucket holds up to a capacity of tokens and refills at a fixed rate, computed lazily from elapsed time. Each request spends a token; with none left it is rejected, ideally with a retry hint. Capacity sets how large a burst is allowed; the refill rate sets the sustained average."
+    }
+   ],
+   "keyPoints": [
+    "Tokens refill at a steady rate, capped at capacity",
+    "Each request spends a token; none left means reject",
+    "Capacity controls burst size, refill rate the average",
+    "Lazy refill from elapsed time and an injected clock",
+    "Reject with a retry hint; keep one bucket per client"
+   ]
+  }
+ ]
+}

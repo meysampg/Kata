@@ -1,0 +1,157 @@
+{
+  "id": "immutable-object",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Share state safely between threads by never changing it: every update produces a new object."},
+      {"type": "p", "text": "An **immutable object** has a state fixed at construction. With no writes to race on, it needs no locks and can be shared freely. Java backs this with a memory-model rule: after the constructor finishes, a thread that sees the reference also sees the values of its **`final` fields**, even if the reference was published through a data race."},
+      {"type": "bullets", "items": [
+        "**Requires:** `final` fields, no setters, a `final` class or private constructor.",
+        "**Deep immutability:** fields must reference immutable objects, or be copied defensively.",
+        "**Update:** return a new instance (a *wither*)."]},
+      {"type": "callout", "tone": "warning", "text": "The `final` guarantee holds only if `this` does not escape during construction, and only for state reachable through final fields."}
+    ]},
+    {"role": "implementation", "file": "ImmutableObject.java",
+     "expectedOutput": "Route[name=R1, stops=[A, B]]\n[A, B, S0]\n[A, B, S1]\n[A, B, S2]\n[X]",
+     "walkthrough": [
+      {"region": "copy", "note": "A record's fields are `final`. The compact constructor replaces the incoming list with an unmodifiable copy, so later changes by the caller cannot leak in."},
+      {"region": "wither", "note": "An update never mutates `this`: it builds a modified copy and returns a new `Route`. The old value stays valid for anyone still holding it."},
+      {"region": "shared", "note": "One instance is shared by every thread through a `static final` field. Class initialization safely publishes it."},
+      {"region": "threads", "note": "Three virtual threads derive new routes from the same base with no lock. Each `join` gives a happens-before edge, so reading `results` afterwards is safe."},
+      {"region": "client", "note": "The base is unchanged, and mutating the original source list after construction does not affect the copy."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "A hot-reloadable configuration read by every request."},
+      {"type": "p", "text": "A service reads feature flags and rate limits on every request, and an admin endpoint reloads them from a file. Guarding a mutable map with a lock puts every request on one monitor. Instead the config is an immutable `Settings` record, and the reload builds a complete new one and swaps a single `volatile` reference. A request sees either the old or the new snapshot, never a half-updated mix."},
+      {"type": "code", "language": "java", "lines": [
+        "private volatile Settings current = Settings.defaults();",
+        "",
+        "void reload(Path file) {",
+        "    current = Settings.parse(file);   // new snapshot",
+        "}",
+        "boolean allowed(Request r) {",
+        "    return current.limits().allow(r);  // one read",
+        "}"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: readers take no lock, see a consistent snapshot, and a failed parse leaves the old settings in place."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "route", "name": "Route", "kind": "record", "role": "ImmutableObject", "col": 0.5, "row": 0,
+         "members": ["- name: String (final)", "- stops: List (final)", "+ withStop(s): Route"]},
+        {"id": "list", "name": "List<String>", "kind": "interface", "role": "ImmutableState", "col": 0, "row": 1,
+         "members": ["copied by List.copyOf"]},
+        {"id": "next", "name": "Route'", "kind": "record", "role": "New version", "col": 1, "row": 1,
+         "members": ["new instance"]}],
+       "edges": [
+        {"from": "route", "to": "list", "rel": "composition", "label": "stops"},
+        {"from": "route", "to": "next", "rel": "dependency", "label": "withStop"}],
+       "notes": [{"attachTo": "route", "text": "no setters, never mutated"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "State is read by many threads and rarely changes.",
+        "Values are map keys, cached, or passed between components.",
+        "You want an object that is correct without synchronization."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "Large objects change often: each update copies everything.",
+        "You need in-place identity-based updates, such as counters on a hot path."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Shallow immutability: a `final` field holding an `ArrayList` is still mutable.",
+        "Letting `this` escape from the constructor voids the final-field guarantee.",
+        "Returning internal arrays or collections instead of copies or unmodifiable views."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "Copying a large collection on every single-element update, when a persistent structure would do.",
+        "Immutable wrapper around a mutable service object."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Records give shallow immutability for free; copy collections in the compact constructor.",
+        "`List.of`, `Map.of` and `List.copyOf` are immutable; `Collections.unmodifiableList` is only a view."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "builder", "relation": "combines", "difference": "A builder is mutable scratch space that ends in an immutable product. It is the usual way to construct objects with many fields."},
+      {"ref": "flyweight", "relation": "combines", "difference": "Flyweights are shared across clients, which is only safe when the shared part is immutable."},
+      {"ref": "read-write-lock", "relation": "alternative", "difference": "A read-write lock lets many readers share a mutable object. An immutable snapshot removes the lock, at the cost of copying on write."},
+      {"ref": "memento", "relation": "combines", "difference": "A memento is an immutable snapshot of another object's state, kept so that state can be restored."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.lang.String", "detail": "Immutable, so safe to share, cache its hash code, and use as a map key."},
+      {"where": "JDK", "name": "java.time", "detail": "`LocalDate`, `Instant` and `Duration` are immutable and thread-safe; `plusDays` returns a new instance."},
+      {"where": "JDK", "name": "List.of / List.copyOf", "detail": "Return unmodifiable lists; mutators throw `UnsupportedOperationException`."},
+      {"where": "JDK", "name": "java.math.BigDecimal", "detail": "Every arithmetic method returns a new `BigDecimal`."},
+      {"where": "Guava", "name": "ImmutableList", "detail": "Immutable collections with builders, rejecting nulls."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class Range {",
+      "    private final int lo;",
+      "    private final int hi;",
+      "",
+      "    Range(int lo, int hi) {",
+      "        if (lo > hi) throw new IllegalArgumentException();",
+      "        this.lo = lo;",
+      "        this.hi = hi;",
+      "    }",
+      "    Range shift(int by) { return new Range(lo + by, hi + by); }",
+      "    int lo() { return lo; }",
+      "    int hi() { return hi; }",
+      "}"],
+     "options": [
+      {"ref": "immutable-object", "correct": true, "why": "Final fields, no setters, and shift returns a new instance rather than changing this one."},
+      {"ref": "prototype", "why": "Nothing clones a template to make configured variants; shift derives a value, not a copy of a prototype."},
+      {"ref": "builder", "why": "There is no step-by-step assembly or separate mutable builder."},
+      {"ref": "flyweight", "why": "Instances are not pooled or shared by key, though immutability would permit it."}],
+     "compile": {"template": ["{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A pricing table is read by hundreds of request threads on every call and replaced wholesale a few times a day by a reload job. Readers must never see a half-updated table.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "immutable-object", "correct": true, "why": "Build a new immutable table and swap one volatile reference: no locks for readers and no torn state."},
+      {"ref": "read-write-lock", "why": "It works, but every read still takes the lock and the table must be mutated in place."},
+      {"ref": "guarded-suspension", "why": "Nobody needs to wait for a condition; readers should proceed immediately."},
+      {"ref": "double-checked-locking", "why": "It is for lazy one-time initialization, not for repeated replacement of shared data."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Immutable Object pattern.",
+     "lines": [
+      "final class Roster {",
+      "    private final List<String> names;",
+      "",
+      "    Roster(List<String> names) {",
+      "        this.names = names;",
+      "    }",
+      "",
+      "    Roster with(String name) {",
+      "        var next = new ArrayList<>(names);",
+      "        next.add(name);",
+      "        return new Roster(next);",
+      "    }",
+      "",
+      "    List<String> names() { return Collections.unmodifiableList(names); }",
+      "}"],
+     "flawLines": [5],
+     "explanation": "The constructor keeps the caller's list, so the caller can still mutate it. The field is only shallowly final. Copy it: `this.names = List.copyOf(names);`.",
+     "compile": {"template": ["import java.util.*;", "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the body of the wither so that it never changes this.",
+     "blocks": [
+      ["var next = new ArrayList<>(stops);"],
+      ["next.add(stop);"],
+      ["Route moved = new Route(name, next);"],
+      ["return moved;"]],
+     "explanation": "Copy first so the original is untouched, modify the copy, wrap it in a new instance, then return it.",
+     "compile": {"template": [
+      "import java.util.*;",
+      "record Route(String name, List<String> stops) {",
+      "  Route { stops = List.copyOf(stops); }",
+      "  Route withStop(String stop) {",
+      "{{code}}",
+      "  } }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain why immutable objects are thread-safe, and what is needed beyond declaring fields final.",
+     "modelAnswer": [
+      {"type": "p", "text": "With no writes after construction there is nothing to race on. The memory model guarantees that any thread seeing the reference sees the final fields as set by the constructor. That needs deep immutability: copy mutable inputs and never let this escape during construction."}],
+     "keyPoints": [
+      "No writes after construction means no races",
+      "final fields are safely visible once the constructor completes",
+      "Final reference to a mutable object is only shallow immutability",
+      "Copy defensively; do not leak this from the constructor",
+      "Updates return new instances, often swapped via a volatile reference"]}
+  ]
+}

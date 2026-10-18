@@ -1,0 +1,480 @@
+{
+ "id": "cache-aside",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Let the application load data into a cache on demand and keep the database as the source of truth."
+    },
+    {
+     "type": "p",
+     "text": "On a read the application checks the cache first. On a **miss** it reads the database, stores the result with a **TTL**, and returns it. On a write it updates the database and **invalidates** the cached entry. The cache never talks to the database itself; the application owns both sides."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Read:** hit returns; miss loads, stores, returns.",
+      "**Write:** update the source, then delete the cached copy.",
+      "**Expiry:** a TTL bounds how stale a missed invalidation can be."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "The cache can briefly disagree with the database. Cache-aside gives eventual consistency, not a transaction across both."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "CacheAside.java",
+   "expectedOutput": "Ada reads=1\nAda reads=1\nGrace reads=2\nGrace reads=3\nfalse reads=4",
+   "walkthrough": [
+    {
+     "region": "source",
+     "note": "A counting fake of the database makes the pattern's effect visible: every call to `find` is a cache miss somewhere above."
+    },
+    {
+     "region": "read",
+     "note": "Check the entry and its expiry against the injected clock. Only a present row is cached. A miss falls through to the store and fills the cache."
+    },
+    {
+     "region": "write",
+     "note": "Write the database first, then evict. Evicting rather than updating the cache avoids racing writers leaving an older value cached."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A product catalog read by every page view."
+    },
+    {
+     "type": "p",
+     "text": "A catalog service reads product details from PostgreSQL, thousands of times a second for a small hot set. Product data changes a few times a day. Putting Redis in front with a ten-minute TTL cuts database load by orders of magnitude. The price-update job writes the database and then deletes the key, so the next read reloads the fresh value. A restart of Redis only causes a temporary rise in database reads."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "Product p = cache.get(key);",
+      "if (p == null) {",
+      "    p = db.findProduct(id);",
+      "    cache.set(key, p, Duration.ofMinutes(10));",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: hot reads come from memory, and the cache can be lost at any time without losing data."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "svc",
+       "name": "UserService",
+       "kind": "class",
+       "role": "Application",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ get(id): Optional",
+        "+ rename(id, name)"
+       ]
+      },
+      {
+       "id": "cache",
+       "name": "Cache",
+       "kind": "class",
+       "role": "Cache",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "- entries: Map",
+        "- ttlMs: long"
+       ]
+      },
+      {
+       "id": "store",
+       "name": "UserStore",
+       "kind": "interface",
+       "role": "Source of truth",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ find(id)",
+        "+ save(id, name)"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "svc",
+       "to": "cache",
+       "rel": "association",
+       "label": "read, evict"
+      },
+      {
+       "from": "svc",
+       "to": "store",
+       "rel": "association",
+       "label": "load, write"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "cache",
+       "text": "unaware of the store"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "app",
+       "name": "App"
+      },
+      {
+       "id": "cache",
+       "name": "Cache"
+      },
+      {
+       "id": "db",
+       "name": "Database"
+      }
+     ],
+     "messages": [
+      {
+       "from": "app",
+       "to": "cache",
+       "label": "get(key)",
+       "style": "call"
+      },
+      {
+       "from": "cache",
+       "to": "app",
+       "label": "miss",
+       "style": "return"
+      },
+      {
+       "from": "app",
+       "to": "db",
+       "label": "find(id)",
+       "style": "call"
+      },
+      {
+       "from": "db",
+       "to": "app",
+       "label": "row",
+       "style": "return"
+      },
+      {
+       "from": "app",
+       "to": "cache",
+       "label": "put(key, row, ttl)",
+       "style": "call"
+      },
+      {
+       "from": "app",
+       "to": "cache",
+       "label": "get(key) again",
+       "style": "call"
+      },
+      {
+       "from": "cache",
+       "to": "app",
+       "label": "hit",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Reads far outnumber writes and a small hot set dominates.",
+      "The data tolerates seconds or minutes of staleness.",
+      "The cache may be cold or lost without data loss."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Reads must always see the latest write, such as balances.",
+      "Access is uniformly spread, so hit rates stay low."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Stampede: many readers miss on a popular key and hit the database together.",
+      "Race: a reader loads old data, a writer evicts, and the reader then caches the stale row.",
+      "Absent rows never cached, so repeated lookups for missing keys hit the database.",
+      "No TTL: a missed eviction stays wrong forever."
+     ]
+    },
+    {
+     "title": "Overuse smells",
+     "tone": "warning",
+     "items": [
+      "Caching to hide a missing index or an N+1 query.",
+      "Caching entities that are written as often as read."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Caffeine's `LoadingCache` gives per-key single-flight loading, so only one thread loads a missing key.",
+      "`ConcurrentHashMap.computeIfAbsent` is fine for in-process caches, but keep slow loads out of it."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "repository",
+     "relation": "combines",
+     "difference": "Cache-aside often lives inside a repository, so callers see one data-access seam and never the cache."
+    },
+    {
+     "ref": "proxy",
+     "relation": "alternative",
+     "difference": "A caching proxy is transparent to the caller and the cache sits in the call path. In cache-aside, application code explicitly manages the cache."
+    },
+    {
+     "ref": "decorator",
+     "relation": "alternative",
+     "difference": "A decorating repository can add cache-aside behavior without changing callers. Read-through and write-through caches move the loading into the cache itself."
+    },
+    {
+     "ref": "event-sourcing",
+     "relation": "oftenConfused",
+     "difference": "Event sourcing stores events as the truth and derives state; a cache is a disposable copy of state the database already holds."
+    },
+    {
+     "ref": "retry-backoff",
+     "relation": "combines",
+     "difference": "Cache-aside reduces calls; retry and breaker cover the calls that still reach the database."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Spring Framework",
+     "name": "@Cacheable and @CacheEvict",
+     "detail": "The cache abstraction gives declarative read-and-fill and eviction around a method, backed by Caffeine, Redis and others."
+    },
+    {
+     "where": "Caffeine",
+     "name": "LoadingCache and Cache.get(key, mappingFunction)",
+     "detail": "Computes a missing value once per key, with expiry and size-based eviction."
+    },
+    {
+     "where": "Guava",
+     "name": "CacheBuilder and LoadingCache",
+     "detail": "`CacheBuilder.newBuilder().expireAfterWrite(...)` builds a loading cache with a `CacheLoader`."
+    },
+    {
+     "where": "Hibernate",
+     "name": "Second-level cache",
+     "detail": "Entity caches filled on a load and invalidated on update, through JCache or Infinispan providers."
+    },
+    {
+     "where": "Redis",
+     "name": "EXPIRE and SET with EX",
+     "detail": "Native TTLs make time-bounded entries cheap, the usual store behind cache-aside."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "Profile load(String id) {",
+    "    Profile p = memory.get(id);",
+    "    if (p != null) return p;",
+    "    p = db.findProfile(id);",
+    "    memory.put(id, p, Duration.ofMinutes(5));",
+    "    return p;",
+    "}",
+    "void save(Profile p) {",
+    "    db.update(p);",
+    "    memory.remove(p.id());",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "cache-aside",
+     "correct": true,
+     "why": "The application itself checks, fills on a miss, and evicts after writing the database."
+    },
+    {
+     "ref": "proxy",
+     "why": "The caller does not reach the data through a stand-in object; this code manages the cache explicitly."
+    },
+    {
+     "ref": "repository",
+     "why": "A repository is the data-access seam; the distinguishing feature here is the explicit cache fill and eviction."
+    },
+    {
+     "ref": "event-sourcing",
+     "why": "State is not derived from a log of events; the database holds the truth."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.time.Duration;",
+     "interface Profile { String id(); }",
+     "interface Mem { Profile get(String k); void put(String k, Profile p, Duration t); void remove(String k); }",
+     "interface Db { Profile findProfile(String id); void update(Profile p); }",
+     "class Snippet {",
+     "    Mem memory; Db db;",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A reference-data service answers 5,000 reads per second for 2,000 country and currency records that change maybe weekly. The database is struggling, but losing the cache must never lose data, and a few minutes of stale data is acceptable.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "cache-aside",
+     "correct": true,
+     "why": "Read-heavy, rarely changing, staleness tolerated, and the database stays the source of truth."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "Callers are not abusive; the same data is simply read repeatedly."
+    },
+    {
+     "ref": "bulkhead",
+     "why": "It would protect other features from this load, but not reduce the load itself."
+    },
+    {
+     "ref": "event-sourcing",
+     "why": "It changes how truth is stored, which is not the problem here."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that can leave stale data cached.",
+   "lines": [
+    "void rename(String id, String name) {",
+    "    cache.remove(id);",
+    "    db.save(id, name);",
+    "}",
+    "",
+    "Optional<String> get(String id) {",
+    "    var hit = cache.get(id);",
+    "    if (hit != null) return Optional.of(hit);",
+    "    var row = db.find(id);",
+    "    row.ifPresent(n -> cache.put(id, n));",
+    "    return row;",
+    "}"
+   ],
+   "flawLines": [
+    2
+   ],
+   "explanation": "A reader can miss, load the old row, and cache it between the eviction and the database write, leaving the stale name cached. Write the database first, then evict.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Db { Optional<String> find(String id); void save(String id, String name); }",
+     "class Snippet {",
+     "    Map<String, String> cache = new HashMap<>();",
+     "    Db db;",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the read path.",
+   "blocks": [
+    [
+     "String v = cache.get(key);"
+    ],
+    [
+     "if (v != null) return v;"
+    ],
+    [
+     "v = db.load(key);"
+    ],
+    [
+     "cache.put(key, v);"
+    ],
+    [
+     "return v;"
+    ]
+   ],
+   "explanation": "Look in the cache, return on a hit, otherwise load from the source, fill the cache with the loaded value, then return it.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Db { String load(String k); }",
+     "class Snippet {",
+     "    Map<String, String> cache = new HashMap<>();",
+     "    Db db;",
+     "    String read(String key) {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain the read and write paths of cache-aside, why writes evict instead of update, and the main risk.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Reads check the cache, load from the database on a miss and store with a TTL. Writes update the database and then delete the cached entry, because updating the cache can leave an older value after racing writers. The risks are brief staleness and stampedes on a hot key."
+    }
+   ],
+   "keyPoints": [
+    "The application manages the cache; the database is the truth",
+    "Read: check, load on miss, fill with TTL",
+    "Write: update the database, then evict",
+    "Eviction avoids races that updating can cause",
+    "Risks: staleness and stampedes"
+   ]
+  }
+ ]
+}

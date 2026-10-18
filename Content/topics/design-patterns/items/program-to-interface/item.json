@@ -1,0 +1,333 @@
+{
+  "id": "program-to-interface",
+  "cards": [
+    {
+      "role": "definition",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "Declare variables, parameters and return types as the narrowest supertype that offers what you need, not as a concrete class."
+        },
+        {
+          "type": "p",
+          "text": "Name the **capability** you require, such as `Collection`, `Map` or `Iterable`, and let the caller choose the class. The concrete type appears once, at construction. Implementations swap in one line, tests substitute fakes, and an API stops leaking decisions like `ArrayList` versus `LinkedList`. \"Interface\" here means any supertype."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Parameters:** accept the most general type that works.",
+            "**Returns:** promise as little as is useful, but no less.",
+            "**Locals and fields:** declare the interface, construct the class."
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "warning",
+          "text": "Do not abstract stable value types such as `String` or `Instant`. The goal is flexibility where change is likely."
+        }
+      ]
+    },
+    {
+      "role": "implementation",
+      "file": "ProgramToInterface.java",
+      "expectedOutput": "before: 7\n{go=2, java=4, kata=4}\nmap values: 10\nimmutable: 6",
+      "walkthrough": [
+        {
+          "region": "before",
+          "note": "The parameter demands `ArrayList`. A caller holding a `List.of(...)`, a set or `map.values()` must copy into one first."
+        },
+        {
+          "region": "after",
+          "note": "The parameter names the capability actually used, iteration over a `Collection`. Every collection, view or immutable, now works."
+        },
+        {
+          "region": "swap",
+          "note": "The concrete class appears once, at construction. Switching `HashMap` to `TreeMap` is one expression; callers only see `Map`."
+        },
+        {
+          "region": "client",
+          "note": "One method accepts a map's `values()` view and an immutable list without copies, because it asked for a capability, not a class."
+        }
+      ]
+    },
+    {
+      "role": "example",
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "A CSV export that must stream a million rows."
+        },
+        {
+          "type": "p",
+          "text": "An export function took `List<Order>` and read it by index. When the source moved to a database cursor, a list meant loading every row into memory. The method only iterated, so its parameter became `Iterable<Order>`. A cursor-backed iterable streams, while tests still pass `List.of(...)`. Callers that passed lists needed no change."
+        },
+        {
+          "type": "code",
+          "language": "java",
+          "lines": [
+            "void export(Iterable<Order> orders, Writer out) throws IOException {",
+            "    for (Order o : orders) out.write(toCsv(o));",
+            "}",
+            "export(List.of(o1, o2), out);       // test",
+            "export(cursor.asIterable(), out);   // production"
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "positive",
+          "text": "Payoff: the same method serves a three-row test and a streaming million-row export."
+        }
+      ]
+    },
+    {
+      "role": "tradeoffs",
+      "lists": [
+        {
+          "title": "Use when",
+          "tone": "positive",
+          "items": [
+            "A method only iterates, looks up or queries: ask for that capability.",
+            "The implementation may change per environment, such as ordering or concurrency.",
+            "You want to substitute fakes in tests."
+          ]
+        },
+        {
+          "title": "Avoid when",
+          "tone": "negative",
+          "items": [
+            "You need a concrete guarantee, such as constant-time indexing: require `RandomAccess` or an array.",
+            "The type is a stable value like `String`."
+          ]
+        },
+        {
+          "title": "Pitfalls",
+          "tone": "warning",
+          "items": [
+            "A parameter wider than needed, such as `List` when `Iterable` suffices.",
+            "Casting or `instanceof ArrayList` to reach implementation details.",
+            "Assuming guarantees the interface does not give: `Map` ordering, mutability of `List.of`."
+          ]
+        },
+        {
+          "title": "Overuse smells",
+          "tone": "warning",
+          "items": [
+            "One-implementation interfaces for plain value objects.",
+            "`IFoo` and `FooImpl` pairs created reflexively."
+          ]
+        },
+        {
+          "title": "Modern Java",
+          "tone": "info",
+          "items": [
+            "`SequencedCollection`, `SequencedSet` and `SequencedMap` (Java 21) let an API ask for defined encounter order.",
+            "`var` infers the concrete type; write the interface type when the abstraction is the point."
+          ]
+        }
+      ]
+    },
+    {
+      "role": "compare",
+      "rows": [
+        {
+          "ref": "dip",
+          "relation": "specializes",
+          "difference": "Programming to an interface is the local habit. DIP adds that the high-level consumer owns the interface and details implement it."
+        },
+        {
+          "ref": "isp",
+          "relation": "combines",
+          "difference": "Choose the narrowest interface that offers what you need; narrow interfaces make that choice available."
+        },
+        {
+          "ref": "strategy",
+          "relation": "combines",
+          "difference": "Strategy is exactly this: the context is programmed against an interface and the algorithm is chosen elsewhere."
+        },
+        {
+          "ref": "factory-method",
+          "relation": "combines",
+          "difference": "A factory hides which concrete class is constructed, so callers never name it."
+        },
+        {
+          "ref": "composition-over-inheritance",
+          "relation": "combines",
+          "difference": "Held collaborators are typed by interface, which keeps composition swappable."
+        }
+      ]
+    },
+    {
+      "role": "sightings",
+      "entries": [
+        {
+          "where": "JDK",
+          "name": "java.util Collection, List, Set, Map",
+          "detail": "Callers use the interface; `ArrayList`, `LinkedList`, `HashMap`, `TreeMap` are interchangeable."
+        },
+        {
+          "where": "JDK",
+          "name": "java.util.concurrent.ExecutorService",
+          "detail": "`Executors` factories return the interface; the pool implementation is hidden."
+        },
+        {
+          "where": "JDK",
+          "name": "java.time.Clock",
+          "detail": "An abstract class injected instead of calling `Instant.now()`, so time can be fixed in tests."
+        },
+        {
+          "where": "JDK",
+          "name": "java.sql.Connection",
+          "detail": "Code uses the JDBC interface; drivers supply the implementation."
+        }
+      ]
+    }
+  ],
+  "exercises": [
+    {
+      "id": "spot-1",
+      "kind": "identify",
+      "prompt": "Which guideline does this method ignore?",
+      "lines": [
+        "ArrayList<Customer> loadActive(HashMap<String, Customer> byId) {",
+        "    ArrayList<Customer> out = new ArrayList<>();",
+        "    for (Customer c : byId.values()) {",
+        "        if (c.active()) out.add(c);",
+        "    }",
+        "    return out;",
+        "}"
+      ],
+      "options": [
+        {
+          "ref": "program-to-interface",
+          "correct": true,
+          "why": "It demands and returns concrete classes, so callers cannot pass a `TreeMap` or receive an immutable list."
+        },
+        {
+          "ref": "tell-dont-ask",
+          "why": "Querying `active()` to filter is a legitimate query, not a rule pulled out of an object."
+        },
+        {
+          "ref": "lsp",
+          "why": "No subtype relationship is being defined here."
+        },
+        {
+          "ref": "ocp",
+          "why": "Nothing here is growing by edits; the types are the problem."
+        }
+      ],
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "record Customer(boolean active) {}",
+          "class Snippet {",
+          "{{code}}",
+          "}"
+        ]
+      }
+    },
+    {
+      "id": "pick-1",
+      "kind": "choose",
+      "scenario": "A utility `static double avg(ArrayList<Double> xs)` has three callers. One holds a `LinkedList`, another a `TreeSet`, and the third `map.values()`. Each currently copies into an `ArrayList` first.",
+      "prompt": "What is the best change?",
+      "options": [
+        {
+          "ref": "program-to-interface",
+          "correct": true,
+          "why": "Change the parameter to `Collection<Double>` (or `Iterable<Double>`) and remove the copies."
+        },
+        {
+          "ref": "dip",
+          "why": "Inverting ownership of an abstraction is overkill for a pure utility method."
+        },
+        {
+          "ref": "lsp",
+          "why": "No subtype contract is broken; the signature is simply too specific."
+        },
+        {
+          "ref": "tell-dont-ask",
+          "why": "Moving the average into a caller's object would not remove the copies."
+        }
+      ]
+    },
+    {
+      "id": "flaw-1",
+      "kind": "tapLine",
+      "prompt": "Tap the line that leaks the concrete class.",
+      "lines": [
+        "final class Inventory {",
+        "    private final Map<String, Integer> stock = new HashMap<>();",
+        "",
+        "    void add(String sku, int qty) { stock.merge(sku, qty, Integer::sum); }",
+        "",
+        "    int units(String sku) { return stock.getOrDefault(sku, 0); }",
+        "",
+        "    HashMap<String, Integer> snapshot() {",
+        "        return new HashMap<>(stock);",
+        "    }",
+        "}"
+      ],
+      "flawLines": [
+        8
+      ],
+      "explanation": "The return type exposes `HashMap`, locking callers to that class and preventing a switch to a sorted or immutable map. Return `Map<String, Integer>`.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "{{code}}"
+        ]
+      }
+    },
+    {
+      "id": "order-1",
+      "kind": "reorder",
+      "prompt": "Order the lines so that each only uses what came before.",
+      "blocks": [
+        [
+          "Map<String, Integer> m = new TreeMap<>();"
+        ],
+        [
+          "m.put(\"go\", 2);"
+        ],
+        [
+          "Collection<Integer> values = m.values();"
+        ],
+        [
+          "int sum = total(values);"
+        ],
+        [
+          "System.out.println(sum);"
+        ]
+      ],
+      "explanation": "Create the map, fill it, take the values view, pass it to the method that accepts any `Collection`, then print the result.",
+      "compile": {
+        "template": [
+          "import java.util.*;",
+          "class Snippet {",
+          "static int total(Collection<Integer> xs) { int s = 0; for (int x : xs) s += x; return s; }",
+          "void run() {",
+          "{{code}}",
+          "} }"
+        ]
+      }
+    },
+    {
+      "id": "recall-1",
+      "kind": "recall",
+      "prompt": "Explain 'program to an interface' in your own words. What does it buy you, and when is it not worth it?",
+      "modelAnswer": [
+        {
+          "type": "p",
+          "text": "Depend on the capability you need, not the class that provides it. Parameters and fields use the most general useful type, and the concrete class is named once at construction. That lets implementations change and tests substitute fakes. It is not worth it for stable value types, or where you need a concrete performance guarantee."
+        }
+      ],
+      "keyPoints": [
+        "Depend on the capability, not the class",
+        "Construct the concrete class in one place",
+        "Choose the narrowest sufficient supertype",
+        "Skip for stable types like String",
+        "Beware guarantees the interface does not make"
+      ]
+    }
+  ]
+}

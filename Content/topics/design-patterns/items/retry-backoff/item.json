@@ -1,0 +1,473 @@
+{
+ "id": "retry-backoff",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Retry transient failures after growing, randomized delays, so recovery is automatic without a thundering herd."
+    },
+    {
+     "type": "p",
+     "text": "Many failures are momentary: a dropped connection, a 503, a leader election. A retry hides them, but only if it **backs off** so the dependency can recover, adds **jitter** so clients do not retry in lockstep, and has a hard limit on attempts."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Classify first:** retry transient errors, never permanent ones (400, validation).",
+      "**Backoff:** the delay ceiling doubles per attempt, up to a cap.",
+      "**Jitter:** pick a random delay below the ceiling to spread the load.",
+      "**Bound it:** a maximum number of attempts, inside the request deadline."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "Retries multiply load: three layers each retrying three times turn one request into twenty-seven. Retry at one layer."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "RetryBackoff.java",
+   "expectedOutput": "flaky: ok waits=[50, 100, 200]\ndown: TransientException waits=[50, 100]\nbad: PermanentException waits=[]",
+   "walkthrough": [
+    {
+     "region": "errors",
+     "note": "The classification is the type system: only `TransientException` is retried. A `PermanentException` propagates on the first attempt."
+    },
+    {
+     "region": "policy",
+     "note": "The ceiling is `min(cap, base * 2^(attempt-1))`. Jitter chooses a delay at or below it (full jitter). The shift is clamped to avoid overflow."
+    },
+    {
+     "region": "wiring",
+     "note": "Jitter and sleeping are injected. Production passes a random function and a real sleep; the test passes a fixed function and a recorder, so nothing waits."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Uploading to object storage during a regional blip."
+    },
+    {
+     "type": "p",
+     "text": "A batch job pushes thousands of files to a bucket. When the storage service returns throttling or 5xx errors, every worker would retry at the same instants and keep the service saturated. Exponential backoff with full jitter spreads the retries over time. Idempotent keys make a retried upload safe, and a cap of five attempts stops a bad day from becoming a stuck job."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "var retry = new Retry(5, 200, 10_000, ThreadLocalRandom.current()::nextLong, Thread::sleep);",
+      "retry.call(() -> bucket.put(key, bytes));  // key makes put idempotent"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: transient errors vanish from the job's results, and the storage service sees a smoothed load instead of synchronized waves."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "retry",
+       "name": "Retry",
+       "kind": "record",
+       "role": "Policy",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ call(op): T",
+        "- delayMs(attempt)"
+       ]
+      },
+      {
+       "id": "op",
+       "name": "Supplier<T>",
+       "kind": "interface",
+       "role": "Operation",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ get(): T"
+       ]
+      },
+      {
+       "id": "sleeper",
+       "name": "Sleeper",
+       "kind": "interface",
+       "role": "Waiter",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ sleep(Duration)"
+       ]
+      },
+      {
+       "id": "err",
+       "name": "TransientException",
+       "kind": "class",
+       "role": "Retryable",
+       "col": 0.5,
+       "row": 2
+      }
+     ],
+     "edges": [
+      {
+       "from": "retry",
+       "to": "op",
+       "rel": "dependency",
+       "label": "invokes"
+      },
+      {
+       "from": "retry",
+       "to": "sleeper",
+       "rel": "aggregation",
+       "label": "waits via"
+      },
+      {
+       "from": "op",
+       "to": "err",
+       "rel": "dependency",
+       "label": "throws"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "client",
+       "name": "Client"
+      },
+      {
+       "id": "retry",
+       "name": "Retry",
+       "role": "Policy"
+      },
+      {
+       "id": "op",
+       "name": "Operation"
+      },
+      {
+       "id": "sleeper",
+       "name": "Sleeper"
+      }
+     ],
+     "messages": [
+      {
+       "from": "client",
+       "to": "retry",
+       "label": "call(op)",
+       "style": "call"
+      },
+      {
+       "from": "retry",
+       "to": "op",
+       "label": "get()",
+       "style": "call"
+      },
+      {
+       "from": "op",
+       "to": "retry",
+       "label": "TransientException",
+       "style": "return"
+      },
+      {
+       "from": "retry",
+       "to": "sleeper",
+       "label": "sleep(jittered)",
+       "style": "call"
+      },
+      {
+       "from": "retry",
+       "to": "op",
+       "label": "get()",
+       "style": "call"
+      },
+      {
+       "from": "op",
+       "to": "retry",
+       "label": "result",
+       "style": "return"
+      },
+      {
+       "from": "retry",
+       "to": "client",
+       "label": "result",
+       "style": "return"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Failures are transient and the operation is idempotent or keyed.",
+      "Many clients may fail together, so spreading retries matters.",
+      "A short outage should not surface as a user-visible error."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "The error is permanent: invalid input, authorization, not found.",
+      "The caller is interactive and has no time budget left for another attempt."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Retry storms: retries at several layers multiply load on a struggling service.",
+      "Retrying non-idempotent writes duplicates their effect.",
+      "Backoff with no jitter keeps clients synchronized.",
+      "Ignoring a `Retry-After` hint the server already sent."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Virtual threads make blocking sleeps cheap, so a plain loop like this is fine at scale.",
+      "Pair it with a [Circuit Breaker](kata:circuit-breaker) so retries stop when a dependency is clearly down."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "circuit-breaker",
+     "relation": "combines",
+     "difference": "A retry asks again after a failure; a breaker stops asking once failures are frequent. Retry sits inside the breaker so every attempt counts toward tripping it."
+    },
+    {
+     "ref": "timeout",
+     "relation": "combines",
+     "difference": "Each attempt needs its own timeout, and all attempts together need an overall deadline. Without both, retries only prolong the wait."
+    },
+    {
+     "ref": "idempotent-consumer",
+     "relation": "combines",
+     "difference": "Retries produce duplicates by design. The receiving side must make a second delivery harmless."
+    },
+    {
+     "ref": "rate-limiter",
+     "relation": "oftenConfused",
+     "difference": "A rate limiter rejects requests that arrive too fast; a retry re-sends after rejection. Backoff is the polite response to a 429."
+    },
+    {
+     "ref": "strategy",
+     "relation": "specializes",
+     "difference": "The backoff schedule is a strategy: fixed, exponential, decorrelated jitter. The policy swaps it without touching the calling code."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Resilience4j",
+     "name": "Retry / RetryConfig",
+     "detail": "Configures `maxAttempts` and a wait via `IntervalFunction`, including `ofExponentialRandomBackoff`."
+    },
+    {
+     "where": "Spring Retry",
+     "name": "@Retryable and @Backoff",
+     "detail": "Annotation-driven retry with `delay`, `multiplier` and `random` for jitter."
+    },
+    {
+     "where": "AWS SDK for Java v2",
+     "name": "RetryMode",
+     "detail": "`LEGACY`, `STANDARD` and `ADAPTIVE` modes retry throttling and transient errors with exponential backoff and jitter."
+    },
+    {
+     "where": "Envoy",
+     "name": "retry_policy",
+     "detail": "Route-level retries with `retry_on`, `num_retries` and a configurable exponential back-off base interval."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "String fetch(Supplier<String> op) throws InterruptedException {",
+    "    long ceiling = 100;",
+    "    for (int i = 1; ; i++) {",
+    "        try {",
+    "            return op.get();",
+    "        } catch (IllegalStateException e) {",
+    "            if (i == 5) throw e;",
+    "            Thread.sleep(ThreadLocalRandom.current().nextLong(ceiling));",
+    "            ceiling = Math.min(ceiling * 2, 5_000);",
+    "        }",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "retry-backoff",
+     "correct": true,
+     "why": "A bounded loop re-invokes the operation after randomized, growing waits."
+    },
+    {
+     "ref": "circuit-breaker",
+     "why": "There is no shared state across calls and no fail-fast mode; each call retries independently."
+    },
+    {
+     "ref": "timeout",
+     "why": "Nothing bounds how long a single attempt may take; only the number of attempts is limited."
+    },
+    {
+     "ref": "rate-limiter",
+     "why": "The loop does not admit or reject requests by rate; it re-sends after its own failures."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.concurrent.ThreadLocalRandom;",
+     "import java.util.function.Supplier;",
+     "class Snippet {",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "After a brief database failover, 2,000 service instances all see connection errors at the same moment. Each retries after exactly 1 second, and the database falls over again on every retry wave.",
+   "prompt": "What change addresses the actual problem?",
+   "options": [
+    {
+     "ref": "retry-backoff",
+     "correct": true,
+     "why": "Exponential growth with random jitter desynchronizes the instances and spreads the load."
+    },
+    {
+     "ref": "bulkhead",
+     "why": "Isolation limits blast radius inside one instance, but does not desynchronize 2,000 instances."
+    },
+    {
+     "ref": "cache-aside",
+     "why": "Caching would help reads, but connection recovery itself is the problem."
+    },
+    {
+     "ref": "timeout",
+     "why": "A timeout bounds each wait; it does not change when the clients come back."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that makes this retry loop dangerous.",
+   "lines": [
+    "<T> T call(Supplier<T> op) throws InterruptedException {",
+    "    for (int attempt = 1; ; attempt++) {",
+    "        try {",
+    "            return op.get();",
+    "        } catch (RuntimeException e) {",
+    "            if (attempt == 5) throw e;",
+    "            Thread.sleep(100L << attempt);",
+    "        }",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    5
+   ],
+   "explanation": "It catches every RuntimeException, so permanent errors such as a 400 are retried five times for nothing. Catch only the transient exception type and let everything else propagate.",
+   "compile": {
+    "template": [
+     "import java.util.function.Supplier;",
+     "class Snippet {",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the body of one retry loop iteration.",
+   "blocks": [
+    [
+     "try {",
+     "    return op.get();"
+    ],
+    [
+     "} catch (TransientException e) {"
+    ],
+    [
+     "    if (attempt == maxAttempts) throw e;"
+    ],
+    [
+     "    long ceiling = Math.min(capMs, baseMs << (attempt - 1));"
+    ],
+    [
+     "    sleeper.sleep(Duration.ofMillis(jitter.applyAsLong(ceiling)));",
+     "}"
+    ]
+   ],
+   "explanation": "Attempt first. Only on a transient failure check the attempt budget, then compute the ceiling, then wait a jittered time before the loop tries again.",
+   "compile": {
+    "template": [
+     "import java.time.Duration;",
+     "import java.util.function.*;",
+     "class TransientException extends RuntimeException { private static final long serialVersionUID = 1L; }",
+     "interface Sleeper { void sleep(Duration d); }",
+     "class Snippet {",
+     "  <T> T call(Supplier<T> op, int maxAttempts, long baseMs, long capMs, LongUnaryOperator jitter, Sleeper sleeper) {",
+     "    for (int attempt = 1; ; attempt++) {",
+     "{{code}}",
+     "    }",
+     "  }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain why a retry needs backoff and jitter, and what must be true of the operation being retried.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Backoff gives the failing dependency time to recover instead of hammering it. Jitter randomizes the delays so many clients do not retry at the same instants. Retries also cap attempts, retry only transient errors, and require an idempotent operation, because the first attempt may have succeeded."
+    }
+   ],
+   "keyPoints": [
+    "Only transient errors are retried",
+    "Exponential delay up to a cap",
+    "Jitter prevents synchronized retry waves",
+    "Bounded attempts inside an overall deadline",
+    "The operation must be idempotent"
+   ]
+  }
+ ]
+}

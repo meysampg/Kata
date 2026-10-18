@@ -1,0 +1,501 @@
+{
+ "id": "reactor",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Handle many I/O sources on few threads: wait for readiness, then dispatch each ready event to its handler."
+    },
+    {
+     "type": "p",
+     "text": "A **demultiplexer** blocks until some sources are ready and returns them. The **reactor** loop then calls the handler registered for each event, on a single thread. Handlers must be short and non-blocking, because they run on the loop itself."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Inverts control:** you register interest; the loop calls you.",
+      "**Scales:** thousands of idle connections cost memory, not threads.",
+      "**Contract:** a handler that blocks stalls every other source."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "This is the model behind `java.nio.channels.Selector`, Netty and Node.js: one loop, many channels."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Reactor.java",
+   "expectedOutput": "accept a\naccept b\nread b: hello\nread a: ping\nclose a open=[b]\nread b: bye\nclose b open=[]",
+   "walkthrough": [
+    {
+     "region": "events",
+     "note": "The vocabulary: an operation kind, a ready event naming its channel, and a demultiplexer whose `select` returns the next batch of ready events."
+    },
+    {
+     "region": "reactor",
+     "note": "The loop selects, then dispatches each event to the handler registered for its operation. An empty batch ends the loop. No other threads exist."
+    },
+    {
+     "region": "wire",
+     "note": "A lambda replays scripted batches, standing in for the OS; a real one blocks in `Selector.select()`. Handlers share `open` without locks: only the loop thread runs them."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "A chat gateway holding 100,000 mostly idle WebSocket connections."
+    },
+    {
+     "type": "p",
+     "text": "Almost every connection is silent at any moment. A thread per connection would burn memory on blocked stacks. The gateway runs a few event loops, each owning a share of the sockets. A loop wakes when bytes arrive, decodes the frame, and calls the pipeline; slow work, such as a database lookup, is handed to a separate executor."
+    },
+    {
+     "type": "code",
+     "language": "java",
+     "lines": [
+      "EventLoopGroup loops = new NioEventLoopGroup(4);",
+      "ServerBootstrap b = new ServerBootstrap()",
+      "    .group(loops)",
+      "    .channel(NioServerSocketChannel.class)",
+      "    .childHandler(new FrameHandlerInit());"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: four threads serve 100,000 connections, and each connection's handlers run on one loop without locks."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "reactor",
+       "name": "Reactor",
+       "kind": "class",
+       "role": "Dispatcher",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "- handlers: Map<Op, Handler>",
+        "+ on(op, handler)",
+        "+ run()"
+       ]
+      },
+      {
+       "id": "demux",
+       "name": "Demultiplexer",
+       "kind": "interface",
+       "role": "SynchronousDemultiplexer",
+       "col": 0,
+       "row": 1,
+       "members": [
+        "+ select(): List<Ready>"
+       ]
+      },
+      {
+       "id": "handler",
+       "name": "Handler",
+       "kind": "interface",
+       "role": "EventHandler",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "+ handle(event)"
+       ]
+      },
+      {
+       "id": "accept",
+       "name": "AcceptHandler",
+       "kind": "class",
+       "role": "ConcreteHandler",
+       "col": 0,
+       "row": 2,
+       "members": [
+        "+ handle(event)"
+       ]
+      },
+      {
+       "id": "read",
+       "name": "ReadHandler",
+       "kind": "class",
+       "role": "ConcreteHandler",
+       "col": 1,
+       "row": 2,
+       "members": [
+        "+ handle(event)"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "reactor",
+       "to": "demux",
+       "rel": "association",
+       "label": "select"
+      },
+      {
+       "from": "reactor",
+       "to": "handler",
+       "rel": "aggregation",
+       "label": "handlers"
+      },
+      {
+       "from": "accept",
+       "to": "handler",
+       "rel": "realizes"
+      },
+      {
+       "from": "read",
+       "to": "handler",
+       "rel": "realizes"
+      }
+     ],
+     "notes": [
+      {
+       "attachTo": "demux",
+       "text": "Selector.select() blocks"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "os",
+       "name": "OS / channels"
+      },
+      {
+       "id": "demux",
+       "name": "Demultiplexer",
+       "role": "SynchronousDemultiplexer"
+      },
+      {
+       "id": "reactor",
+       "name": "Reactor",
+       "role": "Dispatcher"
+      },
+      {
+       "id": "h",
+       "name": "Handler",
+       "role": "EventHandler"
+      }
+     ],
+     "messages": [
+      {
+       "from": "reactor",
+       "to": "demux",
+       "label": "select()",
+       "style": "call"
+      },
+      {
+       "from": "os",
+       "to": "demux",
+       "label": "channels ready",
+       "style": "async"
+      },
+      {
+       "from": "demux",
+       "to": "reactor",
+       "label": "batch of events",
+       "style": "return"
+      },
+      {
+       "from": "reactor",
+       "to": "h",
+       "label": "handle(event)",
+       "style": "call"
+      },
+      {
+       "from": "h",
+       "to": "reactor",
+       "label": "return fast",
+       "style": "return"
+      },
+      {
+       "from": "reactor",
+       "to": "demux",
+       "label": "select() again",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Many connections are mostly idle and work per event is small.",
+      "You want few threads and handlers that need no locks."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Each event needs long computation or blocking calls on the loop thread.",
+      "Concurrency is modest and a thread (or virtual thread) per connection reads simply."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Blocking in a handler stalls every channel on that loop.",
+      "Callback chains scatter one logical flow across handlers and make errors hard to trace.",
+      "A busy loop with unbounded work per event starves other channels."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "Virtual threads make blocking thread-per-connection cheap enough for many workloads that once required a reactor.",
+      "Reactors remain the base of Netty and most async servers, but you rarely hand-roll one."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "observer",
+     "relation": "lookAlike",
+     "difference": "Observer notifies subscribers of state changes in-process. A reactor waits on I/O readiness from the OS and dispatches by event type, usually to one handler."
+    },
+    {
+     "ref": "producer-consumer",
+     "relation": "oftenConfused",
+     "difference": "Producer-consumer passes work between threads through a queue. A reactor has no hand-off: the same thread detects the event and runs its handler."
+    },
+    {
+     "ref": "thread-pool",
+     "relation": "combines",
+     "difference": "Handlers that must block are offloaded to a pool so the loop stays responsive. Netty and Tomcat's NIO connector use this split."
+    },
+    {
+     "ref": "active-object",
+     "relation": "alternative",
+     "difference": "An active object serializes requests to one object on its own thread. A reactor serializes I/O events for many channels on one loop."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "relation": "combines",
+     "difference": "Netty's channel pipeline is a chain of handlers that each event passes through after the loop has dispatched it."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "java.nio.channels.Selector",
+     "detail": "`select()` blocks until registered channels are ready, then `selectedKeys()` yields them for dispatch."
+    },
+    {
+     "where": "Netty",
+     "name": "EventLoop / NioEventLoopGroup",
+     "detail": "Each channel is bound to one event loop thread, and its pipeline handlers run there."
+    },
+    {
+     "where": "Node.js",
+     "name": "libuv event loop",
+     "detail": "A single-threaded loop dispatches I/O callbacks via epoll, kqueue or IOCP."
+    },
+    {
+     "where": "Vert.x",
+     "name": "Vertx event loop",
+     "detail": "Verticles run on event loop threads and must not block them."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "while (running) {",
+    "    selector.select();",
+    "    var keys = selector.selectedKeys();",
+    "    for (var key : keys) {",
+    "        ((Runnable) key.attachment()).run();",
+    "    }",
+    "    keys.clear();",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "reactor",
+     "correct": true,
+     "why": "One thread waits for readiness on many channels and dispatches each ready one to its handler."
+    },
+    {
+     "ref": "observer",
+     "why": "Observers are called when a subject changes. Here a blocking wait on the OS decides what is ready."
+    },
+    {
+     "ref": "producer-consumer",
+     "why": "There is no queue between threads: the same thread detects the event and handles it."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "No worker threads or task queue appear; everything runs on the loop thread."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.io.IOException;",
+     "import java.nio.channels.Selector;",
+     "class Snippet {",
+     "    Selector selector;",
+     "    boolean running;",
+     "    void loop() throws IOException {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A metrics collector accepts 20,000 long-lived TCP connections. Each sends a tiny packet every 30 seconds. The team wants a handful of threads and per-packet work takes a few microseconds.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "reactor",
+     "correct": true,
+     "why": "A few loops wait on readiness for all sockets and dispatch tiny handlers, so idle connections cost no threads."
+    },
+    {
+     "ref": "thread-pool",
+     "why": "A thread per connection would be blocked on reads almost all the time, wasting thousands of threads."
+    },
+    {
+     "ref": "fork-join",
+     "why": "The work is not recursive CPU-bound splitting; it is many sources waiting for I/O."
+    },
+    {
+     "ref": "active-object",
+     "why": "One queue and thread per connection would reintroduce thousands of threads and add futures nobody needs."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the pattern.",
+   "lines": [
+    "void run() {",
+    "    List<Ready> batch;",
+    "    while (!(batch = demux.select()).isEmpty()) {",
+    "        for (Ready event : batch) {",
+    "            var user = db.findUser(event.channel());",
+    "            handlers.get(event.op()).handle(event);",
+    "        }",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    5
+   ],
+   "explanation": "A blocking database call on the loop thread stalls every other channel while it waits. Hand slow work to an executor and post its result back as a new event.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "enum Op { READ }",
+     "record Ready(String channel, Op op) { }",
+     "interface Handler { void handle(Ready e); }",
+     "interface Demultiplexer { List<Ready> select(); }",
+     "interface Db { String findUser(String id); }",
+     "class Snippet {",
+     "    Demultiplexer demux;",
+     "    Db db;",
+     "    Map<Op, Handler> handlers = new EnumMap<>(Op.class);",
+     "{{code}}",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the setup so that each line only uses what came before.",
+   "blocks": [
+    [
+     "var reactor = new Reactor(demux);"
+    ],
+    [
+     "reactor.on(Op.ACCEPT, accepts);",
+     "reactor.on(Op.READ, reads);"
+    ],
+    [
+     "reactor.run();"
+    ],
+    [
+     "System.out.println(\"stopped\");"
+    ]
+   ],
+   "explanation": "Create the reactor, register handlers before the loop starts dispatching, run the loop, and report only after it returns. `run` blocks until the demultiplexer is exhausted.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "enum Op { ACCEPT, READ }",
+     "record Ready(String channel, Op op) { }",
+     "interface Handler { void handle(Ready e); }",
+     "interface Demultiplexer { List<Ready> select(); }",
+     "final class Reactor {",
+     "    Reactor(Demultiplexer d) { }",
+     "    Reactor on(Op op, Handler h) { return this; }",
+     "    void run() { }",
+     "}",
+     "class Snippet {",
+     "    void go(Demultiplexer demux, Handler accepts, Handler reads) {",
+     "{{code}}",
+     "    }",
+     "}"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain the Reactor pattern in your own words: who waits, who runs the handlers, and what must a handler never do?",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "A reactor thread blocks in a demultiplexer, such as `Selector.select`, until some channels are ready. It then calls the handler registered for each ready event, on that same thread. A few threads can serve thousands of connections. Handlers must never block or run long, since that stalls every other channel."
+    }
+   ],
+   "keyPoints": [
+    "One loop waits for readiness on many sources",
+    "The same thread dispatches to registered handlers",
+    "Handlers run on the loop and must not block",
+    "Offload slow work to an executor",
+    "Virtual threads reduce, but do not remove, the need for it"
+   ]
+  }
+ ]
+}
