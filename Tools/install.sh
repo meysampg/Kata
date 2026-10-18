@@ -53,7 +53,7 @@ except Exception:
     sys.exit(0)
 for d in data.get("result", {}).get("devices", []):
     hw = d.get("hardwareProperties", {})
-    if hw.get("reality") != "physical" or hw.get("platform") != "iOS":
+    if hw.get("reality") == "simulated" or hw.get("platform") != "iOS":
         continue
     udid = hw.get("udid") or d.get("identifier", "")
     name = d.get("deviceProperties", {}).get("name", "?")
