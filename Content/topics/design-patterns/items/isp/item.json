@@ -99,7 +99,7 @@
           "tone": "negative",
           "items": [
             "Roles always change and are used together: splitting adds names, not decoupling.",
-            "A published interface has many implementers: splitting later breaks them."
+            "Every client calls every method: there is nothing to segregate."
           ]
         },
         {

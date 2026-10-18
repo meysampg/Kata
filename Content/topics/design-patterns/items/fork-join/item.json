@@ -10,7 +10,7 @@
     },
     {
      "type": "p",
-     "text": "A **task** either computes directly (below a **threshold**) or splits itself in two, **forks** one half onto the pool, computes the other itself, and **joins**. A `ForkJoinPool` runs these tasks with **work stealing**: idle workers take tasks from the tails of busy workers' deques."
+     "text": "A **task** either computes directly (below a **threshold**) or splits itself in two, **forks** one half onto the pool, computes the other itself, and **joins**. A `ForkJoinPool` runs these tasks with **work stealing**: each worker pushes and pops its own deque at one end, and idle workers steal the oldest tasks from the other end."
     },
     {
      "type": "bullets",
@@ -42,7 +42,7 @@
     },
     {
      "region": "invoke",
-     "note": "`invoke` submits the root task and waits. Each task's fork and join is a happens-before edge, so results are visible without extra synchronization."
+     "note": "`invoke` submits the root task and waits. `join`, like `Future.get`, makes a subtask's writes and result visible, so no extra synchronization is needed."
     }
    ]
   },
@@ -51,25 +51,29 @@
    "blocks": [
     {
      "type": "lead",
-     "text": "Counting error lines across a large set of log files."
+     "text": "Rendering an image whose regions differ in cost."
     },
     {
      "type": "p",
-     "text": "A nightly job scans thousands of log files of very different sizes. Splitting by file leaves cores idle when one file is huge. A task over a list of files splits the list; a task over one large file splits its byte range. Work stealing keeps all cores busy, and the counts are merged by addition."
+     "text": "A renderer traces rays for a 4K frame. Sky pixels are cheap, glass and reflections cost a hundred times more, so one strip per core leaves most cores idle while one finishes the hard strip. A `Tile` task splits its rectangle into quadrants until it is small, and work stealing moves the expensive pieces to idle workers. Each task writes only its own pixels, so nothing is shared."
     },
     {
      "type": "code",
      "language": "java",
      "lines": [
-      "record Scan(List<Path> files) extends RecursiveTask<Long> { /* ... */ }",
-      "",
-      "long errors = pool.invoke(new Scan(allFiles));"
+      "final class Tile extends RecursiveAction {",
+      "    protected void compute() {",
+      "        if (area() <= 4_096) { renderPixels(); return; }",
+      "        invokeAll(quadrants());",
+      "    }",
+      "}",
+      "pool.invoke(new Tile(frame, 0, 0, 3840, 2160));"
      ]
     },
     {
      "type": "callout",
      "tone": "positive",
-     "text": "Payoff: near-linear speedup on skewed input without hand-tuning how files are assigned to threads."
+     "text": "Payoff: all cores stay busy on skewed work, with no hand-tuning of which thread renders which region."
     }
    ]
   },
@@ -417,7 +421,7 @@
      "return right.compute() + left.join();"
     ]
    ],
-   "explanation": "Find the midpoint, build both halves, start one asynchronously, then compute the other inline and join the forked one last. A join before the fork would wait on an unstarted task.",
+   "explanation": "Find the midpoint, build both halves, fork one, then compute the other inline and join the forked one. `return` ends the method, so the fork must come before it.",
    "compile": {
     "template": [
      "import java.util.concurrent.RecursiveTask;",

@@ -103,7 +103,7 @@
           "tone": "warning",
           "items": [
             "The self-use problem: a wrapped object that passes `this` bypasses the wrapper.",
-            "Forwarders go stale when the interface gains new `default` methods.",
+            "New `default` methods are inherited, not forwarded, so the inner object's overrides are bypassed.",
             "Sharing a mutable collaborator between several wrappers."
           ]
         },
@@ -271,7 +271,7 @@
       "flawLines": [
         1
       ],
-      "explanation": "A cache has a map; it is not one. Extending exposes `put`, `putAll` and `clear`, so callers bypass the capacity rule. Hold a `Map` in a private field and expose only `find`, `remember` and `evict`.",
+      "explanation": "A cache has a map; it is not one. Extending exposes `put`, `putAll` and `clear`, so callers bypass the capacity rule. Hold a `Map` in a private field and expose only `find`, `remember` and `evictInactive`.",
       "compile": {
         "template": [
           "import java.util.*;",

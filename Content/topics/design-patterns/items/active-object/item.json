@@ -50,7 +50,7 @@
     },
     {
      "region": "callers",
-     "note": "Four threads call concurrently, yet no total is lost. `put` on the queue happens-before `take`, and the servant is touched by one thread."
+     "note": "Four threads call concurrently, yet no total is lost. Each insertion into the queue happens-before its `take`, and only one thread touches the servant."
     }
    ]
   },

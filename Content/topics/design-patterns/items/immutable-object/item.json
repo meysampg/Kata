@@ -3,7 +3,7 @@
   "cards": [
     {"role": "definition", "blocks": [
       {"type": "lead", "text": "Share state safely between threads by never changing it: every update produces a new object."},
-      {"type": "p", "text": "An **immutable object** has a state fixed at construction. With no writes to race on, it needs no locks and can be shared freely. Java backs this with a memory-model rule: after the constructor finishes, a thread that sees the reference also sees the values of its **`final` fields**, even if the reference was published through a data race."},
+      {"type": "p", "text": "An **immutable object** has a state fixed at construction. With no writes to race on, it needs no locks and can be shared freely. The memory model backs this (JLS 17.5): a thread that first sees the reference after construction sees the constructor's values of its **`final` fields** and what they reach, even through a data race."},
       {"type": "bullets", "items": [
         "**Requires:** `final` fields, no setters, a `final` class or private constructor.",
         "**Deep immutability:** fields must reference immutable objects, or be copied defensively.",

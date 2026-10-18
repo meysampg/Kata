@@ -17,7 +17,7 @@
           "items": [
             "**Completes once:** with a value or an exception, never both, never twice.",
             "**Compose, don't wait:** `get()` blocks a thread; `thenX` registers a continuation.",
-            "**Where it runs:** async stages default to the common pool; pass an executor for I/O."
+            "**Where it runs:** `...Async` stages default to the common pool; others run on the completing thread."
           ]
         },
         {
@@ -42,7 +42,7 @@
         },
         {
           "region": "failure",
-          "note": "`handle` receives value or error. Through a dependent stage the error arrives wrapped in `CompletionException`, so the message is read from `getCause()`."
+          "note": "`handle` receives value or error. An exception thrown in an async task or earlier stage arrives wrapped in `CompletionException`, so the message comes from `getCause()`."
         },
         {
           "region": "promise",
@@ -429,12 +429,10 @@
     {
       "id": "order-1",
       "kind": "reorder",
-      "prompt": "Order the lines so the dependent stage is attached before completion and the result is read last.",
+      "prompt": "Order the lines so the program finishes and prints the result.",
       "blocks": [
         [
-          "var promise = new CompletableFuture<String>();"
-        ],
-        [
+          "var promise = new CompletableFuture<String>();",
           "var shout = promise.thenApply(String::toUpperCase);"
         ],
         [
@@ -442,9 +440,12 @@
         ],
         [
           "String result = shout.get();"
+        ],
+        [
+          "System.out.println(result);"
         ]
       ],
-      "explanation": "The promise must exist before anything attaches to it. Reading with `get()` before `complete` would block forever, so the read comes last.",
+      "explanation": "The promise and its stage must exist first. Nothing else completes the promise, so `get()` before `complete` would block forever. Printing needs the result.",
       "compile": {
         "template": [
           "import java.util.concurrent.*;",

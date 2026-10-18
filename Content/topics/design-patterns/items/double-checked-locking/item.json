@@ -38,7 +38,7 @@
     },
     {
      "region": "holder",
-     "note": "The holder idiom gets lazy, thread-safe initialization from class loading. The JVM runs `Holder`'s initializer once, on first use, with no locks in your code."
+     "note": "The holder idiom gets lazy, thread-safe initialization from class initialization. The JVM runs `Holder`'s initializer once, on first use, with no locks in your code."
     },
     {
      "region": "race",
@@ -55,21 +55,21 @@
    "blocks": [
     {
      "type": "lead",
-     "text": "A reporting service builds an expensive template engine."
+     "text": "Per-tenant template engines in a reporting service."
     },
     {
      "type": "p",
-     "text": "Compiling thousands of report templates takes seconds, and most requests never need the engine. A `TemplateEngineHolder` creates it on first use. Request threads read the cached engine on every call, so a lock per read would be a visible hotspot. DCL with a volatile field keeps reads lock-free after startup."
+     "text": "Compiling a tenant's report templates takes seconds, and many tenants never run a report. Each `TenantReports` object builds its engine on first use from that tenant's template directory, so a static holder class cannot help. Request threads read the engine on every call, so a lock per read would be a visible hotspot. DCL on a volatile instance field keeps reads lock-free after the first build."
     },
     {
      "type": "code",
      "language": "java",
      "lines": [
-      "private static volatile Engine engine;",
-      "static Engine engine() {",
+      "private volatile Engine engine;",
+      "Engine engine() {",
       "    Engine e = engine;",
-      "    if (e == null) {",
-      "        synchronized (Holder.class) { /* re-check, build */ }",
+      "    if (e == null) synchronized (this) {",
+      "        if ((e = engine) == null) engine = e = Engine.compile(dir);",
       "    }",
       "    return e;",
       "}"
@@ -78,7 +78,7 @@
     {
      "type": "callout",
      "tone": "positive",
-     "text": "Payoff: the lock is taken at most a few times, then every read is a single volatile load."
+     "text": "Payoff: each tenant takes the lock only during its first build; after that every read is a single volatile load."
     }
    ]
   },
@@ -205,8 +205,8 @@
      "title": "Pitfalls",
      "tone": "warning",
      "items": [
-      "Forgetting `volatile` compiles, usually works, and fails rarely on weak memory models.",
-      "Before Java 5, `volatile` was too weak to fix it, so old advice is wrong.",
+      "Forgetting `volatile` compiles, usually works, and fails rarely under JIT reordering or weak hardware.",
+      "Before Java 5 even `volatile` could not fix it; advice from that era is outdated.",
       "Reading the field twice on the fast path costs an extra volatile read."
      ]
     },
@@ -248,11 +248,6 @@
   {
    "role": "sightings",
    "entries": [
-    {
-     "where": "JDK",
-     "name": "Holder idiom in the JDK",
-     "detail": "Several JDK classes use a private nested holder class, such as lazily initialized caches built on class initialization."
-    },
     {
      "where": "JDK",
      "name": "java.util.concurrent.atomic.AtomicReference",

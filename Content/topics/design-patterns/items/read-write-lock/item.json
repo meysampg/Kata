@@ -17,7 +17,7 @@
           "items": [
             "**Read lock:** shared with other readers, excluded by a writer.",
             "**Write lock:** exclusive, and sees every earlier write.",
-            "**No upgrade:** holding read and asking for write deadlocks; downgrading is allowed."
+            "**No upgrade** in `ReentrantReadWriteLock`: read to write blocks forever; downgrading is allowed."
           ]
         },
         {
@@ -270,7 +270,7 @@
           "items": [
             "`StampedLock` offers optimistic reads that take no lock and are validated afterwards.",
             "For rarely changed data, a `volatile` immutable snapshot gives readers no lock at all.",
-            "Java 21 virtual threads pin their carrier inside `synchronized`; lock classes do not."
+            "Before JDK 24 (JEP 491), `synchronized` pinned virtual threads; lock classes never did."
           ]
         }
       ]
@@ -353,7 +353,7 @@
         },
         {
           "ref": "guarded-suspension",
-          "why": "No caller waits for a condition to become true; the locks only exclude, they never block on state."
+          "why": "No caller waits for a condition on the data to become true; the locks only exclude other threads."
         },
         {
           "ref": "immutable-object",

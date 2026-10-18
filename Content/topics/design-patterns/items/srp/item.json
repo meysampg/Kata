@@ -291,25 +291,23 @@
       "prompt": "Order the wiring so that each line only uses what came before.",
       "blocks": [
         [
-          "var lines = List.of(new Line(\"A1\", 2, 1250));"
-        ],
-        [
-          "var invoice = new Invoice(lines);"
-        ],
-        [
           "var rows = new ArrayList<Invoice>();"
         ],
         [
-          "var service = new BillingService(new InvoiceRenderer(), rows::add);"
+          "InvoiceStore store = rows::add;"
         ],
         [
+          "var service = new BillingService(new InvoiceRenderer(), store);"
+        ],
+        [
+          "var invoice = new Invoice(List.of(new Line(\"A1\", 2, 1250)));",
           "String text = service.issue(invoice);"
         ],
         [
-          "System.out.println(text);"
+          "System.out.println(text + \" / \" + rows.size() + \" stored\");"
         ]
       ],
-      "explanation": "Data first, then the store the service needs, then the service; only a built service can issue, and only an issued invoice has text to print.",
+      "explanation": "The store wraps the list, the service needs the store, issuing needs the service, and the print reads the issued text. Each block consumes the one before it.",
       "compile": {
         "template": [
           "import java.util.*;",

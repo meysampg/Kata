@@ -10,7 +10,7 @@
         },
         {
           "type": "p",
-          "text": "The rule inverts twice. Source dependencies point at an **abstraction**, and that abstraction is **owned by the consumer**: `OrderService` defines `Notifier` in terms of what orders need, and SMTP adapts to it. That is what lets the business core build and test without infrastructure."
+          "text": "The inversion has two parts. Source dependencies point at an **abstraction**, and that abstraction is **owned by the consumer**: `OrderService` defines `Notifier` in terms of what orders need, and SMTP adapts to it. That is what lets the business core build and test without infrastructure."
         },
         {
           "type": "bullets",

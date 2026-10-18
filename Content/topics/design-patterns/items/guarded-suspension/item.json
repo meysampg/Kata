@@ -8,20 +8,20 @@
         "**Guard:** a boolean condition over state protected by the lock.",
         "**Wait in a loop:** `while`, never `if`; wakeups can be spurious or stolen.",
         "**Signal on every change** that can make some guard true."]},
-      {"type": "callout", "tone": "info", "text": "`wait` releases the monitor and reacquires it before returning. Writes made before `notifyAll` by the signaler are visible to the waiter afterwards."}
+      {"type": "callout", "tone": "info", "text": "`wait` releases the monitor and reacquires it before returning. The signaler's unlock happens-before that reacquire, so its writes inside the monitor are visible to the waiter."}
     ]},
     {"role": "implementation", "file": "GuardedSuspension.java",
      "expectedOutput": "[m1, m2, m3]",
      "walkthrough": [
       {"region": "take", "note": "The guard `item == null` is rechecked in a `while` loop after every wakeup. `wait()` releases the monitor, so a producer can enter `put`."},
       {"region": "put", "note": "The producer has its own guard: the slot must be empty. Changing `item` and then calling `notifyAll()` wakes threads whose guard may now hold."},
-      {"region": "consumer", "note": "The consumer starts first and blocks on the empty slot. Restoring the interrupt flag keeps cancellation visible to callers."},
+      {"region": "consumer", "note": "The consumer is started first and blocks if the slot is still empty. Restoring the interrupt flag keeps cancellation visible to callers."},
       {"region": "producer", "note": "The main thread produces. Whatever order the scheduler picks, each guard is evaluated under the lock, so the result is the same."},
       {"region": "join", "note": "`join` gives a happens-before edge, so reading `received` here is safe. The list needed no extra synchronization."}
     ]},
     {"role": "example", "blocks": [
       {"type": "lead", "text": "Borrowing a connection from a database pool."},
-      {"type": "p", "text": "A request thread calls `borrow()` when all connections are in use. It must block until one is returned, but not forever: after 30 seconds the call fails so the request can return an error instead of hanging. The guard is `!idle.isEmpty()`, `return()` signals, and the wait is a timed `awaitNanos` that survives spurious wakeups by recomputing the remaining time."},
+      {"type": "p", "text": "A request thread calls `borrow()` when all connections are in use. It must block until one is returned, but not forever: after 30 seconds the call fails so the request can return an error instead of hanging. The guard is `!idle.isEmpty()`, `release()` signals, and the wait is a timed `awaitNanos` that survives spurious wakeups by recomputing the remaining time."},
       {"type": "code", "language": "java", "lines": [
         "lock.lock(); try {",
         "    long left = timeout.toNanos();",
@@ -73,7 +73,7 @@
         "One lock with many unrelated guards and `notifyAll` storming every waiter."]},
       {"title": "Modern Java", "tone": "info", "items": [
         "`ReentrantLock` with `Condition` gives several wait sets and timed waits.",
-        "Blocking inside `synchronized` pins a virtual thread in Java 21; prefer `ReentrantLock` conditions or `java.util.concurrent` types there."]}
+        "On Java 21, `wait()` inside `synchronized` pins a virtual thread; JDK 24 fixed this (JEP 491)."]}
     ]},
     {"role": "compare", "rows": [
       {"ref": "producer-consumer", "relation": "combines", "difference": "A blocking queue is guarded suspension on both ends: `take` waits while empty, `put` waits while full."},
@@ -140,10 +140,9 @@
      "blocks": [
       ["while (item == null) wait();"],
       ["T value = item;"],
-      ["item = null;"],
-      ["notifyAll();"],
+      ["item = null;", "notifyAll();"],
       ["return value;"]],
-     "explanation": "Wait for the guard first, read the item, then clear it. Signal after the state change so woken threads see it, and return last.",
+     "explanation": "Wait until the guard holds, read the item before clearing it, then clear and wake producers waiting for an empty slot. Return last.",
      "compile": {"template": [
       "final class Slot<T> {",
       "  private T item;",

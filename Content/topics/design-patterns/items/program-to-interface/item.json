@@ -6,7 +6,7 @@
       "blocks": [
         {
           "type": "lead",
-          "text": "Declare variables, parameters and return types as the narrowest supertype that offers what you need, not as a concrete class."
+          "text": "Declare variables, parameters and return types as the most general supertype that offers what you need, not as a concrete class."
         },
         {
           "type": "p",
@@ -38,7 +38,7 @@
         },
         {
           "region": "after",
-          "note": "The parameter names the capability actually used, iteration over a `Collection`. Every collection, view or immutable, now works."
+          "note": "The parameter names a capability, `Collection`; `Iterable` would also do, since only iteration is used. Any collection, view or immutable, now works."
         },
         {
           "region": "swap",
@@ -103,7 +103,7 @@
           "title": "Pitfalls",
           "tone": "warning",
           "items": [
-            "A parameter wider than needed, such as `List` when `Iterable` suffices.",
+            "A parameter more specific than needed, such as `List` when `Iterable` suffices.",
             "Casting or `instanceof ArrayList` to reach implementation details.",
             "Assuming guarantees the interface does not give: `Map` ordering, mutability of `List.of`."
           ]
@@ -324,7 +324,7 @@
       "keyPoints": [
         "Depend on the capability, not the class",
         "Construct the concrete class in one place",
-        "Choose the narrowest sufficient supertype",
+        "Choose the most general sufficient supertype",
         "Skip for stable types like String",
         "Beware guarantees the interface does not make"
       ]

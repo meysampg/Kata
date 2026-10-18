@@ -255,7 +255,7 @@
           "title": "Modern Java",
           "tone": "info",
           "items": [
-            "Virtual threads make a blocking `take()` cheap, so a consumer per task is affordable.",
+            "Virtual threads make blocking `put` and `take` cheap, so many consumers cost little.",
             "`Flow` and `SubmissionPublisher` add demand signalling for streaming pipelines."
           ]
         }
@@ -297,7 +297,7 @@
         {
           "where": "JDK",
           "name": "java.util.concurrent.BlockingQueue",
-          "detail": "`ArrayBlockingQueue`, `LinkedBlockingQueue` and `SynchronousQueue` implement the bounded buffer; `put` and `take` block."
+          "detail": "`ArrayBlockingQueue` and bounded `LinkedBlockingQueue` are the buffer; `SynchronousQueue` is a zero-capacity hand-off."
         },
         {
           "where": "JDK",

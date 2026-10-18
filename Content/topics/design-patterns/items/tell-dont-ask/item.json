@@ -10,7 +10,7 @@
         },
         {
           "type": "p",
-          "text": "Asking a getter and then branching in the caller moves an object's rules out of the object, so each caller reimplements them. Put behavior beside the data it guards and expose **intent** (`withdraw`) instead of **state** (`getBalance`, `setBalance`). The invariant then lives in one place. The related **Law of Demeter** forbids reaching through chains like `a.b().c().d()`."
+          "text": "Asking a getter and then branching in the caller moves an object's rules out of the object, so each caller reimplements them. Put behavior beside the data it guards and expose **intent** (`withdraw`) instead of **state** (`getBalance`, `setBalance`). The related **Law of Demeter** limits a method to its own object, fields, parameters and the objects it creates, ruling out `a.b().c().d()`."
         },
         {
           "type": "bullets",
@@ -34,7 +34,7 @@
       "walkthrough": [
         {
           "region": "before",
-          "note": "`TellerBefore` reads the balance, decides and writes it back. The overdraft rule would be duplicated in every caller that withdraws."
+          "note": "`TellerBefore` reads the balance, decides and writes it back. The withdrawal rule would be duplicated in every caller that withdraws."
         },
         {
           "region": "after",
@@ -218,7 +218,7 @@
     {
       "id": "pick-1",
       "kind": "choose",
-      "scenario": "Four services each check `user.getPlan().equals(\"PRO\") && user.getSeats() > limit` before allowing an invite. One service omitted the seats check and over-provisioned a customer.",
+      "scenario": "Four services each check `user.getPlan().equals(\"PRO\") && user.getSeats() < limit` before allowing an invite. One service omitted the seats check and over-provisioned a customer.",
       "prompt": "What is the right fix?",
       "options": [
         {

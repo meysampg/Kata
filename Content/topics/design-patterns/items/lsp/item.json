@@ -209,7 +209,7 @@
     {
       "id": "pick-1",
       "kind": "choose",
-      "scenario": "A `Queue` interface documents FIFO order. A teammate adds `PriorityQueueAdapter` implementing it so the scheduler can use it. All unit tests pass, but an ordering-sensitive job produces wrong results in production.",
+      "scenario": "A `JobQueue` interface documents FIFO order. A teammate adds `PriorityJobQueue` implementing it so the scheduler can use it. All unit tests pass, but an ordering-sensitive job produces wrong results in production.",
       "prompt": "Which principle was violated?",
       "options": [
         {
@@ -295,7 +295,7 @@
       "modelAnswer": [
         {
           "type": "p",
-          "text": "Any code written for a supertype must work with any subtype without knowing which. It is about behavior, not signatures: preconditions cannot tighten, postconditions cannot weaken. A mutable Square couples width and height, so code that sets them independently and expects the product gets the wrong area."
+          "text": "Any code written for a supertype must work with any subtype without knowing which. It is about behavior, not signatures: preconditions cannot tighten, postconditions and invariants cannot weaken. A mutable Square couples width and height, so code that sets them independently and expects the product gets the wrong area."
         }
       ],
       "keyPoints": [

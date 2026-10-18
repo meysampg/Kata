@@ -320,11 +320,11 @@
     {
      "where": "Node.js",
      "name": "libuv event loop",
-     "detail": "A single-threaded loop dispatches I/O callbacks via epoll, kqueue or IOCP."
+     "detail": "Node's single-threaded loop polls epoll or kqueue (IOCP on Windows) and runs the I/O callbacks."
     },
     {
      "where": "Vert.x",
-     "name": "Vertx event loop",
+     "name": "Event loop and verticles",
      "detail": "Verticles run on event loop threads and must not block them."
     }
    ]
@@ -391,7 +391,7 @@
     },
     {
      "ref": "thread-pool",
-     "why": "A thread per connection would be blocked on reads almost all the time, wasting thousands of threads."
+     "why": "A pool serving blocking sockets ties up one thread per open connection, almost always blocked on reads."
     },
     {
      "ref": "fork-join",
