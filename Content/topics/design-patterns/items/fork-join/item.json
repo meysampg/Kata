@@ -246,7 +246,7 @@
    "rows": [
     {
      "ref": "thread-pool",
-     "relation": "specializes",
+     "relation": "lookAlike",
      "difference": "A fork-join pool is a thread pool specialized for tasks that spawn and join subtasks, with per-worker deques and work stealing."
     },
     {

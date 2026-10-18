@@ -74,7 +74,7 @@
         "A `switch` over the sealed type can host several operations outside the nodes, like Visitor."]}
     ]},
     {"role": "compare", "rows": [
-      {"ref": "composite", "relation": "specializes", "difference": "An interpreter tree is a Composite whose leaves and branches carry grammar meaning. Composite is about treating parts and wholes uniformly; Interpreter adds evaluation of a language."},
+      {"ref": "composite", "relation": "lookAlike", "difference": "An interpreter tree is a Composite whose leaves and branches carry grammar meaning. Composite is about treating parts and wholes uniformly; Interpreter adds evaluation of a language."},
       {"ref": "visitor", "relation": "combines", "difference": "Visitor moves operations such as eval, print and optimize out of the nodes, so you can add them without editing every node class. Natural once the grammar is stable."},
       {"ref": "flyweight", "relation": "combines", "difference": "Terminal symbols that repeat (constants, keywords) can be shared as flyweights to save memory in big trees."},
       {"ref": "strategy", "relation": "alternative", "difference": "If you only need to pick one of a few algorithms, a strategy or lambda is enough. Interpreter is for sentences with structure that users compose."},

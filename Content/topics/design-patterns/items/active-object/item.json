@@ -316,7 +316,7 @@
    "rows": [
     {
      "ref": "producer-consumer",
-     "relation": "specializes",
+     "relation": "lookAlike",
      "difference": "Producer-consumer decouples any producers from any consumers through a queue. An active object is one consumer whose queue carries method requests and returns futures."
     },
     {
