@@ -10,7 +10,7 @@
         },
         {
           "type": "p",
-          "text": "A **DTO** has fields and no behavior. It exists so that a remote call, a screen or a message gets exactly the data it needs in a stable shape. An **assembler** or mapper converts between DTOs and domain objects at the edge, keeping internals, secrets and lazy associations from leaking."
+          "text": "A **DTO** has fields and no behavior. Fowler introduced it to replace many fine-grained remote calls with one coarse-grained transfer. It exists so that a remote call, a screen or a message gets exactly the data it needs in a stable shape. An **assembler** or mapper converts between DTOs and domain objects at the edge, keeping internals, secrets and lazy associations from leaking."
         },
         {
           "type": "bullets",
@@ -274,7 +274,8 @@
       "kind": "identify",
       "prompt": "Which pattern is this?",
       "lines": [
-        "record OrderPayload(long id, String customerName, String total, List<String> lines) {",
+        "record OrderPayload(",
+        "        long id, String customerName, String total, List<String> lines) {",
         "",
         "    static OrderPayload from(Order o) {",
         "        return new OrderPayload(",

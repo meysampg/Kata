@@ -234,7 +234,7 @@
     {
      "where": "Ruby on Rails",
      "name": "ActiveRecord::Base",
-     "detail": "The framework that named the pattern: models with `find`, `save`, `where` and validations."
+     "detail": "Rails' ORM, named after Fowler's pattern: models with `find`, `save`, `where` and validations."
     },
     {
      "where": "Django",
@@ -368,10 +368,10 @@
      "account.save();"
     ],
     [
-     "receipt.print(account.balance());"
+     "receipt.print(Account.find(id).orElseThrow().balance());"
     ]
    ],
-   "explanation": "Get the key, load the record, apply behavior, persist it, then report the saved state. Each step uses the previous variable.",
+   "explanation": "Get the key, load the record, apply behavior, persist it. The receipt re-reads the stored balance, which reflects the withdrawal only after `save()`.",
    "compile": {
     "template": [
      "import java.util.*;",

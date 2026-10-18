@@ -23,7 +23,7 @@
         {
           "type": "callout",
           "tone": "info",
-          "text": "The same idea is called Ports and Adapters, Onion or Clean Architecture; the details differ but the inward dependency rule is shared."
+          "text": "Cockburn's own name is Ports and Adapters. Onion and Clean Architecture are close relatives that add inner rings but keep the inward dependency rule."
         }
       ]
     },
@@ -325,8 +325,8 @@
         },
         {
           "ref": "dip",
-          "relation": "specializes",
-          "difference": "Hexagonal applies the Dependency Inversion Principle at architectural scale: the core defines abstractions, outer code depends on them."
+          "relation": "lookAlike",
+          "difference": "Hexagonal is a special case: DIP applied at architectural scale, where the core owns the abstractions and outer code depends on them. DIP itself applies to any two modules."
         },
         {
           "ref": "adapter",
@@ -349,24 +349,19 @@
       "role": "sightings",
       "entries": [
         {
-          "where": "JDK",
-          "name": "JDBC java.sql.Driver and DataSource",
-          "detail": "Applications code against the JDBC API (port); each vendor driver is an adapter."
-        },
-        {
-          "where": "SLF4J",
-          "name": "org.slf4j.Logger",
-          "detail": "Code logs through the API; Logback, Log4j 2 or `java.util.logging` bindings adapt it."
-        },
-        {
-          "where": "Spring Cloud Stream",
-          "name": "Binder",
-          "detail": "Application logic uses channels; Kafka and RabbitMQ binders adapt the broker."
+          "where": "jMolecules",
+          "name": "@PrimaryPort, @SecondaryPort, @PrimaryAdapter, @SecondaryAdapter",
+          "detail": "Annotations in `org.jmolecules.architecture.hexagonal` that declare each role; the jMolecules ArchUnit rules then verify the dependencies."
         },
         {
           "where": "ArchUnit",
           "name": "Architectures.onionArchitecture()",
           "detail": "Rule builder that checks domain, application and adapter packages for inward-only dependencies."
+        },
+        {
+          "where": "Spring Cloud Stream",
+          "name": "Binder",
+          "detail": "Logic is a plain `Function` or `Consumer` bean; Kafka or RabbitMQ binders are driving adapters, so changing the broker leaves the code untouched."
         }
       ]
     }

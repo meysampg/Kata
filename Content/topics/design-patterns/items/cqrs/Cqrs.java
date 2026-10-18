@@ -1,9 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 // [[messages
 record PlaceOrder(String orderId, String customer, int cents) {}
@@ -12,17 +10,17 @@ record OrderPlaced(String orderId, String customer, int cents) {}
 
 // [[write
 final class OrderCommands {
-    private final Set<String> ids = new HashSet<>();
-    private final List<OrderPlaced> log = new ArrayList<>();
+    private final Map<String, PlaceOrder> orders = new HashMap<>();
+    private final List<OrderPlaced> feed = new ArrayList<>();
 
     void handle(PlaceOrder cmd) {
         if (cmd.cents() <= 0) throw new IllegalArgumentException("amount");
-        if (!ids.add(cmd.orderId()))
+        if (orders.putIfAbsent(cmd.orderId(), cmd) != null)
             throw new IllegalStateException("duplicate " + cmd.orderId());
-        log.add(new OrderPlaced(cmd.orderId(), cmd.customer(), cmd.cents()));
+        feed.add(new OrderPlaced(cmd.orderId(), cmd.customer(), cmd.cents()));
     }
 
-    List<OrderPlaced> log() { return List.copyOf(log); }
+    List<OrderPlaced> feed() { return List.copyOf(feed); }
 }
 // ]]
 
@@ -31,9 +29,9 @@ final class RevenueView {
     private final Map<String, Integer> byCustomer = new HashMap<>();
     private int applied;
 
-    void catchUp(List<OrderPlaced> log) {
-        for (; applied < log.size(); applied++) {
-            var e = log.get(applied);
+    void catchUp(List<OrderPlaced> feed) {
+        for (; applied < feed.size(); applied++) {
+            var e = feed.get(applied);
             byCustomer.merge(e.customer(), e.cents(), Integer::sum);
         }
     }
@@ -59,7 +57,7 @@ class Main {
         commands.handle(new PlaceOrder("o2", "bob", 700));
         commands.handle(new PlaceOrder("o3", "ada", 1000));
         System.out.println("before: " + view.revenue("ada"));
-        view.catchUp(commands.log());
+        view.catchUp(commands.feed());
         System.out.println("after: " + view.revenue("ada"));
         System.out.println(view.top(2));
         // ]]

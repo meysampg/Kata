@@ -16,8 +16,8 @@
      "type": "bullets",
      "items": [
       "**Write:** append events; never update or delete.",
-      "**Read state:** replay events, or start from a snapshot.",
-      "**Concurrency:** append with an expected version."
+      "**Read state:** replay events, or load a snapshot and replay only the tail.",
+      "**Concurrency:** append with the expected stream version."
      ]
     },
     {
@@ -30,7 +30,7 @@
   {
    "role": "implementation",
    "file": "EventSourcing.java",
-   "expectedOutput": "70 at v2\n100 at v1\nconflict: expected v2, at v3",
+   "expectedOutput": "70 at v2\n100 at v1\nconflict at v3",
    "walkthrough": [
     {
      "region": "events",
@@ -50,7 +50,11 @@
     },
     {
      "region": "client",
-     "note": "Replaying all events gives the present; replaying a prefix gives the past. That time travel is a one-liner."
+     "note": "After the save, a fresh replay of a prefix of the stream gives the past: the balance after the first event only. Time travel is a replay."
+    },
+    {
+     "region": "conflict",
+     "note": "A rival writer appends first. `acc` still expects v2, so its append is rejected; the command should reload, re-check the invariant and retry."
     }
    ]
   },
@@ -63,7 +67,7 @@
     },
     {
      "type": "p",
-     "text": "Auditors ask 'how many units of SKU 42 were on the shelf on 3 March, and why did the count change?' An update-in-place table can only answer the first part for today. As a stream of `Received`, `Picked` and `Adjusted` events, any date is a replay up to a timestamp, and every number carries its reason. EventStoreDB and Axon Server store such streams."
+     "text": "Auditors ask 'how many units of SKU 42 were on the shelf on 3 March, and why did the count change?' An update-in-place table can only answer the first part for today. As a stream of `Received`, `Picked` and `Adjusted` events, any date is a replay up to a timestamp, and every number carries its reason. KurrentDB (formerly EventStoreDB) and Axon Server store such streams."
     },
     {
      "type": "code",
@@ -266,7 +270,7 @@
      "tone": "info",
      "items": [
       "Sealed event hierarchies and switch patterns make `apply` exhaustive; the compiler flags unhandled new events.",
-      "Sealed event hierarchies and switch patterns make `apply` exhaustive; the compiler flags unhandled new events."
+      "Keep old event records readable forever: add a new record version and upcast old ones on load."
      ]
     }
    ]
@@ -277,7 +281,7 @@
     {
      "ref": "cqrs",
      "relation": "combines",
-     "difference": "Event sourcing gives CQRS a natural feed for read models. Each stands alone: CQRS with state tables, event sourcing with one query model."
+     "difference": "Event sourcing makes the write model an event stream and almost forces CQRS, since streams are poor at queries. CQRS alone stores plain state and needs no event log."
     },
     {
      "ref": "domain-event",
@@ -305,19 +309,19 @@
      "detail": "Rebuilds event-sourced aggregates by applying stored events to handler methods."
     },
     {
-     "where": "EventStoreDB",
-     "name": "Streams with expected revision",
-     "detail": "Append-only streams; appends can require an expected stream revision for optimistic concurrency."
+     "where": "Axon Framework",
+     "name": "SingleEventUpcaster",
+     "detail": "Converts an old stored event revision to the current shape while reading, so history is never rewritten."
+    },
+    {
+     "where": "KurrentDB (EventStoreDB)",
+     "name": "Append with expected revision",
+     "detail": "Append-only streams; an append can require an expected stream revision and fails on mismatch: optimistic concurrency."
     },
     {
      "where": "Akka Persistence",
      "name": "EventSourcedBehavior",
-     "detail": "Typed actors persist events and recover state by replaying them, with optional snapshots."
-    },
-    {
-     "where": "Git",
-     "name": "Commit history",
-     "detail": "State of the tree is derived from the chain of commits; the history is the record."
+     "detail": "Typed actors persist events and recover state by replaying them, optionally from a snapshot."
     }
    ]
   }
@@ -441,10 +445,10 @@
      "account.saveTo(store, id);"
     ],
     [
-     "System.out.println(account.balance());"
+     "System.out.println(Account.replay(store.load(id)).balance());"
     ]
    ],
-   "explanation": "Load the stream, rebuild state from it, validate and record a new event against that state, append the new events, then read the result.",
+   "explanation": "Load the stream, rebuild state, validate and record a new event against that state, append it, then replay the stored stream, which includes the withdrawal only after the append.",
    "compile": {
     "template": [
      "import java.util.*;",

@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "info",
-     "text": "A repository is a port in the domain. Its implementation is an adapter that belongs to infrastructure."
+     "text": "Unlike a table-shaped DAO, a repository works in aggregates and domain terms. Its interface is a port owned by the domain; the implementation is an infrastructure adapter."
     }
    ]
   },
@@ -250,7 +250,7 @@
     },
     {
      "ref": "hexagonal",
-     "relation": "specializes",
+     "relation": "combines",
      "difference": "In hexagonal architecture a repository interface is the typical outbound port, and its implementation is a driven adapter."
     }
    ]
@@ -266,7 +266,7 @@
     {
      "where": "Jakarta EE",
      "name": "jakarta.data.repository.Repository",
-     "detail": "Jakarta Data marks an interface as a repository with built-in CRUD and query methods."
+     "detail": "Jakarta Data's `@Repository` marks an interface for the provider to implement; extending `CrudRepository` adds built-in operations."
     },
     {
      "where": "Spring",
@@ -392,12 +392,9 @@
     ],
     [
      "orders.save(order);"
-    ],
-    [
-     "audit.record(order.id());"
     ]
    ],
-   "explanation": "Build the identity, fetch the aggregate, change it, persist it, then use the persisted result. Each line depends on the previous variable.",
+   "explanation": "Build the identity, fetch the aggregate, change it through its own behavior, then save it. Saving before `cancel()` would persist the old state.",
    "compile": {
     "template": [
      "import java.util.*;",

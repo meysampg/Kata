@@ -1,82 +1,78 @@
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-// [[changes
-sealed interface Change permits Insert, Update, Delete {}
-record Insert(String id, int value) implements Change {}
-record Update(String id, int value) implements Change {}
-record Delete(String id) implements Change {}
-// ]]
+final class Account {
+    final String id;
+    int balance;
+
+    Account(String id, int balance) { this.id = id; this.balance = balance; }
+}
 
 final class UnitOfWork {
-    private final TreeMap<String, Integer> db;
-    private final Map<String, Change> pending = new LinkedHashMap<>();
+    private final Map<String, Integer> db;
+    private final Map<String, Account> loaded = new LinkedHashMap<>();
+    private final Map<String, Integer> snapshot = new LinkedHashMap<>();
+    private final List<Account> created = new ArrayList<>();
+    private final List<String> removed = new ArrayList<>();
 
-    UnitOfWork(TreeMap<String, Integer> db) { this.db = db; }
+    UnitOfWork(Map<String, Integer> db) { this.db = db; }
 
-    // [[register
-    void registerNew(String id, int value) {
-        pending.put(id, new Insert(id, value));
-    }
-
-    void registerDirty(String id, int value) {
-        pending.merge(id, new Update(id, value), (old, now) ->
-            old instanceof Insert ? new Insert(id, value)
-            : old instanceof Update ? now : old);
-    }
-
-    void registerRemoved(String id) {
-        if (pending.get(id) instanceof Insert) pending.remove(id);
-        else pending.put(id, new Delete(id));
+    // [[identity
+    Account load(String id) {
+        return loaded.computeIfAbsent(id, k -> {
+            snapshot.put(k, db.get(k));
+            return new Account(k, db.get(k));
+        });
     }
     // ]]
 
+    // [[register
+    void registerNew(Account a) { created.add(a); }
+    void registerRemoved(Account a) { removed.add(a.id); }
+    // ]]
+
     // [[commit
-    int commit() {
-        var copy = new TreeMap<>(db);
-        for (Change c : pending.values()) {
-            switch (c) {
-                case Insert i -> {
-                    if (copy.putIfAbsent(i.id(), i.value()) != null)
-                        throw new IllegalStateException("duplicate " + i.id());
-                }
-                case Update u -> {
-                    if (copy.replace(u.id(), u.value()) == null)
-                        throw new IllegalStateException("missing " + u.id());
-                }
-                case Delete d -> copy.remove(d.id());
-            }
+    List<String> commit() {
+        var log = new ArrayList<String>();
+        var next = new TreeMap<>(db);
+        for (Account a : created) {
+            next.put(a.id, a.balance);
+            log.add("INSERT " + a.id);
+        }
+        for (Account a : loaded.values()) {
+            boolean same = a.balance == snapshot.get(a.id);
+            if (same || removed.contains(a.id)) continue;
+            next.put(a.id, a.balance);
+            log.add("UPDATE " + a.id);
+        }
+        for (String id : removed) {
+            next.remove(id);
+            log.add("DELETE " + id);
         }
         db.clear();
-        db.putAll(copy);
-        int applied = pending.size();
-        pending.clear();
-        return applied;
+        db.putAll(next);
+        return log;
     }
     // ]]
 }
 
 class Main {
     public static void main(String[] args) {
-        var db = new TreeMap<>(Map.of("a", 100, "b", 50));
+        var db = new TreeMap<>(Map.of("a", 100, "b", 50, "c", 7));
         // [[client
         var work = new UnitOfWork(db);
-        work.registerNew("c", 10);
-        work.registerDirty("a", 70);
-        work.registerDirty("a", 60);
-        work.registerRemoved("b");
-        System.out.println("committed " + work.commit() + " changes");
+        Account a = work.load("a");
+        a.balance -= 30;
+        work.load("a").balance -= 10;
+        System.out.println("same object: " + (a == work.load("a")));
+        work.load("b");
+        work.registerNew(new Account("d", 5));
+        work.registerRemoved(work.load("c"));
+        System.out.println(work.commit());
         System.out.println(db);
         // ]]
-        var bad = new UnitOfWork(db);
-        bad.registerDirty("a", 1);
-        bad.registerDirty("zzz", 5);
-        try {
-            bad.commit();
-        } catch (IllegalStateException e) {
-            System.out.println("rolled back: " + e.getMessage());
-        }
-        System.out.println(db);
     }
 }

@@ -10,14 +10,14 @@
     },
     {
      "type": "p",
-     "text": "A **unit of work** records objects that were created, modified or removed. Nothing hits storage until `commit()`, which writes all changes in the right order within one transaction. It also keeps each entity written once, however often it changed, and it is where rollback lives."
+     "text": "A **unit of work** records objects that were created, modified or removed during one business transaction. Nothing hits storage until `commit()`, which writes every change in a valid order inside one transaction, each row once. It usually pairs with an **identity map**, so each row loads as one object, and finds changes by explicit registration or by comparing against load-time snapshots."
     },
     {
      "type": "bullets",
      "items": [
-      "**Tracks:** new, dirty and removed objects (`registerNew/Dirty/Removed`).",
-      "**Commits:** one batch, one transaction, in dependency order.",
-      "**Scope:** one request or business transaction, then discarded."
+      "**Tracks:** new, dirty and removed objects.",
+      "**Dirty detection:** caller calls `registerDirty`, or the UoW diffs snapshots (Hibernate).",
+      "**Commits:** one transaction: inserts, then updates, then deletes."
      ]
     },
     {
@@ -30,23 +30,23 @@
   {
    "role": "implementation",
    "file": "UnitOfWork.java",
-   "expectedOutput": "committed 3 changes\n{a=60, c=10}\nrolled back: missing zzz\n{a=60, c=10}",
+   "expectedOutput": "same object: true\n[INSERT d, UPDATE a, DELETE c]\n{a=60, b=50, d=5}",
    "walkthrough": [
     {
-     "region": "changes",
-     "note": "Pending work as a sealed hierarchy of records. The compiler checks that commit handles every kind of change."
+     "region": "identity",
+     "note": "`load` is an identity map: one `Account` instance per id for the whole unit, plus a snapshot of the value as it was read."
     },
     {
      "region": "register",
-     "note": "A map keyed by id coalesces repeats: two updates become one, an update after an insert stays an insert, and removing a new object cancels it."
+     "note": "New and removed objects must be registered, because no snapshot can reveal them. Modified objects need no call at all."
     },
     {
      "region": "commit",
-     "note": "Apply changes to a copy, then swap it in. A failing change throws before anything is published, which stands in for a database rollback."
+     "note": "Dirty checking compares each loaded object with its snapshot. Writes go out in insert, update, delete order and are published in one swap, standing in for one transaction."
     },
     {
      "region": "client",
-     "note": "Three business operations, four registrations, one commit. `a` is written once with its final value."
+     "note": "Two edits through two `load` calls hit the same object, so `a` is written once with its final value. `b` was read but unchanged, so it is not written."
     }
    ]
   },
@@ -59,7 +59,7 @@
     },
     {
      "type": "p",
-     "text": "Cancelling must flip the order status, release reserved stock and credit the loyalty balance. Doing this with three independent saves leaves a half-cancelled order when the third fails. With a unit of work, the handler loads entities through it, mutates them as plain objects, and calls one `commit()`. Hibernate's persistence context detects the changes and flushes them in a single transaction."
+     "text": "Cancelling must flip the order status, release reserved stock and credit the loyalty balance. Doing this with three independent saves leaves a half-cancelled order when the third fails. With a unit of work, the handler loads entities through it, mutates them as plain objects, and calls one `commit()`. With JPA, the persistence context plays that role: it detects the changes and flushes them in a single transaction."
     },
     {
      "type": "code",
@@ -106,9 +106,10 @@
        "col": 0.5,
        "row": 1,
        "members": [
-        "- pending: Map",
+        "- loaded: Map",
+        "- snapshot: Map",
+        "+ load(id)",
         "+ registerNew(e)",
-        "+ registerDirty(e)",
         "+ registerRemoved(e)",
         "+ commit()"
        ],
@@ -183,13 +184,13 @@
       {
        "from": "c",
        "to": "u",
-       "label": "registerDirty(a)",
+       "label": "load(a), mutate",
        "style": "call"
       },
       {
        "from": "c",
        "to": "u",
-       "label": "registerNew(c)",
+       "label": "registerNew(d)",
        "style": "call"
       },
       {
@@ -219,7 +220,7 @@
       {
        "from": "u",
        "to": "c",
-       "label": "3 changes",
+       "label": "log",
        "style": "return"
       }
      ]
@@ -307,9 +308,14 @@
    "role": "sightings",
    "entries": [
     {
-     "where": "JPA / Hibernate",
-     "name": "EntityManager and Session",
-     "detail": "The persistence context tracks managed entities, detects dirty ones and flushes them at commit."
+     "where": "Jakarta Persistence",
+     "name": "EntityManager persistence context",
+     "detail": "Returns one managed instance per id (an identity map), tracks new and removed entities, and flushes dirty ones at commit."
+    },
+    {
+     "where": "Hibernate",
+     "name": "Session.flush()",
+     "detail": "Dirty-checks managed entities against load-time snapshots and orders the SQL: inserts, then updates, then deletes."
     },
     {
      "where": "Spring",
@@ -320,11 +326,6 @@
      "where": "Spring",
      "name": "TransactionTemplate",
      "detail": "Programmatic transaction scope: callback body runs, then commit or rollback."
-    },
-    {
-     "where": "Entity Framework",
-     "name": "DbContext.SaveChanges",
-     "detail": "A change tracker collects entity states and writes them in one transaction."
     }
    ]
   }
@@ -448,18 +449,15 @@
      "order.cancel();"
     ],
     [
-     "work.registerDirty(order);"
-    ],
-    [
      "work.commit();"
     ]
    ],
-   "explanation": "Create the scope, load through it, mutate, register the change, and commit last. Commit publishes everything registered before it.",
+   "explanation": "Create the scope, load through it so the order is tracked, mutate it, and commit last. Dirty checking at commit finds the change; commit before `cancel()` would write nothing.",
    "compile": {
     "template": [
      "interface Db {}",
      "final class Order { void cancel() {} }",
-     "final class UnitOfWork { UnitOfWork(Db db) {} Order load(String id) { return new Order(); } void registerDirty(Order o) {} void commit() {} }",
+     "final class UnitOfWork { UnitOfWork(Db db) {} Order load(String id) { return new Order(); } void commit() {} }",
      "class Snippet { void run(Db db, String id) {",
      "{{code}}",
      "} }"
@@ -473,14 +471,14 @@
    "modelAnswer": [
     {
      "type": "p",
-     "text": "A unit of work records new, changed and removed objects during one business transaction and writes them together at commit, in a valid order, in one transaction. It coalesces repeated edits and owns rollback. It is request-scoped and local to one store, so it is not a saga and not a cache."
+     "text": "A unit of work records new, changed and removed objects during one business transaction and writes them together at commit, in a valid order, in one transaction. With an identity map it loads each row once and can detect changes by diffing snapshots. It is request-scoped and local to one store, so it is not a saga."
     }
    ],
    "keyPoints": [
     "Tracks new, dirty and removed objects",
     "Nothing is written until commit",
+    "Identity map: one object per row",
     "One transaction, batched and ordered",
-    "Short-lived and request-scoped",
     "Local to one store; a saga spans services"
    ]
   }

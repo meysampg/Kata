@@ -12,16 +12,13 @@ record Withdrawn(int cents) implements Event {}
 // [[store
 final class EventStore {
     private final Map<String, List<Event>> streams = new HashMap<>();
-
     List<Event> load(String id) {
         return List.copyOf(streams.getOrDefault(id, List.of()));
     }
-
     void append(String id, int expected, List<Event> events) {
         var s = streams.computeIfAbsent(id, k -> new ArrayList<>());
         if (s.size() != expected)
-            throw new IllegalStateException(
-                "conflict: expected v" + expected + ", at v" + s.size());
+            throw new IllegalStateException("conflict at v" + s.size());
         s.addAll(events);
     }
 }
@@ -29,16 +26,13 @@ final class EventStore {
 
 final class Account {
     private final List<Event> fresh = new ArrayList<>();
-    private int balance;
-    private int version;
-
+    private int balance, version;
     // [[replay
     static Account replay(List<Event> history) {
         var account = new Account();
         history.forEach(account::apply);
         return account;
     }
-
     private void apply(Event e) {
         switch (e) {
             case Deposited d -> balance += d.cents();
@@ -54,15 +48,12 @@ final class Account {
         if (cents > balance) throw new IllegalStateException("funds");
         record(new Withdrawn(cents));
     }
-
     private void record(Event e) { apply(e); fresh.add(e); }
-
     void saveTo(EventStore store, String id) {
         store.append(id, version - fresh.size(), fresh);
         fresh.clear();
     }
     // ]]
-
     int balance() { return balance; }
     int version() { return version; }
 }
@@ -75,17 +66,17 @@ class Main {
         acc.deposit(100);
         acc.withdraw(30);
         acc.saveTo(store, "acc-1");
-        var now = Account.replay(store.load("acc-1"));
-        System.out.println(now.balance() + " at v" + now.version());
+        System.out.println(acc.balance() + " at v" + acc.version());
         var then = Account.replay(store.load("acc-1").subList(0, 1));
         System.out.println(then.balance() + " at v" + then.version());
         // ]]
-        var a1 = Account.replay(store.load("acc-1"));
-        var a2 = Account.replay(store.load("acc-1"));
-        a1.deposit(10);
-        a2.deposit(5);
-        a1.saveTo(store, "acc-1");
-        try { a2.saveTo(store, "acc-1"); }
+        // [[conflict
+        var rival = Account.replay(store.load("acc-1"));
+        rival.deposit(5);
+        rival.saveTo(store, "acc-1");
+        acc.deposit(10);
+        try { acc.saveTo(store, "acc-1"); }
         catch (IllegalStateException e) { System.out.println(e.getMessage()); }
+        // ]]
     }
 }

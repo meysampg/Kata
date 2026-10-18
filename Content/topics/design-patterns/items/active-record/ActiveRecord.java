@@ -57,7 +57,7 @@ class Main {
         Account loaded = Account.find(created.id()).orElseThrow();
         loaded.withdraw(30);
         loaded.save();
-        long stored = Account.find(1).orElseThrow().balance();
+        long stored = Account.find(loaded.id()).orElseThrow().balance();
         System.out.println("balance " + stored);
 
         try {

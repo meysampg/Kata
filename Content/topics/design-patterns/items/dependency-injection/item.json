@@ -42,7 +42,7 @@
         },
         {
           "region": "root",
-          "note": "The composition root builds the object graph with production-style collaborators: a fixed clock and a console mailer."
+          "note": "The composition root builds the graph and picks implementations: a fixed clock keeps the demo deterministic, where production would pass `Clock.systemUTC()`."
         },
         {
           "region": "test",
@@ -285,7 +285,7 @@
         {
           "ref": "dependency-injection",
           "correct": true,
-          "why": "Collaborators come in through the constructor as interfaces; one outer place chooses the implementations."
+          "why": "Collaborators come in through the constructor as abstractions; one outer place chooses the implementations."
         },
         {
           "ref": "service-locator",

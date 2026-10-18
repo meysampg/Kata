@@ -59,7 +59,7 @@
         },
         {
           "type": "p",
-          "text": "In a request-driven MVC framework the controller receives `GET /accounts/42`, asks the domain model for the account, puts it into a view model and names a template. The template only renders. Changing the page layout never touches the account rules, and a JSON endpoint reuses the same model with a different view."
+          "text": "In a request-driven MVC framework the controller receives `GET /accounts/42`, asks the domain model for the account, adds it to the `Model` map and names a template. The template only renders. Changing the page layout never touches the account rules, and a JSON endpoint reuses the same model with a different view."
         },
         {
           "type": "code",
@@ -246,7 +246,7 @@
           "title": "Modern Java",
           "tone": "info",
           "items": [
-            "Records make fine immutable view models. Listener interfaces are often replaced by `java.util.concurrent.Flow` or reactive streams.",
+            "Records make immutable view models that templates read but cannot mutate.",
             "Pattern-matching `switch` over sealed command types gives controllers exhaustive input handling."
           ]
         }
@@ -297,8 +297,8 @@
         },
         {
           "where": "JDK Swing",
-          "name": "javax.swing.ListModel and JList",
-          "detail": "Same split: the list view listens to a model, input handlers change the model."
+          "name": "javax.swing.plaf.ComponentUI",
+          "detail": "Swing's separable-model variant: each component's UI delegate fuses view and controller over a separate model."
         }
       ]
     }
@@ -321,7 +321,7 @@
         "final class KeyHandler {",
         "    private final Counter c;",
         "    KeyHandler(Counter c) { this.c = c; }",
-        "    void onKey(char k) { if (k == '+') c.add(1); else if (k == '-') c.add(-1); }",
+        "    void onKey(char k) { c.add(k == '+' ? 1 : -1); }",
         "}"
       ],
       "options": [
@@ -415,21 +415,23 @@
           "var model = new Thermostat(20);"
         ],
         [
-          "model.addListener(new ConsoleView());"
+          "var view = new ConsoleView();",
+          "model.addListener(view);"
         ],
         [
-          "var controller = new Controller(model);"
-        ],
-        [
+          "var controller = new Controller(model);",
           "controller.onInput(\"up\");"
+        ],
+        [
+          "System.out.println(view.lastShown());"
         ]
       ],
-      "explanation": "The model must exist before a view can listen to it or a controller can be given it; input comes last, once both are connected.",
+      "explanation": "The model comes first. The view must be listening before input arrives, or it misses the change; only then can you read what it rendered.",
       "compile": {
         "template": [
           "interface ModelListener { void changed(int t); }",
           "class Thermostat { Thermostat(int t) {} void addListener(ModelListener l) {} }",
-          "class ConsoleView implements ModelListener { public void changed(int t) {} }",
+          "class ConsoleView implements ModelListener { public void changed(int t) {} String lastShown() { return \"\"; } }",
           "class Controller { Controller(Thermostat m) {} void onInput(String c) {} }",
           "class Snippet { void run() {",
           "{{code}}",

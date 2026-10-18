@@ -302,7 +302,7 @@
         {
           "where": "JDK",
           "name": "module-info.java requires",
-          "detail": "The module system rejects compilation when a module uses a package it does not require, enforcing direction."
+          "detail": "A module sees only exported packages of modules it `requires`, and the `requires` graph must be acyclic."
         },
         {
           "where": "Networking",
@@ -401,7 +401,7 @@
         "        Book book = books.find(isbn);",
         "        if (book.onLoan()) throw new IllegalStateException();",
         "        books.save(book.lent());",
-        "        return book;",
+        "        return book.lent();",
         "    }",
         "}"
       ],
@@ -458,7 +458,7 @@
       "modelAnswer": [
         {
           "type": "p",
-          "text": "Code is arranged in layers, typically presentation, business and data access, and each layer may depend only on the one below it. That isolates responsibilities and makes layers replaceable. The weakness is that the business layer ends up depending on persistence, and rules of thumb like this erode into pass-through code."
+          "text": "Code is arranged in layers, typically presentation, business and data access, and each layer may depend only on the one below it. That isolates responsibilities and makes layers replaceable. The weakness: the business layer depends on data access, so persistence shapes the domain, and strict layering breeds pass-through methods."
         }
       ],
       "keyPoints": [

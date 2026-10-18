@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "info",
-     "text": "This is how JPA/Hibernate works. The mapping metadata plays the mapper's role."
+     "text": "JPA/Hibernate is a metadata-driven data mapper: annotations or XML describe the mapping and the `EntityManager` executes it. The annotations are the entity's one concession to persistence."
     }
    ]
   },
@@ -226,7 +226,7 @@
     {
      "ref": "repository",
      "relation": "combines",
-     "difference": "The repository offers the domain-facing collection API; a mapper is typically what it calls to turn rows into objects."
+     "difference": "A mapper's API is persistence-shaped: insert, update, delete, find by column. A repository wraps mappers in a collection-like, domain-worded interface per aggregate."
     },
     {
      "ref": "unit-of-work",
@@ -259,9 +259,9 @@
      "detail": "Maps aggregate roots to tables without a persistence context or lazy loading."
     },
     {
-     "where": "SQLAlchemy",
-     "name": "Classical mapping",
-     "detail": "Python's ORM maps plain classes to tables separately, in the data-mapper style."
+     "where": "jOOQ",
+     "name": "RecordMapper and RecordUnmapper",
+     "detail": "Pluggable conversions between fetched `Record`s and plain objects in each direction; `fetchInto(Class)` uses the default mapper."
     }
    ]
   }

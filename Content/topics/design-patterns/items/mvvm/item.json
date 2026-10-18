@@ -23,7 +23,7 @@
         {
           "type": "callout",
           "tone": "info",
-          "text": "Binding needs an observable type. Most platforms provide one: JavaFX properties, Android `StateFlow`, SwiftUI `@Published`."
+          "text": "Binding needs an observable type. Most platforms provide one: JavaFX properties, Android `LiveData` or `StateFlow`, SwiftUI `@Published`."
         }
       ]
     },
@@ -65,11 +65,12 @@
           "type": "code",
           "language": "java",
           "lines": [
-            "class CheckoutViewModel : ViewModel() {",
-            "    val state: StateFlow<CheckoutState>",
-            "    fun placeOrder() { /* ... */ }",
+            "class CheckoutViewModel extends ViewModel {",
+            "    final MutableLiveData<CheckoutState> state =",
+            "        new MutableLiveData<>();",
+            "    void placeOrder() { /* ... */ }",
             "}",
-            "// the screen: collect state, call placeOrder()"
+            "// the screen: observe state, call placeOrder()"
           ]
         },
         {
@@ -262,7 +263,7 @@
           "title": "Modern Java",
           "tone": "info",
           "items": [
-            "JavaFX properties and `java.util.concurrent.Flow` are the standard JVM binding tools.",
+            "JavaFX properties and `javafx.beans.binding.Bindings` are the JDK-adjacent binding tools.",
             "Records suit immutable state snapshots exposed by a view model."
           ]
         }
@@ -274,7 +275,7 @@
         {
           "ref": "mvc",
           "relation": "alternative",
-          "difference": "MVC's controller pushes updates into the view. MVVM's view pulls through binding, so the view model needs no reference to the view at all."
+          "difference": "In MVC the view observes the domain model and a controller handles input. In MVVM the view binds, often two-way, to a view model holding view-specific state and commands, and needs no controller."
         },
         {
           "ref": "observer",
@@ -328,11 +329,11 @@
         "final class LoginState {",
         "    final Prop<String> email = new Prop<>(\"\");",
         "    final Prop<Boolean> enabled = new Prop<>(false);",
-        "    LoginState(Api api) {",
-        "        email.listen(e -> enabled.set(e.contains(\"@\")));",
-        "        this.api = api;",
-        "    }",
         "    private final Api api;",
+        "    LoginState(Api api) {",
+        "        this.api = api;",
+        "        email.listen(e -> enabled.set(e.contains(\"@\")));",
+        "    }",
         "    void submit() { if (enabled.get()) api.login(email.get()); }",
         "}",
         "// screen: state.enabled.listen(button::setEnabled);",
@@ -346,7 +347,7 @@
         },
         {
           "ref": "mvc",
-          "why": "No controller translates input and the screen is not updated by code from a controller; the screen subscribes to state."
+          "why": "The screen subscribes to state derived for it (`enabled`), not to a domain model, and no separate controller handles input."
         },
         {
           "ref": "observer",
@@ -432,9 +433,7 @@
           "var vm = new SignInViewModel((e, p) -> true);"
         ],
         [
-          "vm.email.set(\"ana@x.org\");"
-        ],
-        [
+          "vm.email.set(\"ana@x.org\");",
           "vm.password.set(\"hunter22!\");"
         ],
         [
@@ -473,7 +472,7 @@
         "No UI classes in the view model",
         "View only binds and forwards events",
         "Tests drive the view model directly",
-        "Differs from MVC: no controller pushing into the view"
+        "Differs from MVC: the view binds to presentation state, not the domain model"
       ]
     }
   ]

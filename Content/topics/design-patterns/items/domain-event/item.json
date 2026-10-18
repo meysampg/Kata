@@ -10,7 +10,7 @@
     },
     {
      "type": "p",
-     "text": "A **domain event** such as `OrderPlaced` is raised by an aggregate when its state changes. It names a fact, not a request, and carries only the data about it. Handlers react in their own modules, so the aggregate never learns who is listening. That keeps the core small and the reactions decoupled."
+     "text": "A **domain event** such as `OrderPlaced` is raised by an aggregate when its state changes. It names a fact, not a request, and carries only the data about it. Handlers react in their own modules, so the aggregate never learns who is listening. It lives inside one bounded context; for other services, translate it into an **integration event** with a stable, versioned schema."
     },
     {
      "type": "bullets",
@@ -283,8 +283,8 @@
      "title": "Modern Java",
      "tone": "info",
      "items": [
-      "Records and sealed interfaces fit events well; `switch` pattern matching handles them exhaustively.",
-      "Records and sealed interfaces give exhaustive, immutable event types."
+      "Records and sealed interfaces give immutable events with exhaustive `switch` handling.",
+      "A record's compact constructor validates an event's data once, at creation."
      ]
     }
    ]
@@ -305,7 +305,7 @@
     {
      "ref": "transactional-outbox",
      "relation": "combines",
-     "difference": "To avoid losing events between commit and publish, write them to an outbox in the same transaction."
+     "difference": "To avoid losing events between commit and publish, write them to an outbox in the same transaction. The relay usually publishes integration events, not raw domain events."
     },
     {
      "ref": "command",
@@ -340,7 +340,7 @@
     {
      "where": "Spring Modulith",
      "name": "@ApplicationModuleListener",
-     "detail": "Event listener between application modules, with event publication tracking."
+     "detail": "Async, after-commit listener in its own transaction; the event publication registry records deliveries so incomplete ones can be resubmitted."
     }
    ]
   }
@@ -362,7 +362,11 @@
     "        pending.add(new CartCheckedOut(id));",
     "    }",
     "",
-    "    List<Object> drain() { var out = List.copyOf(pending); pending.clear(); return out; }",
+    "    List<Object> drain() {",
+    "        var out = List.copyOf(pending);",
+    "        pending.clear();",
+    "        return out;",
+    "    }",
     "}"
    ],
    "options": [

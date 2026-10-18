@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "warning",
-     "text": "Eventual consistency is the price: a user may read stale data right after writing it."
+     "text": "CQRS needs neither event sourcing nor a second database: at minimum it is two models over one store. Asynchronous read models add the real price, eventual consistency."
     }
    ]
   },
@@ -38,11 +38,11 @@
     },
     {
      "region": "write",
-     "note": "The write side validates, enforces uniqueness and appends an event. It has no query methods apart from exposing its event log."
+     "note": "The write side validates and stores current state in its own map, the source of truth. It also appends a change notification to a feed; it is not event-sourced."
     },
     {
      "region": "read",
-     "note": "The read side is a denormalized revenue-per-customer map. `catchUp` applies only events it has not seen, like a projector following a feed."
+     "note": "The read side is a denormalized revenue-per-customer map. `catchUp` applies only notifications it has not seen, like a projector following a change feed."
     },
     {
      "region": "client",
@@ -104,8 +104,8 @@
        "row": 1,
        "members": [
         "+ handle(PlaceOrder)",
-        "- ids: Set",
-        "- log: List"
+        "- orders: Map",
+        "- feed: List"
        ],
        "role": "Command side"
       },
@@ -118,7 +118,7 @@
        "members": [
         "+ revenue(customer)",
         "+ top(n)",
-        "+ catchUp(log)"
+        "+ catchUp(feed)"
        ],
        "role": "Query side"
       },
@@ -190,7 +190,7 @@
       {
        "from": "w",
        "to": "w",
-       "label": "validate, append event",
+       "label": "store, append to feed",
        "style": "call"
       },
       {
@@ -208,7 +208,7 @@
       {
        "from": "w",
        "to": "r",
-       "label": "catchUp(log)",
+       "label": "catchUp(feed)",
        "style": "async"
       },
       {
@@ -314,9 +314,9 @@
      "detail": "Route commands to aggregates and queries to projections as separate messaging paths."
     },
     {
-     "where": "MediatR (.NET)",
-     "name": "IRequest and INotification",
-     "detail": "Separate command and query handlers in one process, a common starting point for CQRS."
+     "where": "Debezium",
+     "name": "Change data capture connectors",
+     "detail": "Stream committed row changes from the write database's log to Kafka, a common feed for read models when writes store plain state."
     },
     {
      "where": "PostgreSQL",
@@ -446,7 +446,7 @@
      "commands.handle(new PlaceOrder(\"o9\", \"ada\", 500));"
     ],
     [
-     "view.catchUp(commands.log());"
+     "view.catchUp(commands.feed());"
     ],
     [
      "int total = view.revenue(\"ada\");"
@@ -455,13 +455,13 @@
      "System.out.println(total);"
     ]
    ],
-   "explanation": "A command appends an event first; the view can only project events that exist; the query reads the projected result.",
+   "explanation": "A command changes state and appends to the feed first; the view can only project changes that exist; the query reads the projected result.",
    "compile": {
     "template": [
      "import java.util.*;",
      "record PlaceOrder(String id, String customer, int cents) {}",
-     "final class OrderCommands { void handle(PlaceOrder c) {} List<String> log() { return List.of(); } }",
-     "final class RevenueView { void catchUp(List<String> log) {} int revenue(String c) { return 0; } }",
+     "final class OrderCommands { void handle(PlaceOrder c) {} List<String> feed() { return List.of(); } }",
+     "final class RevenueView { void catchUp(List<String> feed) {} int revenue(String c) { return 0; } }",
      "class Snippet { void run() {",
      "{{code}}",
      "} }"
