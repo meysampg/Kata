@@ -9,6 +9,11 @@
 
 Kata is an iOS app for mastering software design patterns through deliberate practice, the way a martial artist drills a kata: small, exact forms, repeated until they are second nature.
 
+<p align="center"><img src="docs/poster.png" width="100%" alt="Kata poster: the app icon and title styled as code, 70 patterns, Java 21, 350 exercises, FSRS and UML, above six iPhone screens (today, guided path, definition, stepped code implementation, native UML structure, practice) and the seven pattern categories"></p>
+
+<details>
+<summary>All screens</summary>
+
 <p align="center">
 <table>
   <tr>
@@ -34,6 +39,7 @@ Kata is an iOS app for mastering software design patterns through deliberate pra
   </tr>
 </table>
 </p>
+</details>
 <p align="center"><sub><a href="docs/screenshots/">All screenshots, individually</a></sub></p>
 
 ## Why
