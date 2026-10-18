@@ -20,7 +20,7 @@
     ]},
     {"role": "example", "blocks": [
       {"type": "lead", "text": "Streaming a large database table to a CSV export."},
-      {"type": "p", "text": "A reporting job must export millions of orders without loading them into memory. A repository returns an iterator that fetches a page at a time through a server-side cursor, hiding the paging and the connection handling. The exporter loops over `orders` and writes rows. Closing the iterator releases the cursor, so it implements `AutoCloseable` as well."},
+      {"type": "p", "text": "A reporting job must export millions of orders without loading them into memory. A repository returns an iterator that fetches a page at a time through a server-side cursor, hiding the paging and the connection handling. The exporter loops over the iterator and writes rows. Closing the iterator releases the cursor, so it implements `AutoCloseable` as well."},
       {"type": "code", "language": "java", "lines": [
         "try (CloseableIterator<Order> it = repo.scanAll()) {",
         "    while (it.hasNext()) {",
@@ -67,7 +67,7 @@
         "A plain list or array is enough and random access is needed.",
         "Operations such as map and filter are the real goal: use streams."]},
       {"title": "Pitfalls", "tone": "warning", "items": [
-        "Modifying the collection during traversal: JDK iterators are fail-fast and throw `ConcurrentModificationException`.",
+        "Modifying during traversal: `java.util` iterators fail fast with `ConcurrentModificationException`; concurrent collections' are weakly consistent.",
         "Iterators that hold resources (cursors, files) and are never closed.",
         "Assuming `Iterator` instances are thread-safe; they are not."]},
       {"title": "Modern Java", "tone": "info", "items": [
@@ -83,8 +83,8 @@
     ]},
     {"role": "sightings", "entries": [
       {"where": "JDK", "name": "java.util.Iterator and Iterable", "detail": "Every `Collection` returns an `Iterator`; implementing `Iterable` enables the enhanced `for` loop."},
-      {"where": "JDK", "name": "ArrayList.Itr", "detail": "A private inner iterator that tracks `modCount` to fail fast with `ConcurrentModificationException`."},
-      {"where": "JDK", "name": "java.sql.ResultSet", "detail": "A forward cursor over query rows, advanced with `next()`, hiding paging and the wire protocol."},
+      {"where": "JDK", "name": "ArrayList.iterator()", "detail": "Documented as fail-fast: a structural change not made through the iterator's own `remove` makes later calls throw `ConcurrentModificationException`, on a best-effort basis."},
+      {"where": "JDK", "name": "java.sql.ResultSet", "detail": "A cursor over query rows: `next()` advances and reports whether a row exists, while the driver fetches rows in batches hinted by `setFetchSize`."},
       {"where": "JDK", "name": "java.util.Spliterator", "detail": "The splittable iterator behind `Stream`, used for both sequential and parallel traversal."},
       {"where": "Guava", "name": "AbstractIterator", "detail": "Base class that lets you implement `computeNext()` and get a correct lazy `Iterator`."}
     ]}
@@ -100,7 +100,10 @@
       "        return new Iterator<>() {",
       "            private int i = 0;",
       "            public boolean hasNext() { return i < tracks.length; }",
-      "            public String next() { return tracks[i++]; }",
+      "            public String next() {",
+      "                if (!hasNext()) throw new NoSuchElementException();",
+      "                return tracks[i++];",
+      "            }",
       "        };",
       "    }",
       "}"],
@@ -110,7 +113,7 @@
       {"ref": "memento", "why": "Nothing captures state for later restoration; the index only advances."},
       {"ref": "observer", "why": "Elements are pulled by the client; nothing is pushed to registered listeners."}],
      "compile": {"template": [
-      "import java.util.Iterator;",
+      "import java.util.*;",
       "{{code}}"]}},
     {"id": "pick-1", "kind": "choose",
      "scenario": "A metrics library stores samples in a ring buffer to avoid allocations. Callers must read samples oldest to newest without knowing about wrap-around, and a dashboard thread may read while another one also reads.",

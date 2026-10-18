@@ -23,7 +23,7 @@
     {
      "type": "callout",
      "tone": "info",
-     "text": "Middleware pipelines (servlet filters, Netty, OkHttp interceptors) are the dominant modern form: every link runs, and each decides whether to continue."
+     "text": "Middleware pipelines (servlet filters, Netty, OkHttp interceptors) are the dominant modern form: each link wraps the rest of the chain and decides whether, and how, to continue."
     }
    ]
   },
@@ -286,7 +286,7 @@
     {
      "ref": "decorator",
      "relation": "lookAlike",
-     "difference": "Both wrap a successor behind one interface. A decorator always delegates and adds behavior; a chain handler may stop and answer the request itself."
+     "difference": "Both wrap a successor behind one interface. A decorator exists to add behavior and normally delegates; a chain handler exists to decide, and may stop and answer the request itself."
     },
     {
      "ref": "observer",
@@ -365,7 +365,7 @@
     },
     {
      "ref": "decorator",
-     "why": "A decorator always delegates and adds behavior. This rule may answer and stop."
+     "why": "A decorator adds behavior and then delegates. This rule may answer and stop."
     },
     {
      "ref": "composite",
@@ -476,14 +476,14 @@
    "modelAnswer": [
     {
      "type": "p",
-     "text": "A request enters the first handler of an ordered chain. Each handler decides: handle it and stop, or forward it to the next, possibly after changing it. The sender knows only the head, so handlers can be added or reordered freely. A decorator also wraps a successor but always delegates; a chain handler can end the request."
+     "text": "A request enters the first handler of an ordered chain. Each handler decides: handle it and stop, or forward it to the next, possibly after changing it. The sender knows only the head, so handlers can be added or reordered freely. A decorator also wraps a successor but exists to add behavior and normally delegates; a chain handler exists to decide, and can end the request."
     }
    ],
    "keyPoints": [
     "Sender knows only the first link",
     "Each handler decides to handle, forward, or both",
     "Order is the policy and is configurable",
-    "A handler can short-circuit; a decorator always delegates",
+    "A handler can short-circuit; a decorator normally delegates",
     "Needs a terminal for unhandled requests"
    ]
   }

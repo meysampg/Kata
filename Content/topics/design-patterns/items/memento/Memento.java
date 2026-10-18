@@ -3,8 +3,8 @@ import java.util.Deque;
 
 // [[originator
 final class Editor {
-    /** Opaque to everyone except Editor. */
-    interface Memento {}
+    /** Opaque to everyone except Editor; sealed so no one can forge one. */
+    sealed interface Memento permits Snapshot {}
 
     private record Snapshot(String text, int cursor) implements Memento {}
 

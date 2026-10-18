@@ -341,6 +341,11 @@
      "detail": "A reusable object that bundles behavior with its text, icon and enabled state for menus and buttons."
     },
     {
+     "where": "JDK",
+     "name": "javax.swing.undo.UndoableEdit",
+     "detail": "Each edit implements `undo()` and `redo()`; an `UndoManager` keeps the history and walks it."
+    },
+    {
      "where": "Eclipse",
      "name": "IUndoableOperation",
      "detail": "Operations with `execute`, `undo` and `redo` managed by an `IOperationHistory`."
@@ -348,7 +353,7 @@
     {
      "where": "Quartz",
      "name": "org.quartz.Job",
-     "detail": "Scheduled work expressed as a `Job` with a `JobDetail`, stored and fired by the scheduler."
+     "detail": "`Job.execute(JobExecutionContext)` is the command; a stored `JobDetail` with its `JobDataMap` is the request a trigger fires later."
     }
    ]
   }
@@ -457,7 +462,7 @@
   {
    "id": "order-1",
    "kind": "reorder",
-   "prompt": "Order the lines so that each one only uses what came before.",
+   "prompt": "Order the lines so that the edit is made and then undone.",
    "blocks": [
     [
      "var doc = new Doc();",
@@ -471,12 +476,9 @@
     ],
     [
      "history.undo();"
-    ],
-    [
-     "System.out.println(doc.text);"
     ]
    ],
-   "explanation": "The command needs its receiver, and the invoker must run it before there is anything to undo. The final state is printed only after the undo.",
+   "explanation": "The command needs its receiver, and the invoker must run it before there is anything on the history to undo.",
    "compile": {
     "template": [
      "class Doc { final StringBuilder text = new StringBuilder(); }",

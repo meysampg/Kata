@@ -1,164 +1,459 @@
 {
-  "id": "mediator",
-  "cards": [
-    {"role": "definition", "blocks": [
-      {"type": "lead", "text": "Replace many-to-many references between objects with one object that owns their interaction."},
-      {"type": "p", "text": "Colleagues no longer know each other. They talk to a **mediator**, which decides who hears what and in which order. Coupling moves from a web of N-to-N links into a single class, which makes the colleagues reusable and the interaction rules easy to find and change."},
-      {"type": "bullets", "items": [
-        "**Colleagues:** know only the mediator interface.",
-        "**Mediator:** holds routing and coordination rules.",
-        "**Trade:** simpler colleagues, a more complex mediator."]},
-      {"type": "callout", "tone": "warning", "text": "A mediator accumulates logic by design. Watch it: unchecked, it turns into a god class."}
-    ]},
-    {"role": "implementation", "file": "Mediator.java",
-     "expectedOutput": "ana=[cy: hello]\nbo=[ana: hi, cy: hello]\ncy=[ana: hi]",
-     "walkthrough": [
-      {"region": "mediator", "note": "The mediator interface is all colleagues ever see. It offers only the coordination operations they need."},
-      {"region": "colleague", "note": "A colleague keeps a reference to the room, never to other members. It sends through the mediator and just records what it receives."},
-      {"region": "concrete", "note": "The concrete mediator owns the rules: broadcast to everyone but the sender, and drop messages from muted members. Policy lives here alone."},
-      {"region": "client", "note": "Wiring: each member enters the room, which registers it. Members are created independently of each other."},
-      {"region": "traffic", "note": "Muting `bo` changes behavior without touching any `Member`. The room drops `spam`, so no one receives it."}
-    ]},
-    {"role": "example", "blocks": [
-      {"type": "lead", "text": "Fields of a checkout form that depend on each other."},
-      {"type": "p", "text": "Choosing a country enables a state dropdown, changes the postal-code validator, hides VAT fields and recalculates shipping. Wiring each widget to the others yields dozens of cross-references. A `CheckoutFormMediator` receives change events from widgets and updates the rest. Widgets stay dumb and reusable; every rule about field dependencies reads top to bottom in one class."},
-      {"type": "code", "language": "java", "lines": [
-        "void changed(Widget source) {",
-        "    if (source == country) {",
-        "        state.setEnabled(country.value().hasStates());",
-        "        postal.setPattern(country.value().postalPattern());",
-        "        vat.setVisible(country.value().isEu());",
-        "    }",
-        "}"]},
-      {"type": "callout", "tone": "positive", "text": "Payoff: adding a field rule edits one class, and widgets are testable and reusable on other forms."}
-    ]},
-    {"role": "structure", "diagrams": [
-      {"kind": "class", "title": "Class", "nodes": [
-        {"id": "med", "name": "Room", "kind": "interface", "role": "Mediator", "col": 0.5, "row": 0,
-         "members": ["+ join(Member)", "+ send(from, text)"]},
-        {"id": "cmed", "name": "ModeratedRoom", "kind": "class", "role": "ConcreteMediator", "col": 0.5, "row": 1,
-         "members": ["- members: List<Member>", "- muted: Set<String>"]},
-        {"id": "m", "name": "Member", "kind": "class", "role": "Colleague", "col": 0.5, "row": 2,
-         "members": ["- room: Room", "+ say(text)", "+ receive(from, text)"]}],
-       "edges": [
-        {"from": "cmed", "to": "med", "rel": "realizes"},
-        {"from": "cmed", "to": "m", "rel": "aggregation", "label": "members"},
-        {"from": "m", "to": "med", "rel": "association", "label": "room"}]},
-      {"kind": "sequence", "title": "Sequence", "participants": [
-        {"id": "ana", "name": "ana", "role": "Colleague"}, {"id": "room", "name": "Room", "role": "Mediator"},
-        {"id": "bo", "name": "bo", "role": "Colleague"}, {"id": "cy", "name": "cy", "role": "Colleague"}],
-       "messages": [
-        {"from": "ana", "to": "room", "label": "send(ana, hi)", "style": "call"},
-        {"from": "room", "to": "bo", "label": "receive(ana, hi)", "style": "call"},
-        {"from": "room", "to": "cy", "label": "receive(ana, hi)", "style": "call"}]}
-    ]},
-    {"role": "tradeoffs", "lists": [
-      {"title": "Use when", "tone": "positive", "items": [
-        "Objects reference each other in a tangle that is hard to follow.",
-        "Interaction rules change more often than the objects themselves.",
-        "You want colleagues reusable in other contexts."]},
-      {"title": "Avoid when", "tone": "negative", "items": [
-        "Two objects interact in one simple way: a direct call is clearer.",
-        "The interaction is pure notification; Observer is lighter."]},
-      {"title": "Pitfalls", "tone": "warning", "items": [
-        "The mediator becomes a god class holding all business logic.",
-        "Colleagues sneak references to each other, bypassing the mediator.",
-        "The mediator is a single point of change and a testing hotspot."]},
-      {"title": "Modern Java", "tone": "info", "items": [
-        "An in-process event bus or Spring's `ApplicationEventPublisher` acts as a mediator for decoupled components.",
-        "For UI state, a single state holder with reducers plays the mediator's role."]}
-    ]},
-    {"role": "compare", "rows": [
-      {"ref": "observer", "relation": "oftenConfused", "difference": "Observer is one-to-many notification with the subject unaware of listeners' logic. A mediator is many-to-many coordination that contains the rules. A mediator is often built on observers."},
-      {"ref": "facade", "relation": "lookAlike", "difference": "A facade simplifies access to a subsystem in one direction and the subsystem does not know it. A mediator is two-way: the colleagues know it and depend on it."},
-      {"ref": "command", "relation": "combines", "difference": "Colleagues often send commands or events to the mediator, which dispatches them to the right collaborators."},
-      {"ref": "chain-of-responsibility", "relation": "alternative", "difference": "A chain passes one request through handlers that do not know each other. A mediator knows every participant and routes freely among them."},
-      {"ref": "mvc", "relation": "specializes", "difference": "A controller in MVC mediates between the view and the model, so they stay unaware of each other."}
-    ]},
-    {"role": "sightings", "entries": [
-      {"where": "JDK", "name": "java.util.concurrent.ExecutorService", "detail": "Submitters hand work to the executor, which mediates between tasks and worker threads."},
-      {"where": "Spring", "name": "ApplicationEventPublisher", "detail": "Components publish events through the context instead of referencing listeners directly."},
-      {"where": "Spring MVC", "name": "DispatcherServlet", "detail": "A central front controller routes requests between handlers, view resolution and exception handling."},
-      {"where": "Jakarta Servlet", "name": "RequestDispatcher", "detail": "Coordinates forwarding and including between resources without them knowing each other."}
-    ]}
-  ],
-  "exercises": [
-    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+ "id": "mediator",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Replace many-to-many references between objects with one object that owns their interaction."
+    },
+    {
+     "type": "p",
+     "text": "Colleagues no longer know each other. They talk to a **mediator**, which decides who hears what and in which order. Coupling moves from a web of N-to-N links into a single class, which makes the colleagues reusable and the interaction rules easy to find and change."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Colleagues:** know only the mediator interface.",
+      "**Mediator:** holds routing and coordination rules.",
+      "**Trade:** simpler colleagues, a more complex mediator."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "warning",
+     "text": "A mediator accumulates logic by design. Watch it: unchecked, it turns into a god class."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Mediator.java",
+   "expectedOutput": "ana=[cy: hello]\nbo=[ana: hi, cy: hello]\ncy=[ana: hi]",
+   "walkthrough": [
+    {
+     "region": "mediator",
+     "note": "The mediator interface is all colleagues ever see. It offers only the coordination operations they need."
+    },
+    {
+     "region": "colleague",
+     "note": "A colleague keeps a reference to the room, never to other members. It sends through the mediator and just records what it receives."
+    },
+    {
+     "region": "concrete",
+     "note": "The concrete mediator owns the rules: broadcast to everyone but the sender, and drop messages from muted members. Policy lives here alone."
+    },
+    {
+     "region": "client",
+     "note": "Wiring: each member enters the room, which registers it. Members are created independently of each other."
+    },
+    {
+     "region": "traffic",
+     "note": "Muting `bo` changes behavior without touching any `Member`. The room drops `spam`, so no one receives it."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Fields of a checkout form that depend on each other."
+    },
+    {
+     "type": "p",
+     "text": "Choosing a country enables a state dropdown, changes the postal-code validator, hides VAT fields and recalculates shipping. Wiring each widget to the others yields dozens of cross-references. A `CheckoutFormMediator` receives change events from widgets and updates the rest. Widgets stay dumb and reusable; every rule about field dependencies reads top to bottom in one class."
+    },
+    {
+     "type": "code",
+     "language": "java",
      "lines": [
-      "final class Tower {",
-      "    private final List<Plane> planes = new ArrayList<>();",
-      "",
-      "    void register(Plane p) { planes.add(p); }",
-      "",
-      "    void requestLanding(Plane p) {",
-      "        boolean busy = planes.stream().anyMatch(Plane::onRunway);",
-      "        if (busy) p.holdPattern(); else p.land();",
+      "void changed(Widget source) {",
+      "    if (source == country) {",
+      "        state.setEnabled(country.value().hasStates());",
+      "        postal.setPattern(country.value().postalPattern());",
+      "        vat.setVisible(country.value().isEu());",
       "    }",
-      "}",
-      "// Planes call tower.requestLanding(this); they never talk to each other"],
-     "options": [
-      {"ref": "mediator", "correct": true, "why": "Peers communicate only through a central object that holds the coordination rule."},
-      {"ref": "observer", "why": "The tower decides what each plane does; it is not just broadcasting a change to passive listeners."},
-      {"ref": "facade", "why": "A facade is used one way by clients and unknown to the subsystem; here planes depend on the tower and call it."},
-      {"ref": "chain-of-responsibility", "why": "The request is not passed from handler to handler; one object makes the decision."}],
-     "compile": {"template": [
-      "import java.util.*;",
-      "interface Plane { boolean onRunway(); void holdPattern(); void land(); }",
-      "{{code}}"]}},
-    {"id": "pick-1", "kind": "choose",
-     "scenario": "A dialog has ten widgets whose enabled state, visibility and validation depend on each other. Each widget currently holds references to several others, and changing a rule means editing five classes.",
-     "prompt": "Which pattern fits best?",
-     "options": [
-      {"ref": "mediator", "correct": true, "why": "Centralizes the many-to-many dependencies into one class so widgets stop referencing each other."},
-      {"ref": "observer", "why": "Each widget would still subscribe to several others, keeping the tangle and scattering the rules."},
-      {"ref": "facade", "why": "A facade offers a simpler outward API; it does not coordinate two-way interactions among peers."},
-      {"ref": "strategy", "why": "The problem is coordination among objects, not swapping one algorithm."}]},
-    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Mediator pattern.",
-     "lines": [
-      "final class Slider {",
-      "    private final Dialog dialog;",
-      "    private final Label label;",
-      "    int value;",
-      "",
-      "    Slider(Dialog dialog, Label label) { this.dialog = dialog; this.label = label; }",
-      "",
-      "    void move(int v) {",
-      "        value = v;",
-      "        label.setText(\"\" + v);",
-      "        dialog.changed(this);",
-      "    }",
-      "}"],
-     "flawLines": [10],
-     "explanation": "The colleague updates another colleague directly, bypassing the mediator. Only `dialog.changed(this)` should remain; the dialog decides that the label must change.",
-     "compile": {"template": [
-      "interface Dialog { void changed(Object source); }",
-      "interface Label { void setText(String s); }",
-      "{{code}}"]}},
-    {"id": "order-1", "kind": "reorder", "prompt": "Order the setup so each line only uses what came before.",
-     "blocks": [
-      ["var room = new ModeratedRoom();"],
-      ["var ana = new Member(\"ana\");"],
-      ["ana.enter(room);"],
-      ["ana.say(\"hi\");"]],
-     "explanation": "The mediator must exist before a colleague enters it, and a colleague must be registered before it can send anything through it.",
-     "compile": {"template": [
-      "import java.util.*;",
-      "interface Room { void join(Member m); void send(Member from, String text); }",
-      "final class Member { private Room room; Member(String n) {}",
-      "  void enter(Room r) { room = r; r.join(this); } void say(String t) { room.send(this, t); } }",
-      "final class ModeratedRoom implements Room {",
-      "  public void join(Member m) {} public void send(Member f, String t) {} }",
-      "class Snippet { void run() {",
-      "{{code}}", "} }"]}},
-    {"id": "recall-1", "kind": "recall",
-     "prompt": "Explain Mediator in your own words: what problem it solves, what it costs, and how it differs from Observer.",
-     "modelAnswer": [
-      {"type": "p", "text": "Mediator replaces a tangle of direct references between peers with a central object that owns their interaction rules. Peers only know the mediator, so they become reusable. The cost is a mediator that can grow into a god class. Observer broadcasts changes one-to-many without coordination logic."}],
-     "keyPoints": [
-      "Peers talk through one object, not each other",
-      "Interaction rules live in the mediator",
-      "Colleagues become simple and reusable",
-      "Risk: the mediator becomes a god class",
-      "Observer notifies; Mediator coordinates"]}
-  ]
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: adding a field rule edits one class, and widgets are testable and reusable on other forms."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "med",
+       "name": "Room",
+       "kind": "interface",
+       "role": "Mediator",
+       "col": 0.5,
+       "row": 0,
+       "members": [
+        "+ join(Member)",
+        "+ send(from, text)"
+       ]
+      },
+      {
+       "id": "cmed",
+       "name": "ModeratedRoom",
+       "kind": "class",
+       "role": "ConcreteMediator",
+       "col": 0.5,
+       "row": 1,
+       "members": [
+        "- members: List<Member>",
+        "- muted: Set<String>"
+       ]
+      },
+      {
+       "id": "m",
+       "name": "Member",
+       "kind": "class",
+       "role": "Colleague",
+       "col": 0.5,
+       "row": 2,
+       "members": [
+        "- room: Room",
+        "+ say(text)",
+        "+ receive(from, text)"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "cmed",
+       "to": "med",
+       "rel": "realizes"
+      },
+      {
+       "from": "cmed",
+       "to": "m",
+       "rel": "aggregation",
+       "label": "members"
+      },
+      {
+       "from": "m",
+       "to": "med",
+       "rel": "association",
+       "label": "room"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "ana",
+       "name": "ana",
+       "role": "Colleague"
+      },
+      {
+       "id": "room",
+       "name": "Room",
+       "role": "Mediator"
+      },
+      {
+       "id": "bo",
+       "name": "bo",
+       "role": "Colleague"
+      },
+      {
+       "id": "cy",
+       "name": "cy",
+       "role": "Colleague"
+      }
+     ],
+     "messages": [
+      {
+       "from": "ana",
+       "to": "room",
+       "label": "send(ana, hi)",
+       "style": "call"
+      },
+      {
+       "from": "room",
+       "to": "bo",
+       "label": "receive(ana, hi)",
+       "style": "call"
+      },
+      {
+       "from": "room",
+       "to": "cy",
+       "label": "receive(ana, hi)",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "Objects reference each other in a tangle that is hard to follow.",
+      "Interaction rules change more often than the objects themselves.",
+      "You want colleagues reusable in other contexts."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "Two objects interact in one simple way: a direct call is clearer.",
+      "The interaction is pure notification; Observer is lighter."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "The mediator becomes a god class holding all business logic.",
+      "Colleagues sneak references to each other, bypassing the mediator.",
+      "The mediator is a single point of change and a testing hotspot."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "An in-process event bus or Spring's `ApplicationEventPublisher` acts as a mediator for decoupled components.",
+      "For UI state, a single state holder with reducers plays the mediator's role."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "observer",
+     "relation": "oftenConfused",
+     "difference": "Observer is one-to-many notification with the subject unaware of listeners' logic. A mediator is many-to-many coordination that contains the rules. A mediator is often built on observers."
+    },
+    {
+     "ref": "facade",
+     "relation": "lookAlike",
+     "difference": "A facade simplifies access to a subsystem in one direction and the subsystem does not know it. A mediator is two-way: the colleagues know it and depend on it."
+    },
+    {
+     "ref": "command",
+     "relation": "combines",
+     "difference": "Colleagues often send commands or events to the mediator, which dispatches them to the right collaborators."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "relation": "alternative",
+     "difference": "A chain passes one request through handlers that do not know each other. A mediator knows every participant and routes freely among them."
+    },
+    {
+     "ref": "mvc",
+     "relation": "specializes",
+     "difference": "A controller in MVC mediates between the view and the model, so they stay unaware of each other."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "JDK",
+     "name": "javax.swing.ButtonGroup",
+     "detail": "Radio buttons never reference each other; selecting one notifies the group, which deselects the previously selected button."
+    },
+    {
+     "where": "Guava",
+     "name": "EventBus",
+     "detail": "Posters and subscribers share only the bus, which routes each event to the `@Subscribe` methods registered for its type."
+    },
+    {
+     "where": "Spring",
+     "name": "ApplicationEventPublisher",
+     "detail": "Components publish events through the context, which dispatches them to `@EventListener` methods; publishers never reference listeners."
+    },
+    {
+     "where": "Spring MVC",
+     "name": "DispatcherServlet",
+     "detail": "Coordinates `HandlerMapping`, `HandlerAdapter` and `ViewResolver` collaborators, which never call each other directly."
+    },
+    {
+     "where": ".NET",
+     "name": "MediatR",
+     "detail": "Named for the pattern: `IMediator.Send` routes a request object to its single registered handler, so senders never reference handlers."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Tower {",
+    "    private final List<Plane> planes = new ArrayList<>();",
+    "",
+    "    void register(Plane p) { planes.add(p); }",
+    "",
+    "    void requestLanding(Plane p) {",
+    "        boolean busy = planes.stream().anyMatch(Plane::onRunway);",
+    "        if (busy) p.holdPattern(); else p.land();",
+    "    }",
+    "}",
+    "// Planes call tower.requestLanding(this); they never talk to each other"
+   ],
+   "options": [
+    {
+     "ref": "mediator",
+     "correct": true,
+     "why": "Peers communicate only through a central object that holds the coordination rule."
+    },
+    {
+     "ref": "observer",
+     "why": "The tower decides what each plane does; it is not just broadcasting a change to passive listeners."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade is used one way by clients and unknown to the subsystem; here planes depend on the tower and call it."
+    },
+    {
+     "ref": "chain-of-responsibility",
+     "why": "The request is not passed from handler to handler; one object makes the decision."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Plane { boolean onRunway(); void holdPattern(); void land(); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A dialog has ten widgets whose enabled state, visibility and validation depend on each other. Each widget currently holds references to several others, and changing a rule means editing five classes.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "mediator",
+     "correct": true,
+     "why": "Centralizes the many-to-many dependencies into one class so widgets stop referencing each other."
+    },
+    {
+     "ref": "observer",
+     "why": "Each widget would still subscribe to several others, keeping the tangle and scattering the rules."
+    },
+    {
+     "ref": "facade",
+     "why": "A facade offers a simpler outward API; it does not coordinate two-way interactions among peers."
+    },
+    {
+     "ref": "strategy",
+     "why": "The problem is coordination among objects, not swapping one algorithm."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Mediator pattern.",
+   "lines": [
+    "final class Slider {",
+    "    private final Dialog dialog;",
+    "    private final Label label;",
+    "    int value;",
+    "",
+    "    Slider(Dialog dialog, Label label) {",
+    "        this.dialog = dialog; this.label = label;",
+    "    }",
+    "    void move(int v) {",
+    "        value = v;",
+    "        label.setText(String.valueOf(v));",
+    "        dialog.changed(this);",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    11
+   ],
+   "explanation": "The colleague updates another colleague directly, bypassing the mediator. Only `dialog.changed(this)` should remain; the dialog decides that the label must change.",
+   "compile": {
+    "template": [
+     "interface Dialog { void changed(Object source); }",
+     "interface Label { void setText(String s); }",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the lines so that the program prints `[ana: hi]`.",
+   "blocks": [
+    [
+     "var room = new ModeratedRoom();",
+     "var ana = new Member(\"ana\");",
+     "var bo = new Member(\"bo\");"
+    ],
+    [
+     "ana.enter(room);",
+     "bo.enter(room);"
+    ],
+    [
+     "ana.say(\"hi\");"
+    ],
+    [
+     "System.out.println(bo.inbox());"
+    ]
+   ],
+   "explanation": "Members must exist before they enter the room, and `bo` must be registered before `ana` sends or the room never delivers to him. The inbox holds the message only after the send.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "interface Room { void join(Member m); void send(Member from, String text); }",
+     "final class Member { private Room room; Member(String n) {}",
+     "  List<String> inbox() { return List.of(); }",
+     "  void enter(Room r) { room = r; r.join(this); } void say(String t) { room.send(this, t); } }",
+     "final class ModeratedRoom implements Room {",
+     "  public void join(Member m) {} public void send(Member f, String t) {} }",
+     "class Snippet { void run() {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Mediator in your own words: what problem it solves, what it costs, and how it differs from Observer.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "Mediator replaces a tangle of direct references between peers with a central object that owns their interaction rules. Peers only know the mediator, so they become reusable. The cost is a mediator that can grow into a god class. Observer broadcasts changes one-to-many without coordination logic."
+    }
+   ],
+   "keyPoints": [
+    "Peers talk through one object, not each other",
+    "Interaction rules live in the mediator",
+    "Colleagues become simple and reusable",
+    "Risk: the mediator becomes a god class",
+    "Observer notifies; Mediator coordinates"
+   ]
+  }
+ ]
 }

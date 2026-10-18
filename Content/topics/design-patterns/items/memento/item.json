@@ -1,162 +1,457 @@
 {
-  "id": "memento",
-  "cards": [
-    {"role": "definition", "blocks": [
-      {"type": "lead", "text": "Capture an object's internal state in an opaque snapshot so it can be restored later."},
-      {"type": "p", "text": "The **originator** creates a **memento** of its own state and later restores itself from one. A **caretaker** stores mementos, for example in an undo stack, but cannot read or change them. Encapsulation holds: only the originator understands the snapshot's contents."},
-      {"type": "bullets", "items": [
-        "**Originator:** creates and consumes mementos.",
-        "**Memento:** immutable, opaque to everyone else.",
-        "**Caretaker:** decides when to save and restore, never inspects."]},
-      {"type": "callout", "tone": "info", "text": "Typical uses are undo, checkpoints and transactional rollback of in-memory state."}
-    ]},
-    {"role": "implementation", "file": "Memento.java",
-     "expectedOutput": "Hello, world@12\nHello@5\n@0",
-     "walkthrough": [
-      {"region": "originator", "note": "`Memento` is an empty public marker. The real snapshot is a private record, so only `Editor` can read its fields. Encapsulation is enforced by the compiler."},
-      {"region": "caretaker", "note": "The caretaker stores opaque `Memento` values on a stack. It has no way to look inside, edit or fabricate a snapshot."},
-      {"region": "checkpoint", "note": "Snapshots are taken before each change. `save()` copies the text into an immutable `String`, so later typing cannot corrupt a stored memento."},
-      {"region": "undo", "note": "Restoring pops the latest snapshot and the editor rebuilds its own state from it. Each `pop` steps one checkpoint back."}
-    ]},
-    {"role": "example", "blocks": [
-      {"type": "lead", "text": "Rolling back a failed bulk edit in a diagram editor."},
-      {"type": "p", "text": "A user applies an auto-layout to a diagram with 2,000 shapes. The layout engine mutates positions in place and may fail halfway. Before running it, the editor takes a snapshot of positions and styles. On failure or on Ctrl-Z, it restores from the snapshot. Stored snapshots are compact (positions only), and the history panel can list them without understanding their contents."},
-      {"type": "code", "language": "java", "lines": [
-        "Memento before = diagram.save();",
-        "try {",
-        "    layout.apply(diagram);",
-        "} catch (LayoutException e) {",
-        "    diagram.restore(before);",
-        "}"]},
-      {"type": "callout", "tone": "positive", "text": "Payoff: atomic, in-memory rollback with no change to the layout engine and no public setters on the diagram's internals."}
-    ]},
-    {"role": "structure", "diagrams": [
-      {"kind": "class", "title": "Class", "nodes": [
-        {"id": "ct", "name": "History", "kind": "class", "role": "Caretaker", "col": 0, "row": 0,
-         "members": ["- stack: Deque<Memento>", "+ push(Memento)", "+ pop(): Memento"]},
-        {"id": "orig", "name": "Editor", "kind": "class", "role": "Originator", "col": 1, "row": 0,
-         "members": ["- text, cursor", "+ save(): Memento", "+ restore(Memento)"]},
-        {"id": "mem", "name": "Memento", "kind": "interface", "role": "Memento (opaque)", "col": 0, "row": 1,
-         "members": []},
-        {"id": "snap", "name": "Snapshot", "kind": "record", "role": "Memento (private)", "col": 1, "row": 1,
-         "members": ["text: String", "cursor: int"]}],
-       "edges": [
-        {"from": "ct", "to": "mem", "rel": "aggregation", "label": "holds"},
-        {"from": "snap", "to": "mem", "rel": "realizes"},
-        {"from": "orig", "to": "snap", "rel": "dependency", "label": "creates, reads"}]},
-      {"kind": "sequence", "title": "Sequence", "participants": [
-        {"id": "ct", "name": "History", "role": "Caretaker"}, {"id": "orig", "name": "Editor", "role": "Originator"},
-        {"id": "m", "name": "Snapshot", "role": "Memento"}],
-       "messages": [
-        {"from": "ct", "to": "orig", "label": "save()", "style": "call"},
-        {"from": "orig", "to": "m", "label": "new Snapshot", "style": "create"},
-        {"from": "orig", "to": "ct", "label": "memento", "style": "return"},
-        {"from": "ct", "to": "orig", "label": "restore(memento)", "style": "call"},
-        {"from": "orig", "to": "m", "label": "read state", "style": "call"}]}
-    ]},
-    {"role": "tradeoffs", "lists": [
-      {"title": "Use when", "tone": "positive", "items": [
-        "You need undo, checkpoints or rollback of an object's state.",
-        "Exposing the state through getters would break encapsulation.",
-        "State is small enough, or copy-on-write, to snapshot cheaply."]},
-      {"title": "Avoid when", "tone": "negative", "items": [
-        "State is huge and changes by small deltas: store the delta instead.",
-        "The object already is immutable; keep the old reference."]},
-      {"title": "Pitfalls", "tone": "warning", "items": [
-        "Shallow copies: mutable fields shared with the live object corrupt the snapshot.",
-        "Unbounded history exhausts memory; cap it or compact.",
-        "Mementos that hold external resources (files, connections) cannot be restored faithfully."]},
-      {"title": "Modern Java", "tone": "info", "items": [
-        "A nested private record is a compact, immutable memento.",
-        "With immutable state, the memento is the previous value itself: no pattern needed."]}
-    ]},
-    {"role": "compare", "rows": [
-      {"ref": "command", "relation": "combines", "difference": "Undo with Command stores the inverse operation, which is cheap in memory. Memento stores the state itself, which is simpler when inverses are hard. Editors often mix both."},
-      {"ref": "prototype", "relation": "lookAlike", "difference": "Both copy state. Prototype produces a new live object to use; a memento is an opaque snapshot that is only ever fed back to its originator."},
-      {"ref": "iterator", "relation": "combines", "difference": "An iterator can save its position as a memento so a traversal can be resumed or rewound."},
-      {"ref": "event-sourcing", "relation": "alternative", "difference": "Event sourcing rebuilds state from the full history of events, with snapshots as an optimization. Memento keeps only chosen snapshots."},
-      {"ref": "state", "relation": "oftenConfused", "difference": "State changes behavior with the object's mode. Memento does not change behavior; it saves data to return to later."}
-    ]},
-    {"role": "sightings", "entries": [
-      {"where": "JDK", "name": "java.io.Serializable", "detail": "Serialization turns an object into an opaque byte snapshot that can be restored later; `ObjectOutputStream` writes it and `ObjectInputStream` reads it."},
-      {"where": "JDK", "name": "javax.swing.undo.UndoManager", "detail": "Swing's undo framework stores `UndoableEdit`s that restore a document's earlier state."},
-      {"where": "Hibernate", "name": "Persistence context loaded state", "detail": "Hibernate keeps a snapshot of an entity's loaded state to detect dirty fields at flush."},
-      {"where": "Git", "name": "Commit", "detail": "Each commit is an immutable snapshot of the working tree to which you can restore."}
-    ]}
-  ],
-  "exercises": [
-    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+ "id": "memento",
+ "cards": [
+  {
+   "role": "definition",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Capture an object's internal state in an opaque snapshot so it can be restored later."
+    },
+    {
+     "type": "p",
+     "text": "The **originator** creates a **memento** of its own state and later restores itself from one. A **caretaker** stores mementos, for example in an undo stack, but cannot read or change them. Encapsulation holds: only the originator understands the snapshot's contents."
+    },
+    {
+     "type": "bullets",
+     "items": [
+      "**Originator:** creates and consumes mementos.",
+      "**Memento:** immutable, opaque to everyone else.",
+      "**Caretaker:** decides when to save and restore, never inspects."
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "info",
+     "text": "Typical uses are undo, checkpoints and transactional rollback of in-memory state."
+    }
+   ]
+  },
+  {
+   "role": "implementation",
+   "file": "Memento.java",
+   "expectedOutput": "Hello, world@12\nHello@5\n@0",
+   "walkthrough": [
+    {
+     "region": "originator",
+     "note": "`Memento` is a sealed marker that permits only the private `Snapshot` record, so only `Editor` can create or read one. The compiler enforces the encapsulation."
+    },
+    {
+     "region": "caretaker",
+     "note": "The caretaker stores opaque `Memento` values on a stack. It cannot look inside, edit or forge a snapshot; it only decides when to save and restore."
+    },
+    {
+     "region": "checkpoint",
+     "note": "Snapshots are taken before each change. `save()` copies the text into an immutable `String`, so later typing cannot corrupt a stored memento."
+    },
+    {
+     "region": "undo",
+     "note": "Restoring pops the latest snapshot and the editor rebuilds its own state from it. Each `pop` steps one checkpoint back."
+    }
+   ]
+  },
+  {
+   "role": "example",
+   "blocks": [
+    {
+     "type": "lead",
+     "text": "Rolling back a failed bulk edit in a diagram editor."
+    },
+    {
+     "type": "p",
+     "text": "A user applies an auto-layout to a diagram with 2,000 shapes. The layout engine mutates positions in place and may fail halfway. Before running it, the editor takes a snapshot of positions and styles. On failure or on Ctrl-Z, it restores from the snapshot. Stored snapshots are compact (positions only), and the history panel can list them without understanding their contents."
+    },
+    {
+     "type": "code",
+     "language": "java",
      "lines": [
-      "final class Canvas {",
-      "    private List<String> shapes = new ArrayList<>();",
-      "",
-      "    void draw(String s) { shapes.add(s); }",
-      "",
-      "    Object checkpoint() { return List.copyOf(shapes); }",
-      "",
-      "    @SuppressWarnings(\"unchecked\")",
-      "    void rollback(Object token) {",
-      "        shapes = new ArrayList<>((List<String>) token);",
-      "    }",
-      "}"],
-     "options": [
-      {"ref": "memento", "correct": true, "why": "The object hands out an opaque copy of its state and rebuilds itself from it later."},
-      {"ref": "prototype", "why": "Nothing creates a new live canvas; the copy is only fed back to the same object."},
-      {"ref": "command", "why": "No operation is being encapsulated or reversed; state, not an action, is stored."},
-      {"ref": "state", "why": "Behavior does not vary with a mode; the snapshot is data."}],
-     "compile": {"template": [
-      "import java.util.*;",
-      "{{code}}"]}},
-    {"id": "pick-1", "kind": "choose",
-     "scenario": "A spreadsheet needs multi-level undo. Cell state is private and mutated through many operations, some hard to invert, such as sort and paste with formatting. Sheets are small enough to copy.",
-     "prompt": "Which pattern fits best?",
-     "options": [
-      {"ref": "memento", "correct": true, "why": "Snapshots restore state regardless of how it was mutated, without exposing the cells' internals."},
-      {"ref": "command", "why": "Needs an inverse for every operation, which is difficult for sort and paste here."},
-      {"ref": "prototype", "why": "Cloning produces new live objects; the need is restoring one object to an earlier state."},
-      {"ref": "observer", "why": "Notifying listeners of changes does not let you return to a prior state."}]},
-    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Memento pattern.",
-     "lines": [
-      "final class Doc {",
-      "    private final List<String> lines = new ArrayList<>();",
-      "    void add(String s) { lines.add(s); }",
-      "",
-      "    record Snapshot(List<String> lines) {}",
-      "",
-      "    Snapshot save() { return new Snapshot(lines); }",
-      "",
-      "    void restore(Snapshot s) {",
-      "        lines.clear();",
-      "        lines.addAll(s.lines());",
-      "    }",
-      "}"],
-     "flawLines": [7],
-     "explanation": "The snapshot holds a reference to the live list, so later `add` calls change the saved state and `restore` even clears its own source. Save a copy: `new Snapshot(List.copyOf(lines))`.",
-     "compile": {"template": [
-      "import java.util.*;",
-      "{{code}}"]}},
-    {"id": "order-1", "kind": "reorder", "prompt": "Order the undo flow.",
-     "blocks": [
-      ["var history = new ArrayDeque<Editor.Memento>();"],
-      ["history.push(editor.save());"],
-      ["editor.type(\"!\");"],
-      ["editor.restore(history.pop());"]],
-     "explanation": "Create the store, snapshot before mutating, mutate, then restore from the snapshot. Saving after the edit would capture the wrong state.",
-     "compile": {"template": [
-      "import java.util.*;",
-      "final class Editor { interface Memento {} void type(String s) {}",
-      "  Memento save() { return new Memento() {}; } void restore(Memento m) {} }",
-      "class Snippet { void run(Editor editor) {",
-      "{{code}}", "} }"]}},
-    {"id": "recall-1", "kind": "recall",
-     "prompt": "Explain Memento in your own words: who creates snapshots, who stores them, and why it preserves encapsulation.",
-     "modelAnswer": [
-      {"type": "p", "text": "The originator creates an opaque snapshot of its own state and can restore itself from one. A caretaker stores snapshots, such as an undo stack, but cannot read them, so the originator's internals stay private. Snapshots must be immutable copies, not references into live state."}],
-     "keyPoints": [
-      "Originator creates and consumes snapshots",
-      "Caretaker stores them without looking inside",
-      "Snapshot is opaque and immutable",
-      "Must deep-copy mutable state",
-      "Command undo stores operations; Memento stores state"]}
-  ]
+      "Memento before = diagram.save();",
+      "try {",
+      "    layout.apply(diagram);",
+      "} catch (LayoutException e) {",
+      "    diagram.restore(before);",
+      "}"
+     ]
+    },
+    {
+     "type": "callout",
+     "tone": "positive",
+     "text": "Payoff: atomic, in-memory rollback with no change to the layout engine and no public setters on the diagram's internals."
+    }
+   ]
+  },
+  {
+   "role": "structure",
+   "diagrams": [
+    {
+     "kind": "class",
+     "title": "Class",
+     "nodes": [
+      {
+       "id": "ct",
+       "name": "History",
+       "kind": "class",
+       "role": "Caretaker",
+       "col": 0,
+       "row": 0,
+       "members": [
+        "- stack: Deque<Memento>",
+        "+ push(Memento)",
+        "+ pop(): Memento"
+       ]
+      },
+      {
+       "id": "orig",
+       "name": "Editor",
+       "kind": "class",
+       "role": "Originator",
+       "col": 1,
+       "row": 0,
+       "members": [
+        "- text, cursor",
+        "+ save(): Memento",
+        "+ restore(Memento)"
+       ]
+      },
+      {
+       "id": "mem",
+       "name": "Memento",
+       "kind": "interface",
+       "role": "Memento (opaque)",
+       "col": 0,
+       "row": 1,
+       "members": []
+      },
+      {
+       "id": "snap",
+       "name": "Snapshot",
+       "kind": "record",
+       "role": "Memento (private)",
+       "col": 1,
+       "row": 1,
+       "members": [
+        "text: String",
+        "cursor: int"
+       ]
+      }
+     ],
+     "edges": [
+      {
+       "from": "ct",
+       "to": "mem",
+       "rel": "aggregation",
+       "label": "holds"
+      },
+      {
+       "from": "snap",
+       "to": "mem",
+       "rel": "realizes"
+      },
+      {
+       "from": "orig",
+       "to": "snap",
+       "rel": "dependency",
+       "label": "creates, reads"
+      }
+     ]
+    },
+    {
+     "kind": "sequence",
+     "title": "Sequence",
+     "participants": [
+      {
+       "id": "ct",
+       "name": "History",
+       "role": "Caretaker"
+      },
+      {
+       "id": "orig",
+       "name": "Editor",
+       "role": "Originator"
+      },
+      {
+       "id": "m",
+       "name": "Snapshot",
+       "role": "Memento"
+      }
+     ],
+     "messages": [
+      {
+       "from": "ct",
+       "to": "orig",
+       "label": "save()",
+       "style": "call"
+      },
+      {
+       "from": "orig",
+       "to": "m",
+       "label": "new Snapshot",
+       "style": "create"
+      },
+      {
+       "from": "orig",
+       "to": "ct",
+       "label": "memento",
+       "style": "return"
+      },
+      {
+       "from": "ct",
+       "to": "orig",
+       "label": "restore(memento)",
+       "style": "call"
+      },
+      {
+       "from": "orig",
+       "to": "m",
+       "label": "read state",
+       "style": "call"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "role": "tradeoffs",
+   "lists": [
+    {
+     "title": "Use when",
+     "tone": "positive",
+     "items": [
+      "You need undo, checkpoints or rollback of an object's state.",
+      "Exposing the state through getters would break encapsulation.",
+      "State is small enough, or copy-on-write, to snapshot cheaply."
+     ]
+    },
+    {
+     "title": "Avoid when",
+     "tone": "negative",
+     "items": [
+      "State is huge and changes by small deltas: store the delta instead.",
+      "The object already is immutable; keep the old reference."
+     ]
+    },
+    {
+     "title": "Pitfalls",
+     "tone": "warning",
+     "items": [
+      "Shallow copies: mutable fields shared with the live object corrupt the snapshot.",
+      "Unbounded history exhausts memory; cap it or compact.",
+      "Mementos that hold external resources (files, connections) cannot be restored faithfully."
+     ]
+    },
+    {
+     "title": "Modern Java",
+     "tone": "info",
+     "items": [
+      "A nested private record is a compact, immutable memento.",
+      "With immutable state, the memento is the previous value itself: no pattern needed."
+     ]
+    }
+   ]
+  },
+  {
+   "role": "compare",
+   "rows": [
+    {
+     "ref": "command",
+     "relation": "combines",
+     "difference": "Undo with Command stores the inverse operation, which is cheap in memory. Memento stores the state itself, which is simpler when inverses are hard. Editors often mix both."
+    },
+    {
+     "ref": "prototype",
+     "relation": "lookAlike",
+     "difference": "Both copy state. Prototype produces a new live object to use; a memento is an opaque snapshot that is only ever fed back to its originator."
+    },
+    {
+     "ref": "iterator",
+     "relation": "combines",
+     "difference": "An iterator can save its position as a memento so a traversal can be resumed or rewound."
+    },
+    {
+     "ref": "event-sourcing",
+     "relation": "alternative",
+     "difference": "Event sourcing rebuilds state from the full history of events, with snapshots as an optimization. Memento keeps only chosen snapshots."
+    },
+    {
+     "ref": "state",
+     "relation": "oftenConfused",
+     "difference": "State changes behavior with the object's mode. Memento does not change behavior; it saves data to return to later."
+    }
+   ]
+  },
+  {
+   "role": "sightings",
+   "entries": [
+    {
+     "where": "Apache Flink",
+     "name": "CheckpointedFunction",
+     "detail": "An operator writes its own state in `snapshotState`; the runtime stores the checkpoint without interpreting it and hands it back to `initializeState` after a failure."
+    },
+    {
+     "where": "Eclipse",
+     "name": "org.eclipse.ui.IMemento",
+     "detail": "Named for the pattern: a view writes its state into an `IMemento` in `saveState`, and the workbench stores it and passes it back on `init`."
+    },
+    {
+     "where": "Kubernetes",
+     "name": "VolumeSnapshot",
+     "detail": "A point-in-time snapshot of a volume; a new `PersistentVolumeClaim` restores from it via `dataSource`, without Kubernetes reading the data."
+    },
+    {
+     "where": "Hibernate",
+     "name": "EntityEntry loaded state",
+     "detail": "A snapshot without restore: the session keeps each entity's state as loaded and compares it with the live object at flush to find dirty fields."
+    }
+   ]
+  }
+ ],
+ "exercises": [
+  {
+   "id": "spot-1",
+   "kind": "identify",
+   "prompt": "Which pattern is this?",
+   "lines": [
+    "final class Canvas {",
+    "    private List<String> shapes = new ArrayList<>();",
+    "",
+    "    void draw(String s) { shapes.add(s); }",
+    "",
+    "    Object checkpoint() { return List.copyOf(shapes); }",
+    "",
+    "    @SuppressWarnings(\"unchecked\")",
+    "    void rollback(Object token) {",
+    "        shapes = new ArrayList<>((List<String>) token);",
+    "    }",
+    "}"
+   ],
+   "options": [
+    {
+     "ref": "memento",
+     "correct": true,
+     "why": "The object hands out an opaque copy of its state and rebuilds itself from it later."
+    },
+    {
+     "ref": "prototype",
+     "why": "Nothing creates a new live canvas; the copy is only fed back to the same object."
+    },
+    {
+     "ref": "command",
+     "why": "No operation is being encapsulated or reversed; state, not an action, is stored."
+    },
+    {
+     "ref": "state",
+     "why": "Behavior does not vary with a mode; the snapshot is data."
+    }
+   ],
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "pick-1",
+   "kind": "choose",
+   "scenario": "A spreadsheet needs multi-level undo. Cell state is private and mutated through many operations, some hard to invert, such as sort and paste with formatting. Sheets are small enough to copy.",
+   "prompt": "Which pattern fits best?",
+   "options": [
+    {
+     "ref": "memento",
+     "correct": true,
+     "why": "Snapshots restore state regardless of how it was mutated, without exposing the cells' internals."
+    },
+    {
+     "ref": "command",
+     "why": "Needs an inverse for every operation, which is difficult for sort and paste here."
+    },
+    {
+     "ref": "prototype",
+     "why": "Cloning produces new live objects; the need is restoring one object to an earlier state."
+    },
+    {
+     "ref": "observer",
+     "why": "Notifying listeners of changes does not let you return to a prior state."
+    }
+   ]
+  },
+  {
+   "id": "flaw-1",
+   "kind": "tapLine",
+   "prompt": "Tap the line that breaks the Memento pattern.",
+   "lines": [
+    "final class Doc {",
+    "    private final List<String> lines = new ArrayList<>();",
+    "    void add(String s) { lines.add(s); }",
+    "",
+    "    record Snapshot(List<String> lines) {}",
+    "",
+    "    Snapshot save() { return new Snapshot(lines); }",
+    "",
+    "    void restore(Snapshot s) {",
+    "        lines.clear();",
+    "        lines.addAll(s.lines());",
+    "    }",
+    "}"
+   ],
+   "flawLines": [
+    7
+   ],
+   "explanation": "The snapshot holds a reference to the live list, so later `add` calls change the saved state and `restore` even clears its own source. Save a copy: `new Snapshot(List.copyOf(lines))`.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "{{code}}"
+    ]
+   }
+  },
+  {
+   "id": "order-1",
+   "kind": "reorder",
+   "prompt": "Order the undo flow.",
+   "blocks": [
+    [
+     "var history = new ArrayDeque<Editor.Memento>();"
+    ],
+    [
+     "history.push(editor.save());"
+    ],
+    [
+     "editor.type(\"!\");"
+    ],
+    [
+     "editor.restore(history.pop());"
+    ]
+   ],
+   "explanation": "Create the store, snapshot before mutating, mutate, then restore from the snapshot. Saving after the edit would capture the wrong state.",
+   "compile": {
+    "template": [
+     "import java.util.*;",
+     "final class Editor { interface Memento {} void type(String s) {}",
+     "  Memento save() { return new Memento() {}; } void restore(Memento m) {} }",
+     "class Snippet { void run(Editor editor) {",
+     "{{code}}",
+     "} }"
+    ]
+   }
+  },
+  {
+   "id": "recall-1",
+   "kind": "recall",
+   "prompt": "Explain Memento in your own words: who creates snapshots, who stores them, and why it preserves encapsulation.",
+   "modelAnswer": [
+    {
+     "type": "p",
+     "text": "The originator creates an opaque snapshot of its own state and can restore itself from one. A caretaker stores snapshots, such as an undo stack, but cannot read them, so the originator's internals stay private. Snapshots must be immutable copies, not references into live state."
+    }
+   ],
+   "keyPoints": [
+    "Originator creates and consumes snapshots",
+    "Caretaker stores them without looking inside",
+    "Snapshot is opaque and immutable",
+    "Must deep-copy mutable state",
+    "Command undo stores operations; Memento stores state"
+   ]
+  }
+ ]
 }

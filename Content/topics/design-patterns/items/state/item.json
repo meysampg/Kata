@@ -26,9 +26,9 @@
         "    default Sub chargeFailed(Clock c) { return this; }",
         "}",
         "record Active(Plan plan) implements Sub {",
-        "    public Sub chargeFailed(Clock c) { return new PastDue(plan, c.now()); }",
+        "    public Sub chargeFailed(Clock c) { return new PastDue(plan, c.instant()); }",
         "}"]},
-      {"type": "callout", "tone": "positive", "text": "Payoff: adding a Paused phase touches that class and its neighbors' successors. The sealed hierarchy makes the compiler list every switch you must revisit."}
+      {"type": "callout", "tone": "positive", "text": "Payoff: adding a Paused phase touches that class and its neighbors' successors. The sealed hierarchy makes the compiler flag every exhaustive `switch` you must revisit."}
     ]},
     {"role": "structure", "diagrams": [
       {"kind": "class", "title": "Class", "nodes": [
@@ -85,8 +85,8 @@
     {"role": "sightings", "entries": [
       {"where": "Spring", "name": "Spring Statemachine", "detail": "`StateMachine<S, E>` configures states and transitions declaratively, with guards and actions per transition."},
       {"where": "Netty", "name": "ReplayingDecoder", "detail": "Generic over a state type: `state()` and `checkpoint(S)` select which part of a frame the decoder parses next."},
-      {"where": "AWS", "name": "Step Functions", "detail": "State machines declared in Amazon States Language: each state decides what runs and which state follows."},
-      {"where": "Kubernetes", "name": "Pod phase", "detail": "A pod moves through `Pending`, `Running`, `Succeeded` or `Failed`; the kubelet reacts differently in each phase."}
+      {"where": "AWS", "name": "Step Functions", "detail": "The table-driven alternative: a state machine declared in Amazon States Language, where each state names what runs and its `Next` state."},
+      {"where": "Akka Typed", "name": "Behavior", "detail": "An actor's message handler returns the `Behavior` for the next message, so each phase is an object that names its successor."}
     ]}
   ],
   "exercises": [

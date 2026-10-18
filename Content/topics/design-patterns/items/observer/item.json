@@ -67,7 +67,7 @@
         "Lapsed listeners: forgotten subscriptions keep objects alive and leak memory.",
         "A slow or throwing observer blocks or breaks notification for the rest.",
         "Observers that mutate the subject cause re-entrant cascades and loops.",
-        "Notification order is unspecified; do not depend on it."]},
+        "Correctness that depends on notification order; most subjects do not promise one."]},
       {"title": "Modern Java", "tone": "info", "items": [
         "`java.util.Observable` and `Observer` are deprecated since Java 9; use your own interface or `java.beans.PropertyChangeListener`.",
         "`java.util.concurrent.Flow` and reactive libraries add back-pressure to the same idea."]}
@@ -134,11 +134,11 @@
       "    }",
       "}"],
      "flawLines": [11],
-     "explanation": "Removing from the list while iterating throws `ConcurrentModificationException` and also silently drops observers after one notification. Keep subscriptions until cancelled; use `CopyOnWriteArrayList` if observers may unsubscribe during a callback.",
+     "explanation": "Removing from an `ArrayList` inside its for-each loop breaks the iteration: depending on the size it throws `ConcurrentModificationException` or silently skips the next observer, and every observer is dropped after one notification. Keep subscriptions until cancelled; use `CopyOnWriteArrayList` if observers may unsubscribe during a callback.",
      "compile": {"template": [
       "import java.util.*;",
       "{{code}}"]}},
-    {"id": "order-1", "kind": "reorder", "prompt": "Order the lifecycle of a subscription.",
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the lines so the listener sees the change to 105 but not the change to 90.",
      "blocks": [
       ["Runnable cancel = ticker.subscribe(listener);"],
       ["ticker.set(105);"],

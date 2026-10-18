@@ -78,20 +78,20 @@
       {"ref": "visitor", "relation": "combines", "difference": "Visitor moves operations such as eval, print and optimize out of the nodes, so you can add them without editing every node class. Natural once the grammar is stable."},
       {"ref": "flyweight", "relation": "combines", "difference": "Terminal symbols that repeat (constants, keywords) can be shared as flyweights to save memory in big trees."},
       {"ref": "strategy", "relation": "alternative", "difference": "If you only need to pick one of a few algorithms, a strategy or lambda is enough. Interpreter is for sentences with structure that users compose."},
-      {"ref": "iterator", "relation": "combines", "difference": "An iterator can walk the tree for tooling such as pretty-printing or validation, without adding methods to each node."}
+      {"ref": "iterator", "relation": "combines", "difference": "An iterator can traverse the AST, for example to collect every variable, while evaluation stays in each node's own `eval`."}
     ]},
     {"role": "sightings", "entries": [
       {"where": "JDK", "name": "java.util.regex.Pattern", "detail": "Compiles a regular expression into an internal node graph that `Matcher` then evaluates against input."},
       {"where": "JDK", "name": "java.text.MessageFormat", "detail": "Parses a format pattern once into segments, then formats arguments against it."},
       {"where": "Spring", "name": "SpelExpressionParser", "detail": "Spring Expression Language parses text into an `Expression` AST that is evaluated against an `EvaluationContext`."},
-      {"where": "Spring Data", "name": "PartTree", "detail": "Parses repository method names such as `findByLastnameAndAge` into a query tree."},
-      {"where": "Apache Lucene", "name": "QueryParser", "detail": "Parses query strings into a tree of `Query` objects that are then executed."}
+      {"where": "Spring Data", "name": "PartTree", "detail": "Parses repository method names such as `findByLastnameAndAge` into a tree of `OrPart`s and `Part`s that store modules turn into queries."},
+      {"where": "Apache Lucene", "name": "QueryParser", "detail": "The classic `QueryParser` turns query syntax into a tree of `Query` objects (`BooleanQuery`, `TermQuery`) that `IndexSearcher` runs."}
     ]}
   ],
   "exercises": [
     {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
      "lines": [
-      "sealed interface Rule permits Eq, And, Not {",
+      "sealed interface Rule permits Eq, And {",
       "    boolean test(Map<String, String> row);",
       "}",
       "record Eq(String col, String val) implements Rule {",
@@ -103,13 +103,10 @@
       "    public boolean test(Map<String, String> row) {",
       "        return a.test(row) && b.test(row);",
       "    }",
-      "}",
-      "record Not(Rule r) implements Rule {",
-      "    public boolean test(Map<String, String> row) { return !r.test(row); }",
       "}"],
      "options": [
       {"ref": "interpreter", "correct": true, "why": "Each grammar rule is a node type, and the tree evaluates itself recursively against a context row."},
-      {"ref": "composite", "why": "The shape is similar, but the nodes encode a language with meaning (equals, and, not), not a uniform part-whole tree."},
+      {"ref": "composite", "why": "The shape is similar, but the nodes encode a language with meaning (equals, and), not a uniform part-whole tree."},
       {"ref": "chain-of-responsibility", "why": "Every node is evaluated; none decides to handle or pass a request along."},
       {"ref": "strategy", "why": "The rules are not alternatives chosen from outside; they compose each other into one sentence."}],
      "compile": {"template": [
@@ -143,16 +140,16 @@
       "{{code}}"]}},
     {"id": "order-1", "kind": "reorder", "prompt": "Order the steps for evaluating a rule from text.",
      "blocks": [
+      ["String text = config.get(\"alert\");"],
       ["Rule rule = parser.parse(text);"],
-      ["Map<String, Integer> env = Map.of(\"x\", 5);"],
-      ["int result = rule.eval(env);"],
+      ["int result = rule.eval(Map.of(\"x\", 5));"],
       ["System.out.println(result);"]],
-     "explanation": "Parsing produces the tree first, the environment supplies the context, and evaluation needs both before its result can be used.",
+     "explanation": "The text must be read before it can be parsed, and the tree must exist before it can be evaluated against a context. Only then is there a result to print.",
      "compile": {"template": [
       "import java.util.Map;",
       "interface Rule { int eval(Map<String, Integer> env); }",
       "interface RuleParser { Rule parse(String text); }",
-      "class Snippet { void run(RuleParser parser, String text) {",
+      "class Snippet { void run(RuleParser parser, Map<String, String> config) {",
       "{{code}}", "} }"]}},
     {"id": "recall-1", "kind": "recall",
      "prompt": "Explain Interpreter in your own words: what the classes represent, where parsing fits, and when you would not use it.",
