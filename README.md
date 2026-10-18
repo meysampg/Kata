@@ -122,9 +122,29 @@ Notes:
     -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
   ```
 
-- To run on a device, open `Kata.xcodeproj`, then set your own Team and a unique bundle identifier under Signing & Capabilities. Do not commit those changes. `Tools/renew.sh` builds, installs and launches the app on the owner's iPhone (edit the device id in the script for yours).
-- With a free Apple ID, a device build expires after 7 days; run `Tools/renew.sh` again to re-sign it.
+- To run on a device, see [Install on your iPhone](#install-on-your-iphone).
 - Screenshots: `Tools/capture_screenshots.sh [device-udid] [out-dir]` uses the DEBUG demo mode (`-KataDemo YES -KataScreen <screen>`) on a connected iPhone, so real progress is untouched.
+
+## Install on your iPhone
+
+```sh
+Tools/install.sh                 # builds, installs and launches; asks which device if several are connected
+Tools/install.sh "Other iPhone"  # a UDID or part of the device name (see `xcrun devicectl list devices`)
+```
+
+1. Connect the iPhone by USB (or pair it on the same network) and tap Trust. The iCloud account on the phone does not matter.
+2. Turn on Developer Mode: Settings > Privacy & Security > Developer Mode, then restart.
+3. Run the script. Xcode registers the device with your team automatically (`-allowProvisioningUpdates`).
+4. After the first install, trust the developer: Settings > General > VPN & Device Management > your Apple ID > Trust. Then open the app.
+5. With a free Apple ID the build expires after 7 days; run `Tools/install.sh` again to re-sign it (`Tools/renew.sh` does the same for the owner's phone).
+
+To sign with a different Apple ID, pass its team and a bundle id that is unique to that team (free teams cannot share ids):
+
+```sh
+TEAM=ABCDE12345 BUNDLE_ID=com.example.kata Tools/install.sh
+```
+
+Other options: `CONFIG=Release`, `NO_PULL=1` (skip `git pull`).
 
 ## Content authoring
 
