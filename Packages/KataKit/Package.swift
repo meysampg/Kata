@@ -22,7 +22,9 @@ let package = Package(
     .testTarget(name: "KataSRSTests", dependencies: ["KataSRS"]),
     .testTarget(name: "KataCodeTests", dependencies: ["KataCode"]),
     .testTarget(name: "KataDiagramTests", dependencies: ["KataDiagram"]),
-    .testTarget(name: "KataCoreTests", dependencies: ["KataCore"]),
+    .testTarget(
+      name: "KataCoreTests", dependencies: ["KataCore", "KataSRS", "KataDiagram"],
+      resources: [.copy("Fixtures")]),
     .testTarget(name: "ContentTests", dependencies: ["KataCore"])
   ]
 )

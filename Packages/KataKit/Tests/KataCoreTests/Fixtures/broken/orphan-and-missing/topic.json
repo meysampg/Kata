@@ -1,0 +1,64 @@
+{
+ "schemaVersion": 1,
+ "id": "orphan-and-missing",
+ "title": "Broken",
+ "symbol": "x.circle",
+ "codeLanguage": "java",
+ "roles": {
+  "definition": {
+   "title": "Definition",
+   "symbol": "a",
+   "type": "text"
+  },
+  "implementation": {
+   "title": "Implementation",
+   "symbol": "b",
+   "type": "code"
+  }
+ },
+ "templates": {
+  "t": {
+   "roles": [
+    "definition",
+    "implementation"
+   ]
+  }
+ },
+ "requiredExercises": [
+  [
+   "recall"
+  ]
+ ],
+ "categories": [
+  {
+   "id": "c",
+   "title": "C",
+   "template": "t"
+  }
+ ],
+ "items": [
+  {
+   "id": "one",
+   "title": "One",
+   "category": "c",
+   "difficulty": 1,
+   "intent": "First."
+  },
+  {
+   "id": "missing",
+   "title": "Missing",
+   "category": "c",
+   "difficulty": 1,
+   "intent": "Has no directory."
+  }
+ ],
+ "path": [
+  {
+   "title": "All",
+   "items": [
+    "one",
+    "missing"
+   ]
+  }
+ ]
+}

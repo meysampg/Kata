@@ -1,0 +1,46 @@
+{
+  "id": "beta",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Count things in one place."},
+      {"type": "p", "text": "Keep the count private and expose operations. Compare with [Alpha](kata:alpha)."}
+    ]},
+    {"role": "implementation", "file": "Beta.java", "language": "java", "expectedOutput": "2",
+     "walkthrough": [
+      {"region": "state", "note": "The counter owns its state."},
+      {"region": "make", "note": "Create it."},
+      {"region": "run", "note": "Increment twice."},
+      {"region": "print", "note": "Read the value."}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": ["State must stay consistent.", "Updates need rules."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "alpha", "relation": "lookAlike", "difference": "Alpha hides behavior, Beta hides state."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.concurrent.atomic.AtomicInteger", "detail": "A counter with atomic updates."},
+      {"where": "JDK", "name": "java.lang.StringBuilder", "detail": "Hides a growing buffer behind methods."},
+      {"where": "JDK", "name": "java.util.ArrayList", "detail": "Hides its backing array."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which item is this?",
+     "lines": ["private int n;", "void inc() { n++; }"],
+     "options": [
+      {"ref": "beta", "correct": true, "why": "The state is private and changed through a method."},
+      {"ref": "alpha", "why": "There is no interface here."},
+      {"text": "Public field", "why": "The field is private."}]},
+    {"id": "pick-1", "kind": "choose", "scenario": "Updates must keep a number consistent.", "prompt": "Which item fits?",
+     "options": [
+      {"ref": "beta", "correct": true, "why": "Encapsulated state with rules."},
+      {"ref": "alpha", "why": "Alpha hides behavior, not state."},
+      {"text": "A public field", "why": "Anyone can break the invariant."}]},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the calls.",
+     "blocks": [["Counter c = new Counter();"], ["c.inc();"], ["int v = c.value();"], ["System.out.println(v);"]],
+     "explanation": "Create, update, read, print."},
+    {"id": "recall-1", "kind": "recall", "prompt": "Explain the idea.",
+     "modelAnswer": [{"type": "p", "text": "Keep state private and expose operations."}, {"type": "bullets", "items": ["Private field", "Methods enforce rules"]}],
+     "keyPoints": ["State is private", "Methods enforce rules", "Callers cannot break invariants"]}
+  ]
+}

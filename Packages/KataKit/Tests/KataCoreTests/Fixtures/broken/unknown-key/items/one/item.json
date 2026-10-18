@@ -1,0 +1,10 @@
+{
+  "id": "one",
+  "cards": [
+    {"role": "definition", "colour": "red", "blocks": [{"type": "lead", "text": "Hello."}]},
+    {"role": "implementation", "file": "One.java", "walkthrough": [{"region": "r", "note": "n"}]}
+  ],
+  "exercises": [
+    {"id": "recall-1", "kind": "recall", "prompt": "Say it.", "modelAnswer": [{"type": "p", "text": "Hi."}], "keyPoints": ["a", "b", "c"]}
+  ]
+}

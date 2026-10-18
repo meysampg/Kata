@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "mini-topic",
+  "title": "Mini Topic",
+  "subtitle": "Two items covering every card type and exercise kind",
+  "symbol": "square.stack",
+  "sortOrder": 5,
+  "codeLanguage": "java",
+  "javaRelease": 21,
+  "roles": {
+    "definition": {"title": "Definition", "symbol": "text.book.closed", "type": "text"},
+    "implementation": {"title": "Implementation", "symbol": "chevron.left.forwardslash.chevron.right", "type": "code"},
+    "structure": {"title": "Structure", "symbol": "point.3.connected.trianglepath.dotted", "type": "diagram"},
+    "tradeoffs": {"title": "When to use", "symbol": "scale.3d", "type": "lists"},
+    "compare": {"title": "Compare", "symbol": "arrow.left.arrow.right", "type": "comparison"},
+    "sightings": {"title": "In the wild", "symbol": "binoculars", "type": "references"}
+  },
+  "templates": {
+    "full": {"roles": ["definition", "implementation", "structure", "tradeoffs", "compare", "sightings"]},
+    "lean": {"roles": ["definition", "implementation", "tradeoffs", "compare", "sightings"], "optionalRoles": ["structure"]}
+  },
+  "requiredExercises": [["identify"], ["choose"], ["tapLine", "reorder"], ["recall"]],
+  "categories": [
+    {"id": "patterns", "title": "Patterns", "template": "full", "summary": "Full template."},
+    {"id": "principles", "title": "Principles", "template": "lean"}
+  ],
+  "items": [
+    {"id": "alpha", "title": "Alpha Greeter", "category": "patterns", "difficulty": 1, "aliases": ["Hello Pattern", "Café"], "intent": "Greet through an interface."},
+    {"id": "beta", "title": "Beta Counter", "category": "principles", "difficulty": 2, "aliases": [], "intent": "Count things in one place."}
+  ],
+  "path": [
+    {"title": "Start", "items": ["alpha"]},
+    {"title": "Next", "items": ["beta"]}
+  ]
+}

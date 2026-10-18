@@ -1,0 +1,71 @@
+{
+  "id": "alpha",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Greet through an interface."},
+      {"type": "heading", "text": "Idea"},
+      {"type": "p", "text": "A **greeter** hides *how* the greeting is made. See [Beta](kata:beta) for counting."},
+      {"type": "bullets", "items": ["One interface.", "Many implementations."]},
+      {"type": "numbered", "items": ["Define it.", "Implement it."]},
+      {"type": "callout", "tone": "info", "text": "Records and lambdas work too."},
+      {"type": "code", "language": "java", "lines": ["Greeter g = n -> \"Hi \" + n;"]}
+    ]},
+    {"role": "implementation", "file": "Alpha.java", "expectedOutput": "Hello, Kata",
+     "walkthrough": [
+      {"region": "iface", "note": "The interface."},
+      {"region": "impl", "note": "One implementation."},
+      {"region": "use", "note": "The client picks one and calls it."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "g", "name": "Greeter", "kind": "interface", "role": "Abstraction", "col": 0, "row": 0, "members": ["+ greet(name): String"]},
+        {"id": "p", "name": "Polite", "kind": "class", "role": "Concrete", "col": 0, "row": 1, "members": []}],
+       "edges": [{"from": "p", "to": "g", "rel": "realizes"}], "notes": []},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "c", "name": "Client"}, {"id": "g", "name": "Polite", "role": "Concrete"}],
+       "messages": [
+        {"from": "c", "to": "g", "label": "greet(name)", "style": "call"},
+        {"from": "g", "to": "c", "label": "greeting", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": ["Several greetings exist.", "Callers should not care which."]},
+      {"title": "Avoid when", "tone": "negative", "items": ["There is only one greeting.", "It never changes."]},
+      {"title": "Pitfalls", "tone": "warning", "items": ["Leaking the concrete type.", "Too many tiny interfaces."]},
+      {"title": "Modern Java", "tone": "info", "items": ["Lambdas replace single-method classes.", "Records make value implementations short."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "beta", "relation": "alternative", "difference": "Beta counts, Alpha greets."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.Comparator", "detail": "One method, many implementations."},
+      {"where": "JDK", "name": "java.lang.Runnable", "detail": "A single-method interface used with threads."},
+      {"where": "Spring", "name": "PasswordEncoder", "detail": "Interchangeable hashing implementations."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which item is this?",
+     "lines": ["Greeter g = new Polite();", "System.out.println(g.greet(\"Kata\"));"],
+     "options": [
+      {"ref": "alpha", "correct": true, "why": "The client talks to the interface only."},
+      {"ref": "beta", "why": "Nothing is being counted."},
+      {"text": "Neither", "why": "The snippet matches Alpha exactly."}],
+     "compile": {"template": ["interface Greeter { String greet(String n); }", "final class Polite implements Greeter { public String greet(String n) { return n; } }", "class Snippet { void run() {", "{{code}}", "} }"]}},
+    {"id": "pick-1", "kind": "choose", "scenario": "Callers must not depend on which greeting is produced.", "prompt": "Which item fits?",
+     "options": [
+      {"ref": "alpha", "correct": true, "why": "An interface hides the implementation."},
+      {"ref": "beta", "why": "Counting is a different concern."},
+      {"text": "A global switch", "why": "That couples callers to every variant."},
+      {"text": "Copy and paste", "why": "It duplicates the rule."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that leaks the concrete type.",
+     "lines": ["Greeter a = new Polite();", "Polite b = new Polite();", "a.greet(\"x\");"],
+     "flawLines": [2], "explanation": "Line 2 declares the concrete class instead of the interface.",
+     "compile": {"template": ["interface Greeter { String greet(String n); }", "final class Polite implements Greeter { public String greet(String n) { return n; } }", "class Snippet { void run() {", "{{code}}", "} }"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the steps.",
+     "blocks": [["Greeter g = new Polite();"], ["String s = g.greet(\"x\");"], ["System.out.println(s);"]],
+     "explanation": "Create, call, print.",
+     "compile": {"template": ["interface Greeter { String greet(String n); }", "final class Polite implements Greeter { public String greet(String n) { return n; } }", "class Snippet { void run() {", "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall", "prompt": "Explain the idea.",
+     "modelAnswer": [{"type": "p", "text": "Hide the implementation behind an interface."}],
+     "keyPoints": ["One interface", "Many implementations", "Callers use the interface"]}
+  ]
+}

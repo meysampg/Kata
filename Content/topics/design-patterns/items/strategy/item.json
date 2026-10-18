@@ -1,0 +1,174 @@
+{
+  "id": "strategy",
+  "cards": [
+    {"role": "definition", "blocks": [
+      {"type": "lead", "text": "Define a family of interchangeable algorithms behind one interface, and let the caller choose one at runtime."},
+      {"type": "p", "text": "A **context** holds a **strategy** and delegates one varying decision to it. The context never learns which concrete strategy it has, so a new algorithm means a new class or lambda, not an edit to the context."},
+      {"type": "bullets", "items": [
+        "**Varies:** one algorithm or policy (pricing, sorting, retry, compression).",
+        "**Stays stable:** the code that uses it.",
+        "**Chosen by:** the client or configuration, usually once per use."]},
+      {"type": "callout", "tone": "info", "text": "In Java 8+ a one-method strategy is a functional interface, so a lambda or method reference is a complete strategy."}
+    ]},
+    {"role": "implementation", "file": "Strategy.java",
+     "expectedOutput": "NONE -> 50.00\nSPRING10 -> 45.00\nWELCOME -> 42.50",
+     "walkthrough": [
+      {"region": "strategy", "note": "The strategy interface: one method. `@FunctionalInterface` lets lambdas implement it and makes the compiler enforce that."},
+      {"region": "concrete", "note": "Concrete strategies as records: immutable, validated in the compact constructor, each knowing only its own rule."},
+      {"region": "context", "note": "The context takes a strategy in its constructor and delegates the one varying step. No `switch`, no `instanceof`."},
+      {"region": "lambda", "note": "A lambda is a full strategy. Trivial rules need no class at all."},
+      {"region": "select", "note": "Selection lives at the edge, in a map from promo code to policy. A new promo touches this map, never `Checkout`."},
+      {"region": "client", "note": "The client pairs context with strategy and calls the context. The same `Checkout` prints three different totals."}
+    ]},
+    {"role": "example", "blocks": [
+      {"type": "lead", "text": "Shipping quotes in an online shop."},
+      {"type": "p", "text": "Each carrier prices parcels differently: weight tables, zones, surcharges. The customer picks a carrier at checkout, finance wants to A/B test a flat rate, and a new carrier arrives every quarter. Each rule becomes a `ShippingQuote` strategy with its own unit tests, and the checkout service stays unchanged."},
+      {"type": "code", "language": "java", "lines": [
+        "interface ShippingQuote { Money quote(Parcel p, Address to); }",
+        "",
+        "ShippingQuote dhl  = new DhlTableRate(rates);",
+        "ShippingQuote flat = (p, to) -> Money.eur(\"4.90\");",
+        "ShippingQuote chosen = flags.on(\"flat-shipping\", user) ? flat : dhl;",
+        "Money price = checkout.quoteWith(chosen, cart, address);"]},
+      {"type": "callout", "tone": "positive", "text": "Payoff: a new carrier is a new class plus one registry line. The flat-rate experiment is one lambda behind a flag."}
+    ]},
+    {"role": "structure", "diagrams": [
+      {"kind": "class", "title": "Class", "nodes": [
+        {"id": "checkout", "name": "Checkout", "kind": "class", "role": "Context", "col": 0.5, "row": 0,
+         "members": ["- policy: DiscountPolicy", "+ total(prices): BigDecimal"]},
+        {"id": "policy", "name": "DiscountPolicy", "kind": "interface", "role": "Strategy", "col": 0.5, "row": 1,
+         "members": ["+ apply(subtotal): BigDecimal"]},
+        {"id": "pct", "name": "PercentOff", "kind": "record", "role": "ConcreteStrategy", "col": 0, "row": 2,
+         "members": ["+ apply(subtotal)"]},
+        {"id": "flat", "name": "FlatOff", "kind": "record", "role": "ConcreteStrategy", "col": 1, "row": 2,
+         "members": ["+ apply(subtotal)"]}],
+       "edges": [
+        {"from": "checkout", "to": "policy", "rel": "aggregation", "label": "policy"},
+        {"from": "pct", "to": "policy", "rel": "realizes"},
+        {"from": "flat", "to": "policy", "rel": "realizes"}],
+       "notes": [{"attachTo": "policy", "text": "a lambda also implements it"}]},
+      {"kind": "sequence", "title": "Sequence", "participants": [
+        {"id": "client", "name": "Client"}, {"id": "checkout", "name": "Checkout", "role": "Context"},
+        {"id": "policy", "name": "PercentOff", "role": "Strategy"}],
+       "messages": [
+        {"from": "client", "to": "checkout", "label": "new Checkout(policy)", "style": "create"},
+        {"from": "client", "to": "checkout", "label": "total(prices)", "style": "call"},
+        {"from": "checkout", "to": "policy", "label": "apply(subtotal)", "style": "call"},
+        {"from": "policy", "to": "checkout", "label": "discounted", "style": "return"},
+        {"from": "checkout", "to": "client", "label": "total", "style": "return"}]}
+    ]},
+    {"role": "tradeoffs", "lists": [
+      {"title": "Use when", "tone": "positive", "items": [
+        "Several variants of one algorithm must be swappable at runtime.",
+        "A growing `switch` on a type or code picks behaviour.",
+        "You want each rule unit-tested in isolation."]},
+      {"title": "Avoid when", "tone": "negative", "items": [
+        "There are two variants that will never change: an `if` is clearer.",
+        "Variants need different inputs, so one interface cannot fit them all."]},
+      {"title": "Pitfalls", "tone": "warning", "items": [
+        "Context checking `instanceof` on its strategy, which defeats the pattern.",
+        "Clients must now know every strategy; hide the choice behind a registry or factory.",
+        "Stateful strategies shared across threads."]},
+      {"title": "Overuse smells", "tone": "warning", "items": [
+        "An interface plus classes for a rule that a lambda would cover.",
+        "A `StrategyFactoryProvider` with a single implementation."]},
+      {"title": "Modern Java", "tone": "info", "items": [
+        "Functional interfaces and lambdas replace most strategy class hierarchies.",
+        "For a closed set of data-driven rules, a sealed interface plus `switch` pattern matching can be simpler."]}
+    ]},
+    {"role": "compare", "rows": [
+      {"ref": "state", "relation": "lookAlike", "difference": "Same shape, different intent. With State the object switches its own state as events arrive and the states know each other. With Strategy the client chooses and strategies are independent."},
+      {"ref": "template-method", "relation": "alternative", "difference": "Template Method varies steps through inheritance, fixed at compile time. Strategy varies the whole algorithm through composition, at runtime."},
+      {"ref": "command", "relation": "oftenConfused", "difference": "A command packages a request to run, queue or undo later. A strategy answers *how* to do one job right now."},
+      {"ref": "decorator", "relation": "alternative", "difference": "Decorator changes an object's behaviour by wrapping it from the outside; Strategy replaces its internals."},
+      {"ref": "factory-method", "relation": "combines", "difference": "A factory or registry often picks the strategy from configuration, and DI injects it."}
+    ]},
+    {"role": "sightings", "entries": [
+      {"where": "JDK", "name": "java.util.Comparator", "detail": "Passed to `List.sort`, `TreeMap` and `Collections.max` to choose the ordering algorithm."},
+      {"where": "JDK", "name": "RejectedExecutionHandler", "detail": "`ThreadPoolExecutor` delegates overflow to a policy: `AbortPolicy`, `CallerRunsPolicy`, `DiscardPolicy`."},
+      {"where": "Spring Security", "name": "PasswordEncoder", "detail": "`BCryptPasswordEncoder` and `Argon2PasswordEncoder` are interchangeable; `DelegatingPasswordEncoder` picks one per stored hash."},
+      {"where": "Jackson", "name": "PropertyNamingStrategies", "detail": "`SNAKE_CASE` and `KEBAB_CASE` change how property names map to JSON."},
+      {"where": "Kubernetes", "name": "Deployment spec.strategy", "detail": "`RollingUpdate` or `Recreate`: the same controller with a different rollout algorithm."}
+    ]}
+  ],
+  "exercises": [
+    {"id": "spot-1", "kind": "identify", "prompt": "Which pattern is this?",
+     "lines": [
+      "final class BackupJob {",
+      "    private final Codec codec;",
+      "    BackupJob(Codec codec) { this.codec = codec; }",
+      "",
+      "    void run(Path file) throws IOException {",
+      "        byte[] raw = Files.readAllBytes(file);",
+      "        Path out = file.resolveSibling(file.getFileName() + codec.extension());",
+      "        Files.write(out, codec.encode(raw));",
+      "    }",
+      "}",
+      "// GzipCodec, ZstdCodec, NoopCodec; chosen from the --codec flag"],
+     "options": [
+      {"ref": "strategy", "correct": true, "why": "The job delegates one varying algorithm (encoding) to an injected, interchangeable `Codec`."},
+      {"ref": "state", "why": "Nothing transitions: the codec is fixed for the job's life and never replaces itself."},
+      {"ref": "bridge", "why": "There is no second abstraction hierarchy being developed independently; it is one job with one pluggable step."},
+      {"ref": "template-method", "why": "There is no abstract superclass with overridable steps; the variation comes through composition."}],
+     "compile": {"template": [
+      "import java.io.IOException;", "import java.nio.file.*;",
+      "interface Codec { String extension(); byte[] encode(byte[] raw); }",
+      "{{code}}"]}},
+    {"id": "pick-1", "kind": "choose",
+     "scenario": "A tax engine computes VAT differently per country. The rule is chosen at checkout from the shipping address, new countries are added monthly, and a rule never changes during one calculation.",
+     "prompt": "Which pattern fits best?",
+     "options": [
+      {"ref": "strategy", "correct": true, "why": "One varying algorithm, selected from outside per request, with new variants added without touching the engine."},
+      {"ref": "state", "why": "There is no lifecycle and no transitions; the rule does not change itself as events arrive."},
+      {"ref": "template-method", "why": "A subclass per country fixes the choice at compile time and couples every rule to one base-class skeleton."},
+      {"ref": "chain-of-responsibility", "why": "The responsible rule is known up front from the address; there is nothing to pass along a chain."}]},
+    {"id": "flaw-1", "kind": "tapLine", "prompt": "Tap the line that breaks the Strategy pattern.",
+     "lines": [
+      "final class Checkout {",
+      "    private final DiscountPolicy policy;",
+      "",
+      "    Checkout(DiscountPolicy policy) { this.policy = policy; }",
+      "",
+      "    BigDecimal total(BigDecimal subtotal) {",
+      "        if (policy instanceof PercentOff p && p.percent() > 50) {",
+      "            return subtotal; // block deep discounts",
+      "        }",
+      "        return policy.apply(subtotal);",
+      "    }",
+      "}"],
+     "flawLines": [7],
+     "explanation": "The context inspects a concrete strategy, so every new policy can force an edit here. Put the cap in a decorating policy, e.g. `capped(policy, 50)`, or in the strategy itself.",
+     "compile": {"template": [
+      "import java.math.BigDecimal;",
+      "interface DiscountPolicy { BigDecimal apply(BigDecimal s); }",
+      "record PercentOff(int percent) implements DiscountPolicy { public BigDecimal apply(BigDecimal s) { return s; } }",
+      "{{code}}"]}},
+    {"id": "order-1", "kind": "reorder", "prompt": "Order the request flow so that each line only uses what came before.",
+     "blocks": [
+      ["String code = request.promoCode();"],
+      ["DiscountPolicy policy = policies.getOrDefault(code, s -> s);"],
+      ["Checkout checkout = new Checkout(policy);"],
+      ["BigDecimal total = checkout.total(cart.prices());"],
+      ["receipt.print(total);"]],
+     "explanation": "Read the input, resolve the strategy at the edge, inject it into the context, then delegate. The context never sees the promo code.",
+     "compile": {"template": [
+      "import java.math.BigDecimal;", "import java.util.*;",
+      "interface DiscountPolicy { BigDecimal apply(BigDecimal s); }",
+      "final class Checkout { private final DiscountPolicy p; Checkout(DiscountPolicy p) { this.p = p; }",
+      "  BigDecimal total(List<BigDecimal> xs) { return p.apply(xs.stream().reduce(BigDecimal.ZERO, BigDecimal::add)); } }",
+      "record Request(String promoCode) {}", "record Cart(List<BigDecimal> prices) {}",
+      "interface Receipt { void print(BigDecimal total); }",
+      "class Snippet { void run(Request request, Map<String, DiscountPolicy> policies, Cart cart, Receipt receipt) {",
+      "{{code}}", "} }"]}},
+    {"id": "recall-1", "kind": "recall",
+     "prompt": "Explain Strategy in your own words: what varies, who chooses, and how it differs from State.",
+     "modelAnswer": [
+      {"type": "p", "text": "Strategy pulls one varying algorithm out of a class behind an interface. The context delegates to whatever strategy it was given, and the client or configuration chooses it, usually at construction. Unlike State, strategies don't know each other and the context doesn't swap them in response to its own events."}],
+     "keyPoints": [
+      "One varying algorithm behind one interface",
+      "Context delegates and never inspects the concrete type",
+      "The client or config chooses, often by injection",
+      "State changes itself and knows the transitions; Strategy is chosen from outside",
+      "In modern Java a lambda can be the strategy"]}
+  ]
+}
