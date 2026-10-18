@@ -1,0 +1,14 @@
+.DS_Store
+Tools/.cache/
+__pycache__/
+build/
+build*/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.build/
+.swiftpm/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+.claude/

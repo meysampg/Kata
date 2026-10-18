@@ -1,0 +1,50 @@
+# Requires Xcode 26 or newer. If the macos-26 runner label is ever retired,
+# switch to the newest macOS label that ships an Xcode >= 26.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit-tests:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Test KataKit
+        run: swift test --package-path Packages/KataKit
+
+  content:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate content packs
+        run: swift test --package-path Packages/KataKit --filter ContentTests
+
+  app-build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Build app and tests for the iOS Simulator
+        run: |
+          xcodebuild -project Kata.xcodeproj -scheme Kata -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO -quiet build-for-testing

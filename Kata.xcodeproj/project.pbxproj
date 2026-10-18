@@ -1,0 +1,430 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CA7A00000000000000006200 /* KataCore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006100 /* KataCore */; };
+		CA7A00000000000000006300 /* KataUI in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006400 /* KataUI */; };
+
+
+/* Begin PBXContainerItemProxy section */
+		CA7A00000000000000005000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CA7A00000000000000000100 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA7A00000000000000003000;
+			remoteInfo = Kata;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		CA7A00000000000000000500 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CA7A00000000000000001000 /* Kata.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kata.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA7A00000000000000001100 /* KataTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KataTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		CA7A00000000000000002000 /* Kata */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Kata;
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000002100 /* KataTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KataTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CA7A00000000000000004100 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA7A00000000000000006200 /* KataCore in Frameworks */,
+				CA7A00000000000000006300 /* KataUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004400 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CA7A00000000000000000200 = {
+			isa = PBXGroup;
+			children = (
+				CA7A00000000000000002000 /* Kata */,
+				CA7A00000000000000002100 /* KataTests */,
+				CA7A00000000000000000400 /* Config */,
+				CA7A00000000000000000300 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000000300 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CA7A00000000000000001000 /* Kata.app */,
+				CA7A00000000000000001100 /* KataTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000000400 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				CA7A00000000000000000500 /* Info.plist */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CA7A00000000000000003000 /* Kata */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA7A00000000000000007300 /* Build configuration list for PBXNativeTarget "Kata" */;
+			buildPhases = (
+				CA7A00000000000000004000 /* Sources */,
+				CA7A00000000000000004100 /* Frameworks */,
+				CA7A00000000000000004200 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CA7A00000000000000002000 /* Kata */,
+			);
+			name = Kata;
+			packageProductDependencies = (
+				CA7A00000000000000006100 /* KataCore */,
+				CA7A00000000000000006400 /* KataUI */,
+			);
+			productName = Kata;
+			productReference = CA7A00000000000000001000 /* Kata.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CA7A00000000000000003100 /* KataTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA7A00000000000000007600 /* Build configuration list for PBXNativeTarget "KataTests" */;
+			buildPhases = (
+				CA7A00000000000000004300 /* Sources */,
+				CA7A00000000000000004400 /* Frameworks */,
+				CA7A00000000000000004500 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CA7A00000000000000005100 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CA7A00000000000000002100 /* KataTests */,
+			);
+			name = KataTests;
+			packageProductDependencies = (
+			);
+			productName = KataTests;
+			productReference = CA7A00000000000000001100 /* KataTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CA7A00000000000000000100 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2710;
+				LastUpgradeCheck = 2710;
+				TargetAttributes = {
+					CA7A00000000000000003000 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					CA7A00000000000000003100 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = CA7A00000000000000003000;
+					};
+				};
+			};
+			buildConfigurationList = CA7A00000000000000007000 /* Build configuration list for PBXProject "Kata" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CA7A00000000000000000200;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CA7A00000000000000006000 /* XCLocalSwiftPackageReference "Packages/KataKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CA7A00000000000000000300 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CA7A00000000000000003000 /* Kata */,
+				CA7A00000000000000003100 /* KataTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CA7A00000000000000004200 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004500 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA7A00000000000000004000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004300 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CA7A00000000000000005100 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA7A00000000000000003000 /* Kata */;
+			targetProxy = CA7A00000000000000005000 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CA7A00000000000000007100 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CA7A00000000000000007200 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		CA7A00000000000000007400 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kata;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CA7A00000000000000007500 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kata;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CA7A00000000000000007700 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kata.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Kata";
+			};
+			name = Debug;
+		};
+		CA7A00000000000000007800 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kata.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Kata";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CA7A00000000000000007000 /* Build configuration list for PBXProject "Kata" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7A00000000000000007100 /* Debug */,
+				CA7A00000000000000007200 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA7A00000000000000007300 /* Build configuration list for PBXNativeTarget "Kata" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7A00000000000000007400 /* Debug */,
+				CA7A00000000000000007500 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA7A00000000000000007600 /* Build configuration list for PBXNativeTarget "KataTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7A00000000000000007700 /* Debug */,
+				CA7A00000000000000007800 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		CA7A00000000000000006000 /* XCLocalSwiftPackageReference "Packages/KataKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KataKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CA7A00000000000000006100 /* KataCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataCore;
+		};
+		CA7A00000000000000006400 /* KataUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = CA7A00000000000000000100 /* Project object */;
+}
