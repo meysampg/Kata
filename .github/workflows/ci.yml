@@ -19,6 +19,10 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Test KataKit
         run: swift test --package-path Packages/KataKit
 
@@ -33,8 +37,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Validate content packs
+      - name: Validate content packs and katas
         run: swift test --package-path Packages/KataKit --filter ContentTests
+      - name: Packs and katas are up to date
+        run: |
+          swift run --package-path Packages/KataKit kata-pack build
+          git diff --exit-code Kata/Resources/Packs KataMac/Resources/Katas
+          test -z "$(git status --porcelain Kata/Resources/Packs KataMac/Resources/Katas)"
 
   app-build:
     runs-on: macos-26

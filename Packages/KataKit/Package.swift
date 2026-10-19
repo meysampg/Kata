@@ -11,6 +11,7 @@ let package = Package(
     .library(name: "KataCore", targets: ["KataCore"]),
     .library(name: "KataUI", targets: ["KataUI"]),
     .library(name: "KataStore", targets: ["KataStore"]),
+    .library(name: "KataRun", targets: ["KataRun"]),
     .executable(name: "kata-pack", targets: ["kata-pack"])
   ],
   targets: [
@@ -20,7 +21,9 @@ let package = Package(
     .target(name: "KataCore", dependencies: ["KataSRS", "KataCode", "KataDiagram"]),
     .target(name: "KataUI", dependencies: ["KataCore", "KataSRS", "KataCode", "KataDiagram"]),
     .target(name: "KataStore", dependencies: ["KataCore", "KataSRS"]),
-    .executableTarget(name: "kata-pack", dependencies: ["KataCore"]),
+    // macOS only: spawns a JDK. Never link it into the iOS app.
+    .target(name: "KataRun", dependencies: ["KataCore"], resources: [.copy("Harness")]),
+    .executableTarget(name: "kata-pack", dependencies: ["KataCore", "KataRun"]),
     .testTarget(name: "KataSRSTests", dependencies: ["KataSRS"]),
     .testTarget(name: "KataCodeTests", dependencies: ["KataCode"]),
     .testTarget(name: "KataDiagramTests", dependencies: ["KataDiagram"]),
@@ -29,6 +32,14 @@ let package = Package(
       resources: [.copy("Fixtures")]),
     .testTarget(name: "KataStoreTests", dependencies: ["KataStore", "KataCore", "KataSRS"]),
     .testTarget(name: "KataUITests", dependencies: ["KataUI", "KataSRS", "KataCode"]),
-    .testTarget(name: "ContentTests", dependencies: ["KataCore"])
+    .testTarget(
+      name: "KataRunTests", dependencies: ["KataRun", "KataCore"],
+      resources: [.copy("Fixtures")]),
+    .testTarget(
+      name: "ContentTests",
+      dependencies: [
+        "KataCore",
+        .target(name: "KataRun", condition: .when(platforms: [.macOS]))
+      ])
   ]
 )

@@ -26,14 +26,21 @@ public final class ContentLibrary: Sendable {
   public let packs: [Pack]
   private let packIndex: [TopicID: Int]
   public let searchIndex: SearchIndex
+  /// Katas by item. Empty on iOS, which never loads `.kkata` files.
+  public let katas: [ItemKey: Kata]
 
-  public init(packs: [Pack]) {
+  public init(packs: [Pack], kataPacks: [KataPack] = []) {
     let sorted = packs.sorted { ($0.topic.sortOrder, $0.topic.id) < ($1.topic.sortOrder, $1.topic.id) }
     self.packs = sorted
     var index: [TopicID: Int] = [:]
     for (i, p) in sorted.enumerated() where index[p.topic.id] == nil { index[p.topic.id] = i }
     self.packIndex = index
     self.searchIndex = SearchIndex(packs: sorted)
+    var katas: [ItemKey: Kata] = [:]
+    for kp in kataPacks {
+      for k in kp.katas { katas[ItemKey(topic: kp.topicId, item: k.itemId)] = k }
+    }
+    self.katas = katas
   }
 
   /// Decodes packs from `*.kpack` files.
@@ -58,11 +65,34 @@ public final class ContentLibrary: Sendable {
     try self.init(urls: urls)
   }
 
-  /// Loads every `*.kpack` in the bundle (root or `Packs/` subdirectory).
-  public static func live(bundle: Bundle = .main) throws -> ContentLibrary {
+  /// Loads every `*.kpack` in the bundle (root or `Packs/` subdirectory). With `includeKatas`
+  /// (the Mac app) every `*.kkata` is loaded too.
+  public static func live(bundle: Bundle = .main, includeKatas: Bool = false) throws -> ContentLibrary {
     var urls = bundle.urls(forResourcesWithExtension: "kpack", subdirectory: nil) ?? []
     urls += bundle.urls(forResourcesWithExtension: "kpack", subdirectory: "Packs") ?? []
-    return try ContentLibrary(urls: urls)
+    var kataURLs: [URL] = []
+    if includeKatas {
+      kataURLs = bundle.urls(forResourcesWithExtension: "kkata", subdirectory: nil) ?? []
+      kataURLs += bundle.urls(forResourcesWithExtension: "kkata", subdirectory: "Katas") ?? []
+    }
+    return try ContentLibrary(urls: urls, kataURLs: kataURLs)
+  }
+
+  /// Decodes packs from `*.kpack` files and katas from `*.kkata` files.
+  public convenience init(urls: [URL], kataURLs: [URL]) throws {
+    let base = try ContentLibrary(urls: urls)
+    let kataPacks = try kataURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
+      .map { try Self.decodeKataPack(at: $0) }
+    self.init(packs: base.packs, kataPacks: kataPacks)
+  }
+
+  public static func decodeKataPack(at url: URL) throws -> KataPack {
+    do {
+      return try JSONDecoder().decode(KataPack.self, from: Data(contentsOf: url))
+    } catch let e as DecodingError {
+      throw ContentLibraryError.decoding(
+        file: url.lastPathComponent, message: DecodingErrorFormatter.describe(e))
+    }
   }
 
   public static func decodePack(at url: URL) throws -> Pack {
@@ -97,6 +127,8 @@ public final class ContentLibrary: Sendable {
       key: key, meta: meta, item: item, category: pack.topic.category(of: meta),
       template: pack.topic.template(for: meta))
   }
+
+  public func kata(_ key: ItemKey) -> Kata? { katas[key] }
 
   public func exercise(_ key: ExerciseKey) -> Exercise? {
     pack(key.item.topic)?.item(key.item.item)?.exercise(key.exercise)

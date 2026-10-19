@@ -8,10 +8,13 @@ public struct LoadReport: Sendable {
   public var missingItems: [ItemID]
   /// Items whose directory exists but failed to load (already reported in `issues`).
   public var failedItems: [ItemID]
+  /// Katas found under `items/<id>/kata/`, in registry order.
+  public var katas: [Kata] = []
   public var issues: [ValidationIssue]
 
   public var hasErrors: Bool { issues.contains { $0.severity == .error } }
   public var pack: Pack? { topic.map { Pack(topic: $0, items: items) } }
+  public var kataPack: KataPack? { topic.map { KataPack(topicId: $0.id, katas: katas) } }
 }
 
 public struct BuildFailure: Error, Sendable, CustomStringConvertible {
@@ -78,6 +81,11 @@ public enum PackBuilder {
       } else {
         report.failedItems.append(meta.id)
       }
+      if KataLoader.hasKata(itemDir: itemDir) {
+        let (kata, kataIssues) = KataLoader.load(itemDir: itemDir, itemId: meta.id, path: path)
+        report.issues += kataIssues
+        if let kata { report.katas.append(kata) }
+      }
     }
     return report
   }
@@ -125,6 +133,22 @@ public enum PackBuilder {
 
   /// Minified JSON with sorted keys; byte-for-byte reproducible.
   public static func encode(_ pack: Pack) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    var data = try encoder.encode(pack)
+    data.append(0x0A)
+    return data
+  }
+
+  /// Assembles the topic's katas (possibly none) or throws `BuildFailure`.
+  public static func buildKatas(topicDirectory: URL, only: Set<ItemID>? = nil) throws -> KataPack {
+    let report = load(topicDirectory: topicDirectory, only: only)
+    guard !report.hasErrors, let pack = report.kataPack else { throw BuildFailure(issues: report.issues) }
+    return pack
+  }
+
+  /// Minified JSON with sorted keys; byte-for-byte reproducible.
+  public static func encodeKatas(_ pack: KataPack) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     var data = try encoder.encode(pack)

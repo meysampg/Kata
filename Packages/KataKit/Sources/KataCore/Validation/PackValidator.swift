@@ -6,10 +6,13 @@ public struct ValidationOptions: Sendable {
   public var allowMissing: Bool
   /// Restrict item-level checks to these ids. Topic-level checks always run.
   public var items: Set<ItemID>?
+  /// Every registry item must have a kata (switched on once all katas are authored).
+  public var requireAllKatas: Bool
 
-  public init(allowMissing: Bool = false, items: Set<ItemID>? = nil) {
+  public init(allowMissing: Bool = false, items: Set<ItemID>? = nil, requireAllKatas: Bool = false) {
     self.allowMissing = allowMissing
     self.items = items
+    self.requireAllKatas = requireAllKatas
   }
 }
 
@@ -35,20 +38,24 @@ public enum PackValidator {
           "topic id '\(pack.topic.id)' does not match directory name"))
     }
     issues += run(pack: pack, options: options, skipMissing: Set(report.failedItems))
+    issues += KataValidator.validate(katas: report.katas, topic: pack.topic, options: options)
     return issues
   }
 
   /// Validates an in-memory pack (items absent from `pack.items` count as missing).
-  public static func validate(pack: Pack, options: ValidationOptions = .init()) -> [ValidationIssue] {
+  public static func validate(pack: Pack, katas: [Kata] = [], options: ValidationOptions = .init())
+    -> [ValidationIssue]
+  {
     run(pack: pack, options: options, skipMissing: [])
+      + KataValidator.validate(katas: katas, topic: pack.topic, options: options)
   }
 
   // MARK: - Implementation
 
   private static let kebab = try! NSRegularExpression(pattern: "^[a-z0-9]+(-[a-z0-9]+)*$")
-  private static let kataLink = try! NSRegularExpression(pattern: "\\]\\(kata:([^)\\s]*)\\)")
+  static let kataLink = try! NSRegularExpression(pattern: "\\]\\(kata:([^)\\s]*)\\)")
 
-  private static func isKebab(_ s: String) -> Bool {
+  static func isKebab(_ s: String) -> Bool {
     kebab.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil
   }
 
@@ -347,6 +354,9 @@ public enum PackValidator {
       func err(_ m: String) { issues.append(.init(.error, p, m)) }
 
       if !isKebab(ex.id) { err("exercise id '\(ex.id)' is not kebab-case") }
+      if ex.id == KataValidator.reservedExerciseId {
+        err("exercise id '\(ex.id)' is reserved for the item's kata card")
+      }
       if !ids.insert(ex.id).inserted { err("duplicate exercise id") }
       if ex.prompt.trimmingCharacters(in: .whitespaces).isEmpty { err("empty prompt") }
 

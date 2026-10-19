@@ -21,6 +21,7 @@ Use `**bold**` for the 2–3 key terms of a card, `` `code` `` for identifiers, 
 ```
 items/<id>/item.json      cards + exercises (schema: see strategy and docs/PLAN.md §2)
 items/<id>/<Name>.java    the implementation card's file (no public types, so any file name works)
+items/<id>/kata/          the coding kata for Kata for Mac (see "Katas" below; optional until all 70 exist)
 ```
 
 The Java file is one compilation unit with a `class Main { public static void main(...) }` that prints a
@@ -78,3 +79,97 @@ K=Packages/KataKit/.build/debug/kata-pack
 $K validate --items <ids> --allow-missing   # 0 errors; fix warnings unless clearly justified
 $K check-java --items <ids>                  # every unit "ok", output matches
 ```
+
+## Katas (draft, Mac only)
+
+Every item gets one hands-on coding kata, checked offline against a local JDK 21+. The gold standard
+is `items/strategy/kata/`: read it before writing one. Katas never enter the iOS `.kpack`; `kata-pack
+build` writes them to `KataMac/Resources/Katas/<topic>.kkata`.
+
+### Layout
+
+```
+items/<id>/kata/kata.json            strict schema, below
+items/<id>/kata/starter/*.java       what the learner starts from
+items/<id>/kata/solution/*.java      the reference; must pass every check
+items/<id>/kata/tests/*.java         hidden tests (use the `kata.*` harness API)
+```
+
+`kata.json` keys (unknown keys are errors): `kind` (`refactor` | `implement` | `fix`), `title`
+(at most 60 characters), `minutes` (10 to 40, the target time that drives the rating suggestion), `task`
+(blocks), `starter`, `readOnly` (optional, subset of `starter`), `solution`, `tests` (file names),
+`checks` (`id`, `kind` `behaviour` | `design`, `title`), `hints` (exactly 3, each a block list),
+`timeoutSeconds` (optional, default 10, at most 30), `stressRuns` (optional, default 5) and
+`starterCompiles` (optional, default `true`; `false` only for an `implement` kata whose skeleton cannot
+compile). `checks` must list the `@Check` ids of the tests in source order; the validator compares them.
+
+### Choosing the kind
+
+| Kind | Use when | Starter | Starter must |
+|---|---|---|---|
+| `refactor` | the pattern removes a smell from working code | working code with the smell | pass every behaviour check and fail at least one design check |
+| `implement` | the pattern is a construction with a crisp contract | compiles, bodies throw `UnsupportedOperationException("TODO")` | fail at least one check |
+| `fix` | the pattern's classic failure is the lesson | code with real bugs | fail at least one behaviour check |
+
+Minimum checks: refactor 2 behaviour and 2 design; implement 4 in total; fix 1 behaviour. Aim for 6 to 10
+checks, each testing one idea. Echo the domain of the item's code card, or of its example card, never a third.
+
+### Task, starter and solution
+
+- Task: at most 180 words. Name every type and method signature the tests rely on. Say what must not change.
+- Starter at most 120 lines, each solution file at most 150. Lines of more than 80 columns warn, more than
+  100 fail. Java 21, 4 spaces, no `public` top-level types, no `System.exit`, deterministic.
+- Do not fix things the task does not mention. In a refactor kata the starter's behaviour is the contract,
+  including its quirks; change it only if it is a real bug, and then say so in the task.
+- Test files declare no top-level type that the solution also declares.
+
+### Tests: the harness API
+
+Tests are package-private classes in the default package with `import kata.*;`. Each `@Check(id = "...",
+kind = Kind.DESIGN, timeoutMs = 2000, repeat = 1)` method runs on a fresh instance in its own thread.
+
+| Type | Use |
+|---|---|
+| `Expect` | `equal(expected, actual, what)`, `isTrue`, `fail`, `raises(Class, runnable, what)`, `none(hits, msg)`, `atMost(n, hits, msg)`, `completesWithin(ms, supplier, what)` |
+| `Types` | `named("X")` (fails with "No type named X in your files"), `singleAbstractMethod`, `onlyFieldOfType`, `fieldsOfType`, `onlyStaticFieldOfType`, `setStatic`, `getStatic`, `constructor`, `method`, `staticMethod`, `call`, `create`, `implement(iface, handler)` |
+| `Source` | `type("X")` then `method("m")`, `switches()`, `instanceofs()`, `comparedStrings()`, `calls("n")`, `fieldReads("f")`, `news("T")`, `mentions("I")`; each returns `Hit`s with file, line and `insideSynchronized` |
+| `Stress` | `race(threads, task)`, `pause(ms)` (at most 50), `holdMonitor(obj)`, `holdLock(lock)` |
+
+Rules:
+
+- Behaviour checks in a refactor kata compile against the stable API that exists in the starter. Design checks
+  never name new types at compile time; they use only `Types` and `Source`, so a half-done refactor still
+  compiles against the hidden tests.
+- A check that cannot compile is reported as "blocked" with the missing symbol, never with test source.
+- Messages are actionable and name the type ("Checkout still compares discount codes"). Pass `Hit`s so the
+  learner is pointed at a line.
+- Check roles, not names, beyond what the task specifies. Try two correct solutions (for example a
+  lambda-only Strategy and an `enum` Strategy) before you call a design check done.
+
+### Concurrency determinism
+
+- Make failures certain with seams (a documented hook such as `onConstruct`, left in the starter) and start
+  gates (`Stress.race`). Never rely on timing for correctness; `Stress.pause` only widens a window.
+- Per-check `timeoutMs` is at most 5000. The reference must pass with 1 and 4 processors, 20 times each
+  (`stressRuns: 20`).
+- Memory-model bugs that tests cannot observe reliably become design checks (for example `volatile`).
+
+### Hint ladder
+
+Exactly three hints, each at most 50 words. H1 names the concept or what varies. H2 gives the structural
+direction and names the types. H3 is nearly the solution, with at most 10 lines of code (only H3 may have a
+code block). None pastes the full answer. Using hints lowers the suggested rating.
+
+### Verification
+
+```bash
+K=Packages/KataKit/.build/debug/kata-pack
+$K validate --items <ids>                              # 0 errors, 0 warnings
+$K check-java --items <ids> --kata-runs 5 --timing     # reference passes, starter fails by kind
+$K kata-workspace --items <id> --out /tmp/<id>         # open in IntelliJ to iterate
+$K build                                               # rewrites the .kpack (unchanged) and the .kkata
+```
+
+`check-java` runs the reference solution `--kata-runs` times (and again with 1 and 4 processors for
+concurrency katas), then the starter, through the same runner the Mac app uses. The median wall time per
+run should stay under 2 seconds.

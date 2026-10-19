@@ -3,6 +3,10 @@ import Testing
 
 @testable import KataCore
 
+#if os(macOS)
+  import KataRun
+#endif
+
 /// Repo-level checks on `Content/` and the committed `.kpack` files.
 enum ContentPaths {
   /// Packages/KataKit/Tests/ContentTests/ContentTests.swift -> repo root.
@@ -11,9 +15,16 @@ enum ContentPaths {
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
   static var content: URL { root.appendingPathComponent("Content", isDirectory: true) }
   static var packs: URL { root.appendingPathComponent("Kata/Resources/Packs", isDirectory: true) }
+  static var katas: URL { root.appendingPathComponent("KataMac/Resources/Katas", isDirectory: true) }
   static var javaCheck: URL { root.appendingPathComponent("Tools/JavaCheck.java") }
   static var topics: [URL] { PackBuilder.topicDirectories(contentRoot: content) }
 }
+
+#if os(macOS)
+  enum KataToolchain {
+    static let jdk: JDK? = JDKLocator.default(minimum: 21)
+  }
+#endif
 
 enum JavaToolchain {
   static let isAvailable: Bool = {
@@ -28,6 +39,9 @@ enum JavaToolchain {
 /// Every registry item must have content; set to `false` while authoring a new batch so
 /// registry items without content are tolerated.
 let requireAllItems = true
+
+/// Every registry item must have a kata. Stays `false` until the kata batches (P4) finish.
+let requireAllKatas = false
 
 @Suite struct ContentValidationTests {
   @Test func contentDirectoryExists() {
@@ -62,6 +76,55 @@ let requireAllItems = true
     #expect(issues.errors.isEmpty, "\(issues)")
   }
 
+  @Test func katasValidateStrictly() {
+    for dir in ContentPaths.topics {
+      let issues = PackValidator.validate(
+        topicDirectory: dir,
+        options: .init(allowMissing: !requireAllItems, requireAllKatas: requireAllKatas))
+      let kataIssues = issues.filter { $0.path.contains("/kata/") || $0.message.contains("kata") }
+      #expect(kataIssues.errors.isEmpty, "\(kataIssues.errors.map(\.description).joined(separator: "\n"))")
+      #expect(kataIssues.warnings.isEmpty, "\(kataIssues.warnings.map(\.description).joined(separator: "\n"))")
+    }
+  }
+
+  @Test func strategyHasARefactorKata() throws {
+    let dir = ContentPaths.content.appendingPathComponent("topics/design-patterns")
+    let pack = try PackBuilder.buildKatas(topicDirectory: dir)
+    let kata = try #require(pack.kata(for: "strategy"))
+    #expect(kata.kind == .refactor)
+    #expect(kata.checks.map(\.kind) == [.behaviour, .behaviour, .behaviour, .behaviour, .design, .design, .design, .design, .design])
+    #expect(kata.starter.map(\.name) == ["Checkout.java"])
+    #expect(kata.solution.map(\.name) == ["Checkout.java", "DiscountPolicy.java", "Discounts.java"])
+  }
+
+  @Test(.enabled(if: requireAllKatas, "enabled once every kata is authored (P4)"))
+  func everyItemHasKata() throws {
+    for dir in ContentPaths.topics {
+      let report = PackBuilder.load(topicDirectory: dir)
+      let have = Set(report.katas.map(\.itemId))
+      let missing = (report.topic?.items.map(\.id) ?? []).filter { !have.contains($0) }
+      #expect(missing.isEmpty, "items without a kata: \(missing)")
+    }
+  }
+
+  @Test func kkataIsUpToDate() throws {
+    for dir in ContentPaths.topics {
+      let katas = try PackBuilder.buildKatas(topicDirectory: dir)
+      let committed = ContentPaths.katas.appendingPathComponent("\(dir.lastPathComponent).kkata")
+      if katas.katas.isEmpty {
+        #expect(!FileManager.default.fileExists(atPath: committed.path), "\(committed.lastPathComponent) should not exist")
+        continue
+      }
+      let fresh = try PackBuilder.encodeKatas(katas)
+      let data = try Data(contentsOf: committed)
+      #expect(data == fresh, "\(committed.lastPathComponent) is stale: run `kata-pack build`")
+      let library = try ContentLibrary(
+        urls: [ContentPaths.packs.appendingPathComponent("\(dir.lastPathComponent).kpack")],
+        kataURLs: [committed])
+      #expect(library.kata(ItemKey(topic: dir.lastPathComponent, item: "strategy"))?.kind == .refactor)
+    }
+  }
+
   @Test func committedKpackMatchesFreshBuild() throws {
     for dir in ContentPaths.topics {
       let fresh = try PackBuilder.encode(PackBuilder.build(topicDirectory: dir))
@@ -91,6 +154,21 @@ let requireAllItems = true
       #expect(report.units.count == units.count)
       let strategy = report.units.first { $0.name == "strategy--code-Strategy" }
       #expect(strategy?.output == "NONE -> 50.00\nSPRING10 -> 45.00\nWELCOME -> 42.50")
+    }
+
+    /// Reference passes every check and the starter fails the way its kind requires, 3 runs each.
+    @Test(.enabled(if: KataToolchain.jdk != nil, "needs a JDK 21+"))
+    func kataReferencesPassAndStartersFail() async throws {
+      let verifier = KataVerifier(runner: KataCheckRunner(), jdk: KataToolchain.jdk!)
+      for dir in ContentPaths.topics {
+        let report = PackBuilder.load(topicDirectory: dir)
+        for kata in report.katas {
+          let concurrency = report.topic?.meta(for: kata.itemId)?.category == "concurrency"
+          let v = await verifier.verify(kata, runs: 3, concurrency: concurrency)
+          #expect(v.ok, "\(kata.itemId): \(v.failures.joined(separator: "\n"))")
+          #expect(v.warnings.isEmpty, "\(kata.itemId): \(v.warnings)")
+        }
+      }
     }
 
     @Test(.enabled(if: JavaToolchain.isAvailable, "needs a JDK on PATH"))

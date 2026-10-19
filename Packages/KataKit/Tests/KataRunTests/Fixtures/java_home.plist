@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>JVMArch</key><string>arm64</string>
+		<key>JVMHomePath</key><string>/Library/Java/JavaVirtualMachines/temurin-26.jdk/Contents/Home</string>
+		<key>JVMName</key><string>OpenJDK 26.0.2.1</string>
+		<key>JVMVendor</key><string>Eclipse Adoptium</string>
+		<key>JVMVersion</key><string>26.0.2.1</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key><string>arm64</string>
+		<key>JVMHomePath</key><string>/Users/me/Library/Java/JavaVirtualMachines/corretto-17.0.14/Contents/Home</string>
+		<key>JVMName</key><string>Amazon Corretto 17</string>
+		<key>JVMVendor</key><string>Amazon.com Inc.</string>
+		<key>JVMVersion</key><string>17.0.14</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key><string>x86_64</string>
+		<key>JVMHomePath</key><string>/Library/Java/JavaVirtualMachines/jdk1.8.0_201.jdk/Contents/Home</string>
+		<key>JVMName</key><string>Java SE 8</string>
+		<key>JVMVendor</key><string>Oracle Corporation</string>
+		<key>JVMVersion</key><string>1.8.0_201</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key><string>arm64</string>
+		<key>JVMHomePath</key><string>/Users/me/Library/Java/JavaVirtualMachines/temurin-25.0.4.1/Contents/Home</string>
+		<key>JVMName</key><string>OpenJDK 25.0.4.1</string>
+		<key>JVMVendor</key><string>Eclipse Adoptium</string>
+		<key>JVMVersion</key><string>25.0.4.1</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key><string>arm64</string>
+		<key>JVMName</key><string>Broken entry without a home</string>
+	</dict>
+</array>
+</plist>

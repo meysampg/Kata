@@ -1,0 +1,38 @@
+{
+  "kind": "refactor",
+  "title": "Take the promotions out of Checkout",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Every new promotion is another branch in `Checkout`."},
+    {"type": "p", "text": "Refactor so a new promotion is a new **strategy**, not an edit to `Checkout`. `Pricing.total(code, prices)` must keep returning exactly what it returns now."},
+    {"type": "bullets", "items": [
+      "Add `interface DiscountPolicy` with one method, `BigDecimal apply(BigDecimal subtotal)`.",
+      "`Checkout(DiscountPolicy)` sums the prices, delegates, and rounds to 2 places.",
+      "Resolve codes in `Discounts.forCode(String)`; unknown codes throw `IllegalArgumentException`."]}
+  ],
+  "starter": ["Checkout.java"],
+  "readOnly": [],
+  "solution": ["Checkout.java", "DiscountPolicy.java", "Discounts.java"],
+  "tests": ["StrategyKataTest.java"],
+  "checks": [
+    {"id": "known-codes", "kind": "behaviour", "title": "Known codes give the same totals"},
+    {"id": "flat-floors-at-zero", "kind": "behaviour", "title": "A flat discount never goes below zero"},
+    {"id": "bulk-threshold", "kind": "behaviour", "title": "BULK applies from 100.00"},
+    {"id": "unknown-code", "kind": "behaviour", "title": "Unknown codes are rejected"},
+    {"id": "policy-interface", "kind": "design", "title": "DiscountPolicy is a one-method interface"},
+    {"id": "checkout-holds-policy", "kind": "design", "title": "Checkout holds a private final policy"},
+    {"id": "checkout-does-not-branch", "kind": "design", "title": "Checkout has no code branches"},
+    {"id": "any-policy-works", "kind": "design", "title": "Checkout accepts a policy it has never seen"},
+    {"id": "lookup-in-discounts", "kind": "design", "title": "Codes are resolved in Discounts"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Find what varies: the rule that turns a subtotal into a total. `Checkout` should only know that *some* rule does that. Give that rule a name."}],
+    [{"type": "p", "text": "Give `Checkout` a `private final DiscountPolicy` set in its constructor. The string code belongs where policies are chosen, not where they are used."}],
+    [{"type": "p", "text": "Back `Discounts.forCode` with a `Map<String, DiscountPolicy>`. Then:"},
+     {"type": "code", "language": "java", "lines": [
+       "static BigDecimal total(String code, List<BigDecimal> prices) {",
+       "    return new Checkout(Discounts.forCode(code)).total(prices);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}
