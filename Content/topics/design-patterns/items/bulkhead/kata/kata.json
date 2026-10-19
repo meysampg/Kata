@@ -1,0 +1,43 @@
+{
+  "kind": "implement",
+  "title": "A bulkhead for the inventory service",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "Cap how many calls one dependency may have in flight, so a stall cannot eat every thread."},
+    {"type": "p", "text": "Implement `Bulkhead(String name, int maxConcurrent)` and `<T> T call(Supplier<T> op)`. `BulkheadFullException` is given."},
+    {"type": "bullets", "items": [
+      "Up to `maxConcurrent` calls run `op` at the same time, each on its own caller's thread.",
+      "When the bulkhead is full, `call` throws `new BulkheadFullException(name)` **immediately**; it must not block or queue, and `op` must not run.",
+      "A permit is returned when `op` finishes, whether it returns or throws; the exception reaches the caller unchanged.",
+      "Two `Bulkhead` instances share nothing."]}
+  ],
+  "starter": ["Support.java", "Bulkhead.java"],
+  "readOnly": ["Support.java"],
+  "solution": ["Support.java", "Bulkhead.java"],
+  "tests": ["BulkheadKataTest.java"],
+  "checks": [
+    {"id": "runs-under-the-limit", "kind": "behaviour", "title": "A call under the limit runs"},
+    {"id": "rejects-when-full", "kind": "behaviour", "title": "A full bulkhead rejects by name"},
+    {"id": "rejection-does-not-wait", "kind": "behaviour", "title": "Rejection is immediate, not queued"},
+    {"id": "permit-returned-after-success", "kind": "behaviour", "title": "Permits return after success"},
+    {"id": "permit-returned-after-failure", "kind": "behaviour", "title": "Permits return after a failure"},
+    {"id": "bulkheads-are-independent", "kind": "behaviour", "title": "A full bulkhead does not affect another"},
+    {"id": "never-exceeds-the-limit", "kind": "behaviour", "title": "Racing callers never exceed the limit"},
+    {"id": "limit-is-per-instance", "kind": "design", "title": "No shared static state"},
+    {"id": "operation-runs-outside-a-monitor", "kind": "design", "title": "The operation runs outside synchronized"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A bulkhead is a counter of free slots plus the discipline to give each slot back. Which `java.util.concurrent` type counts permits and can refuse without blocking?"}],
+    [{"type": "p", "text": "Hold a `Semaphore` created with `maxConcurrent`. Use the non-blocking `tryAcquire()`; reject if it says no. Run `op` in a `try` and release the permit in `finally`."}],
+    [{"type": "code", "language": "java", "lines": [
+      "if (!permits.tryAcquire()) {",
+      "    throw new BulkheadFullException(name);",
+      "}",
+      "try {",
+      "    return op.get();",
+      "} finally {",
+      "    permits.release();",
+      "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

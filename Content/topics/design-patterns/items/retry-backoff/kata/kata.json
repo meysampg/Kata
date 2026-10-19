@@ -1,0 +1,44 @@
+{
+  "kind": "implement",
+  "title": "Retry with capped exponential backoff",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Make flaky calls recover on their own, without hammering the dependency."},
+    {"type": "p", "text": "Implement `Retry` (constructor given). Time and randomness are injected: it sleeps through a `Sleeper` and picks each delay with the `LongUnaryOperator jitter`, which maps a ceiling in ms to the delay in ms."},
+    {"type": "bullets", "items": [
+      "`long ceilingMs(int attempt)`: for a 1-based attempt, `min(capMs, baseMs * 2^(attempt-1))`. It must not overflow for large attempts.",
+      "`<T> T call(Supplier<T> op)` runs `op`, retrying only on `TransientException`, up to `maxAttempts` calls in total.",
+      "Between attempts sleep `jitter.applyAsLong(ceilingMs(attempt))` ms. Never sleep after the last attempt.",
+      "When attempts run out, rethrow the last `TransientException`. Any other exception, including `PermanentException`, propagates at once."]}
+  ],
+  "starter": ["Support.java", "Retry.java"],
+  "readOnly": ["Support.java"],
+  "solution": ["Support.java", "Retry.java"],
+  "tests": ["RetryKataTest.java"],
+  "checks": [
+    {"id": "ceiling-doubles-then-caps", "kind": "behaviour", "title": "Ceilings double and stop at the cap"},
+    {"id": "success-first-try", "kind": "behaviour", "title": "A first-try success never sleeps"},
+    {"id": "recovers-after-transient", "kind": "behaviour", "title": "Transient failures are retried with backoff"},
+    {"id": "sleeps-what-jitter-returns", "kind": "behaviour", "title": "Each sleep is the jittered delay"},
+    {"id": "gives-up-after-max-attempts", "kind": "behaviour", "title": "The last TransientException is rethrown"},
+    {"id": "permanent-is-not-retried", "kind": "behaviour", "title": "Permanent failures are not retried"},
+    {"id": "single-attempt-never-sleeps", "kind": "behaviour", "title": "maxAttempts of 1 never sleeps"},
+    {"id": "no-real-time-or-randomness", "kind": "design", "title": "Time and randomness are injected"},
+    {"id": "retries-only-transient", "kind": "design", "title": "Only TransientException is caught"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Two separate ideas: the *ceiling* grows deterministically, the *delay* is whatever the injected jitter picks below it. Keep them in two steps."}],
+    [{"type": "p", "text": "`call` is a loop over attempts. Catch `TransientException` only; if it is the last attempt rethrow, otherwise ask `jitter` for a delay and hand it to `sleeper`. Cap the shift so `<<` cannot overflow."}],
+    [{"type": "code", "language": "java", "lines": [
+      "for (int attempt = 1; ; attempt++) {",
+      "    try {",
+      "        return op.get();",
+      "    } catch (TransientException e) {",
+      "        if (attempt >= maxAttempts) throw e;",
+      "        long ms = jitter.applyAsLong(ceilingMs(attempt));",
+      "        sleeper.sleep(Duration.ofMillis(ms));",
+      "    }",
+      "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

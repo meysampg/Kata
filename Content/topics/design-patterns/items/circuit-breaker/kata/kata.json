@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "A circuit breaker with a half-open probe",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Stop calling a dependency that keeps failing, then probe it to see if it recovered."},
+    {"type": "p", "text": "Implement `CircuitBreaker(int threshold, long openMs, LongSupplier clock)` with `State state()` and `<T> T call(Supplier<T> op, Supplier<T> fallback)`. `State` is given. Time comes only from `clock` (ms)."},
+    {"type": "bullets", "items": [
+      "**CLOSED:** run `op`. A `RuntimeException` counts as a failure and returns `fallback.get()`. A success resets the count of consecutive failures.",
+      "`threshold` consecutive failures make it **OPEN**: `op` is not called, callers get `fallback.get()`.",
+      "Once `openMs` have passed, one caller becomes the probe and the state is **HALF_OPEN**; everyone else still gets the fallback.",
+      "A successful probe closes the breaker; a failed probe reopens it and restarts the cool-down.",
+      "Never hold a lock while `op` runs."]}
+  ],
+  "starter": ["State.java", "CircuitBreaker.java"],
+  "readOnly": ["State.java"],
+  "solution": ["State.java", "CircuitBreaker.java"],
+  "tests": ["BreakerKataTest.java"],
+  "checks": [
+    {"id": "closed-passes-through", "kind": "behaviour", "title": "A closed breaker passes calls through"},
+    {"id": "opens-after-threshold", "kind": "behaviour", "title": "It opens after threshold failures"},
+    {"id": "open-rejects-without-calling", "kind": "behaviour", "title": "Open rejects without calling the operation"},
+    {"id": "success-resets-failure-count", "kind": "behaviour", "title": "Only consecutive failures count"},
+    {"id": "half-open-after-cooldown", "kind": "behaviour", "title": "After the cool-down one call probes"},
+    {"id": "probe-failure-reopens", "kind": "behaviour", "title": "A failed probe reopens and restarts the timer"},
+    {"id": "only-one-probe-at-a-time", "kind": "behaviour", "title": "Other callers are rejected during the probe"},
+    {"id": "racing-callers-share-one-probe", "kind": "behaviour", "title": "Racing callers cause exactly one probe"},
+    {"id": "slow-call-does-not-block-others", "kind": "behaviour", "title": "A slow call does not hold a lock"},
+    {"id": "injected-clock-only", "kind": "design", "title": "Only the injected clock is used"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Three states and two counters: consecutive failures, and when it opened. The hard part is the transition OPEN to HALF_OPEN: exactly one caller may take it."}],
+    [{"type": "p", "text": "Split `call` into `permit()` and `record(boolean ok)`, both `synchronized`, with `op.get()` between them, outside the lock. `permit()` flips OPEN to HALF_OPEN and returns true for that one caller only."}],
+    [{"type": "code", "language": "java", "lines": [
+      "private synchronized boolean permit() {",
+      "    if (state == State.OPEN",
+      "            && clock.getAsLong() - openedAt >= openMs) {",
+      "        state = State.HALF_OPEN;",
+      "        return true;",
+      "    }",
+      "    return state == State.CLOSED;",
+      "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

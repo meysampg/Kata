@@ -1,0 +1,37 @@
+{
+  "kind": "fix",
+  "title": "Fix the stale profile cache",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "Support renames a user, reloads the page, and still sees the old name."},
+    {"type": "p", "text": "`UserService` is a cache-aside layer over a `UserStore` (given): read the cache first, fall back to the store on a miss, and keep the store as the source of truth. It has two bugs. Fix them without changing any signature."},
+    {"type": "bullets", "items": [
+      "After `rename(id, name)` the next `get(id)` must return the new name. Write the store first, then evict that one entry.",
+      "A user that does not exist yet must not be remembered as absent: once it is created, `get` finds it.",
+      "The TTL and the injected clock stay as they are."]}
+  ],
+  "starter": ["Store.java", "UserService.java"],
+  "readOnly": ["Store.java"],
+  "solution": ["Store.java", "UserService.java"],
+  "tests": ["CacheKataTest.java"],
+  "checks": [
+    {"id": "second-read-is-a-hit", "kind": "behaviour", "title": "A second read is served from the cache"},
+    {"id": "rename-is-visible-at-once", "kind": "behaviour", "title": "A rename shows up on the next read"},
+    {"id": "rename-writes-before-it-evicts", "kind": "behaviour", "title": "Write first, then evict"},
+    {"id": "missing-rows-are-not-cached", "kind": "behaviour", "title": "Absence is not cached"},
+    {"id": "ttl-bounds-staleness", "kind": "behaviour", "title": "The TTL still bounds staleness"},
+    {"id": "rename-evicts-only-that-user", "kind": "behaviour", "title": "A rename evicts only its own entry"},
+    {"id": "concurrent-readers-agree", "kind": "behaviour", "title": "Concurrent readers agree"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Two different bugs, one cause: the cache is trusted more than the store. One is about what happens *after a write*, the other about what a *miss* is allowed to store."}],
+    [{"type": "p", "text": "In `rename`, after `store.save`, remove only that key from `cache`. In `get`, put an entry only when the store returned a row; an empty `Optional` must leave the cache untouched."}],
+    [{"type": "code", "language": "java", "lines": [
+      "row.ifPresent(n -> cache.put(id, new Entry(n, expiresAt)));",
+      "return row;",
+      "// ...",
+      "store.save(id, name);",
+      "cache.remove(id);"]}]
+  ],
+  "timeoutSeconds": 10
+}

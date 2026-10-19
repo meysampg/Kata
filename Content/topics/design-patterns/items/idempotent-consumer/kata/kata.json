@@ -1,0 +1,39 @@
+{
+  "kind": "fix",
+  "title": "Stop crediting duplicate deposits twice",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "The broker redelivers messages, and each redelivery credits the account again."},
+    {"type": "p", "text": "Fix `AccountConsumer.handle(Deposit)` so handling a message twice has the effect of handling it once. `Deposit` and `Ledger` are given; the constructor stays."},
+    {"type": "bullets", "items": [
+      "Return `true` when the deposit was applied, `false` for a message id already processed.",
+      "Identify a message by `messageId`, not by its content.",
+      "If `ledger.credit` throws, the id must **not** count as processed: the redelivery has to be applied.",
+      "The same message arriving on several threads at once is applied exactly once; different messages must not be lost."]}
+  ],
+  "starter": ["Support.java", "AccountConsumer.java"],
+  "readOnly": ["Support.java"],
+  "solution": ["Support.java", "AccountConsumer.java"],
+  "tests": ["IdempotentKataTest.java"],
+  "checks": [
+    {"id": "first-delivery-applied", "kind": "behaviour", "title": "A first delivery is applied"},
+    {"id": "duplicate-is-skipped", "kind": "behaviour", "title": "An immediate duplicate is skipped"},
+    {"id": "late-duplicate-is-skipped", "kind": "behaviour", "title": "A late duplicate is skipped"},
+    {"id": "identity-is-the-message-id", "kind": "behaviour", "title": "Same content, different id, is new"},
+    {"id": "failed-effect-can-be-redelivered", "kind": "behaviour", "title": "A failed effect can be retried"},
+    {"id": "concurrent-duplicates-apply-once", "kind": "behaviour", "title": "Concurrent duplicates apply once"},
+    {"id": "concurrent-distinct-messages-all-apply", "kind": "behaviour", "title": "Concurrent distinct messages all apply"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "At-least-once delivery means the consumer must remember which message ids it has handled. Check, apply and mark are one step: nothing may come between them."}],
+    [{"type": "p", "text": "Keep a `Set<String>` of processed ids. Look the id up, call `ledger.credit`, and only then add the id, all inside one critical section. If `credit` throws, the id is never added."}],
+    [{"type": "code", "language": "java", "lines": [
+      "synchronized boolean handle(Deposit m) {",
+      "    if (processed.contains(m.messageId())) return false;",
+      "    ledger.credit(m.account(), m.cents());",
+      "    processed.add(m.messageId());",
+      "    return true;",
+      "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

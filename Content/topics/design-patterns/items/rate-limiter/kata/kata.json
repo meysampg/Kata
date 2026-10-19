@@ -1,0 +1,41 @@
+{
+  "kind": "implement",
+  "title": "A token-bucket rate limiter",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Admit a burst, then a steady rate, and tell rejected callers when to come back."},
+    {"type": "p", "text": "Implement `TokenBucket(int capacity, double perSecond, LongSupplier nanos)` and `Limiter(int capacity, double perSecond, LongSupplier nanos)`. Time comes only from the `nanos` supplier."},
+    {"type": "bullets", "items": [
+      "A `TokenBucket` starts full. `long acquire()` returns `0` if a token was taken, otherwise the **milliseconds, rounded up,** until one exists.",
+      "Tokens refill lazily from elapsed time (no timer thread) and never exceed `capacity`. A rejection takes nothing.",
+      "`Limiter.acquire(String client)` gives every client its own bucket and returns the same convention.",
+      "Both must be safe to call from many threads."]}
+  ],
+  "starter": ["TokenBucket.java", "Limiter.java"],
+  "readOnly": [],
+  "solution": ["TokenBucket.java", "Limiter.java"],
+  "tests": ["RateKataTest.java"],
+  "checks": [
+    {"id": "burst-up-to-capacity", "kind": "behaviour", "title": "A full bucket admits a burst"},
+    {"id": "retry-after-in-ms", "kind": "behaviour", "title": "Rejections return milliseconds to wait"},
+    {"id": "refills-with-time", "kind": "behaviour", "title": "Tokens refill with elapsed time"},
+    {"id": "never-above-capacity", "kind": "behaviour", "title": "Idle time never banks past capacity"},
+    {"id": "rejections-cost-nothing", "kind": "behaviour", "title": "Rejected requests take no tokens"},
+    {"id": "retry-after-is-honest", "kind": "behaviour", "title": "Waiting the advertised time succeeds"},
+    {"id": "clients-have-separate-buckets", "kind": "behaviour", "title": "Each client has its own bucket"},
+    {"id": "racing-callers-share-the-burst", "kind": "behaviour", "title": "Racing callers cannot overspend"},
+    {"id": "time-is-injected", "kind": "design", "title": "Only the injected clock is read"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Do not run a timer. Remember how many tokens you had and when you last looked; on each call, add what the elapsed time earned, capped at capacity."}],
+    [{"type": "p", "text": "`TokenBucket` keeps `double tokens` and `long last`. `acquire` is `synchronized`: refill, then either spend 1 or compute the wait from the missing fraction. `Limiter` maps client to bucket with `computeIfAbsent`."}],
+    [{"type": "code", "language": "java", "lines": [
+      "long now = nanos.getAsLong();",
+      "tokens = Math.min(capacity,",
+      "    tokens + (now - last) * perSecond / 1e9);",
+      "last = now;",
+      "if (tokens >= 1) { tokens -= 1; return 0; }",
+      "return (long) Math.ceil((1 - tokens) / perSecond * 1000);"]}]
+  ],
+  "timeoutSeconds": 10
+}

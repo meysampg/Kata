@@ -1,0 +1,41 @@
+{
+  "kind": "fix",
+  "title": "Stop the price call from hanging forever",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "When the price service hangs, every checkout request hangs with it."},
+    {"type": "p", "text": "Fix `Gateway.fetch(Remote, long timeoutMs)` so that a call which does not finish in time is **bounded and cancelled**."},
+    {"type": "bullets", "items": [
+      "After `timeoutMs` the caller gets a `TimeoutException`, never an endless wait.",
+      "The abandoned work is cancelled with an interrupt, so it stops using its pool thread.",
+      "If the caller is interrupted while waiting, the work is cancelled too and `InterruptedException` propagates.",
+      "A remote that throws still surfaces as `ExecutionException` with the original cause.",
+      "Signatures and the `Remote` interface stay as they are."]}
+  ],
+  "starter": ["Gateway.java"],
+  "readOnly": [],
+  "solution": ["Gateway.java"],
+  "tests": ["TimeoutKataTest.java"],
+  "checks": [
+    {"id": "fast-call-returns", "kind": "behaviour", "title": "A fast call returns its value"},
+    {"id": "slow-call-times-out", "kind": "behaviour", "title": "A hanging call ends in TimeoutException"},
+    {"id": "timeout-cancels-worker", "kind": "behaviour", "title": "The timed-out work is interrupted"},
+    {"id": "remote-failure-propagates", "kind": "behaviour", "title": "Remote failures keep their cause"},
+    {"id": "caller-interrupt-cancels", "kind": "behaviour", "title": "An interrupted caller cancels the work"},
+    {"id": "no-unbounded-wait", "kind": "design", "title": "fetch never waits without a bound"},
+    {"id": "cancel-on-timeout", "kind": "design", "title": "fetch cancels abandoned work"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "`Future.get()` waits as long as the work does. A timeout has two halves: stop *waiting*, and stop the *work*."}],
+    [{"type": "p", "text": "Use the `Future.get(long, TimeUnit)` overload. When it throws, call `cancel(true)` on the `Future` so the worker thread is interrupted, then let the exception continue."}],
+    [{"type": "p", "text": "Wrap the wait:"},
+     {"type": "code", "language": "java", "lines": [
+       "try {",
+       "    return result.get(timeoutMs, TimeUnit.MILLISECONDS);",
+       "} catch (TimeoutException | InterruptedException e) {",
+       "    result.cancel(true);",
+       "    throw e;",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}
