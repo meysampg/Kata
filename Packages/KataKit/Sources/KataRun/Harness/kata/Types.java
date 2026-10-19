@@ -1,5 +1,6 @@
 package kata;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
@@ -10,6 +11,7 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -26,9 +28,34 @@ public final class Types {
         return c;
     }
 
+    /**
+     * The one abstract method the type declares or inherits, of any visibility (so a
+     * {@code protected abstract} method of a class counts). Object methods are ignored, and a method a
+     * subclass or sub-interface implements is no longer abstract.
+     */
     public static Method singleAbstractMethod(Class<?> type) {
+        java.util.Map<String, Method> bySignature = new java.util.LinkedHashMap<>();
+        java.util.ArrayDeque<Class<?>> queue = new java.util.ArrayDeque<>();
+        java.util.Set<Class<?>> seen = new java.util.HashSet<>();
+        queue.add(type);
+        while (!queue.isEmpty()) {
+            Class<?> c = queue.poll();
+            if (c == Object.class || !seen.add(c)) {
+                continue;
+            }
+            for (Method m : c.getDeclaredMethods()) {
+                if (!m.isSynthetic() && !m.isBridge() && !Modifier.isStatic(m.getModifiers())
+                        && !Modifier.isPrivate(m.getModifiers())) {
+                    bySignature.putIfAbsent(m.getName() + Arrays.toString(m.getParameterTypes()), m);
+                }
+            }
+            if (c.getSuperclass() != null) {
+                queue.add(c.getSuperclass());
+            }
+            queue.addAll(Arrays.asList(c.getInterfaces()));
+        }
         List<Method> abstracts = new ArrayList<>();
-        for (Method m : type.getMethods()) {
+        for (Method m : bySignature.values()) {
             if (Modifier.isAbstract(m.getModifiers()) && !isObjectMethod(m)) {
                 abstracts.add(m);
             }
@@ -37,7 +64,9 @@ public final class Types {
             throw new CheckFailure(type.getSimpleName() + " should have exactly one abstract method but has "
                     + abstracts.size());
         }
-        return abstracts.get(0);
+        Method m = abstracts.get(0);
+        m.setAccessible(true);
+        return m;
     }
 
     /** The only instance field whose declared type is {@code type}. */
@@ -138,6 +167,30 @@ public final class Types {
      * and default methods behave normally.
      */
     public static Object implement(Class<?> type, Function<Object[], Object> handler) {
+        return proxy(type, (method, args) -> handler.apply(args));
+    }
+
+    /**
+     * An instance of the interface whose abstract methods dispatch by method name to {@code stubs}.
+     * An abstract method without a stub throws {@link UnsupportedOperationException}. Object methods and
+     * default methods behave normally; the interface may be package-private.
+     */
+    public static Object implement(Class<?> type, Map<String, Function<Object[], Object>> stubs) {
+        return proxy(type, (method, args) -> {
+            Function<Object[], Object> stub = stubs.get(method.getName());
+            if (stub == null) {
+                throw new UnsupportedOperationException("no stub for " + type.getSimpleName() + "."
+                        + method.getName() + "()");
+            }
+            return stub.apply(args);
+        });
+    }
+
+    private interface Dispatch {
+        Object call(Method method, Object[] args) throws Throwable;
+    }
+
+    private static Object proxy(Class<?> type, Dispatch dispatch) {
         if (!type.isInterface()) {
             throw new CheckFailure(type.getSimpleName() + " should be an interface");
         }
@@ -149,12 +202,20 @@ public final class Types {
                     default -> type.getSimpleName() + "@kata";
                 };
             }
+            Object[] actual = args == null ? new Object[0] : args;
             if (method.isDefault()) {
-                return InvocationHandler.invokeDefault(proxy, method, args);
+                return invokeDefault(proxy, method, actual);
             }
-            return handler.apply(args == null ? new Object[0] : args);
+            return dispatch.call(method, actual);
         };
         return Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, h);
+    }
+
+    /** Runs a default method from a lookup on its own interface, so package-private interfaces work. */
+    private static Object invokeDefault(Object proxy, Method method, Object[] args) throws Throwable {
+        Class<?> owner = method.getDeclaringClass();
+        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(owner, MethodHandles.lookup());
+        return lookup.unreflectSpecial(method, owner).bindTo(proxy).invokeWithArguments(args);
     }
 
     private static Field only(Class<?> owner, Class<?> type, boolean wantStatic) {

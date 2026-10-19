@@ -277,6 +277,99 @@
       #expect(r.checks.first?.status == .pass, "\(r.checks.first?.message ?? "")")
     }
 
+    @Test func singleAbstractMethodSeesProtectedAndInheritedMethods() async throws {
+      let src = """
+        abstract class Base {
+          protected abstract Object createSink();
+          public String hello() { return "hi"; }
+        }
+        interface Greeter { String greet(String who); default String twice(String w) { return greet(w) + greet(w); } }
+        abstract class Mid implements Greeter { }
+        class Impl extends Base { protected Object createSink() { return 1; } }
+
+        """
+      let r = try await Harness.run(
+        src: ["Base.java": src],
+        tests: Harness.test(
+          """
+          @Check(id = "protected") void p() {
+            Expect.equal("createSink", Types.singleAbstractMethod(Types.named("Base")).getName(), "protected");
+          }
+          @Check(id = "inherited") void i() {
+            Expect.equal("greet", Types.singleAbstractMethod(Types.named("Mid")).getName(), "inherited from interface");
+          }
+          @Check(id = "implemented") void n() {
+            Expect.raises(CheckFailure.class, () -> Types.singleAbstractMethod(Types.named("Impl")), "none left");
+          }
+          """))
+      #expect(r.checks.map(\.status) == [.pass, .pass, .pass], "\(r.checks.map(\.message))")
+    }
+
+    @Test func implementInvokesDefaultMethodsOnPackagePrivateInterfaces() async throws {
+      let src = """
+        interface Greeter {
+          String greet(String who);
+          String shout(String who);
+          default String twice(String w) { return greet(w) + greet(w); }
+        }
+
+        """
+      let r = try await Harness.run(
+        src: ["Greeter.java": src],
+        tests: Harness.test(
+          """
+          @Check(id = "default-method") void d() throws Throwable {
+            Class<?> g = Types.named("Greeter");
+            Object o = Types.implement(g, a -> "x" + a[0]);
+            Expect.equal("xAxA", Types.call(Types.method(g, "twice", String.class), o, "A"), "default via handler");
+          }
+          @Check(id = "by-name") void b() throws Throwable {
+            Class<?> g = Types.named("Greeter");
+            Object o = Types.implement(g, java.util.Map.of(
+                "greet", a -> "hi " + a[0], "shout", a -> ((String) a[0]).toUpperCase()));
+            Expect.equal("hi bob", Types.call(Types.method(g, "greet", String.class), o, "bob"), "greet");
+            Expect.equal("BOB", Types.call(Types.method(g, "shout", String.class), o, "bob"), "shout");
+            Expect.equal("hi bobhi bob", Types.call(Types.method(g, "twice", String.class), o, "bob"), "twice");
+          }
+          @Check(id = "missing-stub") void m() throws Throwable {
+            Class<?> g = Types.named("Greeter");
+            Object o = Types.implement(g, java.util.Map.of("greet", a -> "g"));
+            Expect.raises(UnsupportedOperationException.class, () -> {
+              try { Types.call(Types.method(g, "shout", String.class), o, "x"); } catch (RuntimeException e) { throw e; }
+              catch (Throwable t) { throw new RuntimeException(t); }
+            }, "unstubbed method");
+          }
+          """))
+      #expect(r.checks.map(\.status) == [.pass, .pass, .pass], "\(r.checks.map(\.message))")
+    }
+
+    @Test func hitsCarryTheCallArguments() async throws {
+      let src = """
+        class Client {
+          Object use(java.util.concurrent.Future<String> f) throws Exception {
+            return f.get(5,
+                java.util.concurrent.TimeUnit.SECONDS);
+          }
+          Object other() { return new StringBuilder("x"); }
+        }
+
+        """
+      let r = try await Harness.run(
+        src: ["Client.java": src],
+        tests: Harness.test(
+          """
+          @Check(id = "args") void a() {
+            var hits = Source.type("Client").method("use").calls("get");
+            Expect.equal(1, hits.size(), "one call");
+            Expect.equal("get()", hits.get(0).text(), "text unchanged");
+            Expect.equal("5, java.util.concurrent.TimeUnit.SECONDS", hits.get(0).args(), "args");
+            Expect.equal("\\"x\\"", Source.type("Client").method("other").news("StringBuilder").get(0).args(), "new args");
+            Expect.equal("", Source.type("Client").method("use").mentions("f").get(0).args(), "plain hit");
+          }
+          """))
+      #expect(r.checks.first?.status == .pass, "\(r.checks.first?.message ?? "")")
+    }
+
     @Test func repeatedChecksStopAtTheFirstFailure() async throws {
       let src = "class Counter { static int n; static int next() { return ++n; } }\n"
       let r = try await Harness.run(

@@ -13,6 +13,26 @@
     /// Median wall time of one reference run (JVM start to exit).
     public var medianMillis: Int?
     public var starterMedianMillis: Int?
+    /// Per-check outcome of the reference (the first run with a failure, else the last run).
+    public var referenceChecks: [CheckSummary] = []
+    /// Per-check outcome of the starter (same selection rule).
+    public var starterChecks: [CheckSummary] = []
+
+    /// One check's status with the first line of its message.
+    public struct CheckSummary: Sendable, Codable, Equatable {
+      public var id: String
+      public var kind: String
+      public var status: String
+      public var message: String
+
+      static func of(_ report: KataReport) -> [CheckSummary] {
+        report.checks.map {
+          CheckSummary(
+            id: $0.id, kind: $0.kind.rawValue, status: $0.status.rawValue,
+            message: String($0.message.split(separator: "\n", omittingEmptySubsequences: true).first ?? ""))
+        }
+      }
+    }
   }
 
   /// Checks that a kata behaves as its kind promises (MAC_PLAN §3.2), using the real runner.
@@ -46,6 +66,9 @@
               KataRunRequest(kata: kata, files: kata.solution, jdk: jdk, extraJVMArguments: extra))
             v.referenceRuns += 1
             if extra.isEmpty { referenceTimes.append(report.wallMillis) }
+            if v.referenceChecks.isEmpty || !v.referenceChecks.contains(where: { $0.status != "pass" }) {
+              v.referenceChecks = KataVerification.CheckSummary.of(report)
+            }
             v.failures += Self.referenceProblems(report, kata: kata).map { "\(tag): \($0)" }
           } catch {
             v.failures.append("\(tag): \(error)")
@@ -58,6 +81,9 @@
           let report = try await runner.run(KataRunRequest(kata: kata, files: kata.starter, jdk: jdk))
           v.starterRuns += 1
           starterTimes.append(report.wallMillis)
+          if v.starterChecks.isEmpty || !v.starterChecks.contains(where: { $0.status != "pass" }) {
+            v.starterChecks = KataVerification.CheckSummary.of(report)
+          }
           v.failures += Self.starterProblems(report, kata: kata).map { "\(tag): \($0)" }
         } catch {
           v.failures.append("\(tag): \(error)")

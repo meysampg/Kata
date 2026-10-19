@@ -139,10 +139,32 @@ public final class Source {
         private int syncDepth;
 
         private Hit hit(Tree t, Context.Unit u, String text) {
+            return hit(t, u, text, "");
+        }
+
+        /** Source text of the arguments, as written, with newlines collapsed. */
+        private static String argsText(List<? extends ExpressionTree> args, Context.Unit u) {
+            if (args.isEmpty()) {
+                return "";
+            }
+            try {
+                CharSequence src = u.tree().getSourceFile().getCharContent(true);
+                long start = u.positions().getStartPosition(u.tree(), args.get(0));
+                long end = u.positions().getEndPosition(u.tree(), args.get(args.size() - 1));
+                if (start >= 0 && end >= start && end <= src.length()) {
+                    return src.subSequence((int) start, (int) end).toString().replaceAll("\\s+", " ").trim();
+                }
+            } catch (java.io.IOException | RuntimeException e) {
+                // fall through to the empty text
+            }
+            return "";
+        }
+
+        private Hit hit(Tree t, Context.Unit u, String text, String args) {
             long pos = u.positions().getStartPosition(u.tree(), t);
             long line = pos < 0 ? 0 : u.tree().getLineMap().getLineNumber(pos);
             long col = pos < 0 ? 0 : u.tree().getLineMap().getColumnNumber(pos);
-            return new Hit(u.fileName(), (int) line, (int) col, syncDepth > 0, text);
+            return new Hit(u.fileName(), (int) line, (int) col, syncDepth > 0, text, args);
         }
 
         private static void add(Map<String, List<Hit>> m, String key, Hit h) {
@@ -229,7 +251,7 @@ public final class Source {
                 receiver = ms.getExpression();
             }
             if (name != null) {
-                add(calls, name, hit(node, u, name + "()"));
+                add(calls, name, hit(node, u, name + "()", argsText(node.getArguments(), u)));
                 add(mentions, name, hit(node, u, name));
                 if (name.equals("equals") || name.equals("equalsIgnoreCase") || name.equals("contentEquals")) {
                     List<ExpressionTree> operands = new ArrayList<>(node.getArguments());
@@ -256,7 +278,7 @@ public final class Source {
         public Void visitNewClass(NewClassTree node, Context.Unit u) {
             String type = simpleName(node.getIdentifier());
             if (type != null) {
-                add(news, type, hit(node, u, "new " + type));
+                add(news, type, hit(node, u, "new " + type, argsText(node.getArguments(), u)));
             }
             return super.visitNewClass(node, u);
         }

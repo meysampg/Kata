@@ -18,6 +18,7 @@ struct Options {
   var kataRuns: Int?
   var jdk: String?
   var timing = false
+  var verbose = false
   var solution = false
   var requireAllKatas = false
 
@@ -39,6 +40,7 @@ struct Options {
         kataRuns = n
       case "--jdk": jdk = try value(&it, a)
       case "--timing": timing = true
+      case "--verbose": verbose = true
       case "--solution": solution = true
       case "--require-all-katas": requireAllKatas = true
       default: throw CLIError("unknown option '\(a)'")
@@ -75,7 +77,7 @@ let usage = """
                                                               and KataMac/Resources/Katas/<topic>.kkata
     validate    [--topic id] [--items a,b] [--allow-missing] [--require-all-katas]
                                                               check authoring rules
-    check-java  [--topic id] [--items a,b] [--no-katas] [--kata-runs N] [--jdk <home>] [--timing]
+    check-java  [--topic id] [--items a,b] [--no-katas] [--kata-runs N] [--jdk <home>] [--timing] [--verbose]
                                                               compile and run Java snippets and katas
     kata-workspace --items a [--solution] --out <dir>         write a kata as an IDE project
   options: --content <dir with topics/>   --out <pack output dir>   --katas-out <kkata output dir>
@@ -162,6 +164,16 @@ func run() async throws -> Int32 {
         for (kata, concurrency) in katas {
           let v = await verifier.verify(kata, runs: o.kataRuns, concurrency: concurrency)
           verifications.append(v)
+          if o.verbose {
+            func dump(_ label: String, _ checks: [KataVerification.CheckSummary]) {
+              for c in checks {
+                stderr("  \(label) \(c.id) [\(c.kind)] \(c.status)\(c.message.isEmpty ? "" : ": " + c.message)")
+              }
+            }
+            stderr("\(kata.itemId): \(v.ok ? "ok" : "FAILED")")
+            dump("reference", v.referenceChecks)
+            dump("starter  ", v.starterChecks)
+          }
           if o.timing {
             stderr(
               "\(kata.itemId): reference median \(v.medianMillis.map(String.init) ?? "?") ms over \(v.referenceRuns) run(s), starter median \(v.starterMedianMillis.map(String.init) ?? "?") ms over \(v.starterRuns) run(s)"

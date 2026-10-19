@@ -131,9 +131,20 @@ kind = Kind.DESIGN, timeoutMs = 2000, repeat = 1)` method runs on a fresh instan
 | Type | Use |
 |---|---|
 | `Expect` | `equal(expected, actual, what)`, `isTrue`, `fail`, `raises(Class, runnable, what)`, `none(hits, msg)`, `atMost(n, hits, msg)`, `completesWithin(ms, supplier, what)` |
-| `Types` | `named("X")` (fails with "No type named X in your files"), `singleAbstractMethod`, `onlyFieldOfType`, `fieldsOfType`, `onlyStaticFieldOfType`, `setStatic`, `getStatic`, `constructor`, `method`, `staticMethod`, `call`, `create`, `implement(iface, handler)` |
-| `Source` | `type("X")` then `method("m")`, `switches()`, `instanceofs()`, `comparedStrings()`, `calls("n")`, `fieldReads("f")`, `news("T")`, `mentions("I")`; each returns `Hit`s with file, line and `insideSynchronized` |
+| `Types` | `named("X")` (fails with "No type named X in your files"), `singleAbstractMethod`, `onlyFieldOfType`, `fieldsOfType`, `onlyStaticFieldOfType`, `setStatic`, `getStatic`, `constructor`, `method`, `staticMethod`, `call`, `create`, `implement(iface, handler)`, `implement(iface, Map<String, Function<Object[],Object>> stubsByMethodName)` |
+| `Source` | `type("X")` then `method("m")`, `switches()`, `instanceofs()`, `comparedStrings()`, `calls("n")`, `fieldReads("f")`, `news("T")`, `mentions("I")`; each returns `Hit`s with file, line, `insideSynchronized`, `text` (`name()` for calls, `new T` for constructions) and `args` (the call's or `new`'s argument source text, e.g. `5, TimeUnit.SECONDS`; empty for other hits) |
 | `Stress` | `race(threads, task)`, `pause(ms)` (at most 50), `holdMonitor(obj)`, `holdLock(lock)` |
+
+Notes on the API:
+
+- `singleAbstractMethod(type)` considers abstract methods of any visibility, declared or inherited (a
+  `protected abstract createSink()` counts); methods an implementation already provides do not. Object methods are ignored.
+- `implement` works for package-private interfaces and their default methods. The `Map` overload dispatches by method
+  name; an abstract method without a stub throws `UnsupportedOperationException`.
+- Check `Hit.args()` for argument-level design rules, e.g. `Expect.isTrue(hits.stream().allMatch(h -> h.args().contains(",")), ...)`.
+- Checks run one after another in one JVM, sharing static state and output capture, so they are never parallelised. A
+  hang-style starter pays each check's `timeoutMs`; lower the `timeoutMs` of the checks that wait on a bounded
+  condition (the default is 2000) instead of widening it.
 
 Rules:
 
@@ -166,10 +177,12 @@ code block). None pastes the full answer. Using hints lowers the suggested ratin
 K=Packages/KataKit/.build/debug/kata-pack
 $K validate --items <ids>                              # 0 errors, 0 warnings
 $K check-java --items <ids> --kata-runs 5 --timing     # reference passes, starter fails by kind
+$K check-java --items <ids> --verbose                  # per-check status (stderr) for reference and starter
 $K kata-workspace --items <id> --out /tmp/<id>         # open in IntelliJ to iterate
 $K build                                               # rewrites the .kpack (unchanged) and the .kkata
 ```
 
 `check-java` runs the reference solution `--kata-runs` times (and again with 1 and 4 processors for
 concurrency katas), then the starter, through the same runner the Mac app uses. The median wall time per
-run should stay under 2 seconds.
+run should stay under 2 seconds. `--verbose` prints every check's id, kind, status and first message line for both,
+and the JSON output gains `referenceChecks` and `starterChecks` arrays per kata.
