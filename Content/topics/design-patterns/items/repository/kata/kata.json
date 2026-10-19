@@ -1,0 +1,125 @@
+{
+  "kind": "implement",
+  "title": "Hide order storage behind a repository",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "The domain should ask for orders as if they lived in a collection."
+    },
+    {
+      "type": "p",
+      "text": "`OrderRepository` is the port, already written. Implement it in memory and use it from a service."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`InMemoryOrderRepository` implements `OrderRepository`. `save` inserts or replaces by id; `findById` returns an empty `Optional` for unknown ids; `remove` ignores unknown ids.",
+        "`findByCustomer` returns that customer's orders sorted by `id().value()`, as a snapshot that later saves do not change.",
+        "`LoyaltyService(OrderRepository)` gives `points(customer)`: the sum of `totalCents() / 100` over that customer's orders. It must know only the port."
+      ]
+    }
+  ],
+  "starter": [
+    "Order.java",
+    "OrderRepository.java",
+    "InMemoryOrderRepository.java",
+    "LoyaltyService.java"
+  ],
+  "readOnly": [
+    "Order.java",
+    "OrderRepository.java"
+  ],
+  "solution": [
+    "Order.java",
+    "OrderRepository.java",
+    "InMemoryOrderRepository.java",
+    "LoyaltyService.java"
+  ],
+  "tests": [
+    "RepositoryKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "save-and-find",
+      "kind": "behaviour",
+      "title": "A saved order can be found by id"
+    },
+    {
+      "id": "missing-is-empty",
+      "kind": "behaviour",
+      "title": "Unknown ids and customers give empty results"
+    },
+    {
+      "id": "save-replaces",
+      "kind": "behaviour",
+      "title": "Saving an existing id replaces it"
+    },
+    {
+      "id": "by-customer-sorted",
+      "kind": "behaviour",
+      "title": "Orders for a customer come back sorted by id"
+    },
+    {
+      "id": "remove",
+      "kind": "behaviour",
+      "title": "Remove deletes, and tolerates unknown ids"
+    },
+    {
+      "id": "results-are-snapshots",
+      "kind": "behaviour",
+      "title": "Returned lists do not change later"
+    },
+    {
+      "id": "service-works-with-any-port",
+      "kind": "behaviour",
+      "title": "LoyaltyService works with any repository"
+    },
+    {
+      "id": "loyalty-over-memory-repo",
+      "kind": "behaviour",
+      "title": "Points add up over the in-memory store"
+    },
+    {
+      "id": "memory-repo-implements-port",
+      "kind": "design",
+      "title": "The in-memory store implements the port"
+    },
+    {
+      "id": "service-depends-on-port",
+      "kind": "design",
+      "title": "LoyaltyService holds only the port"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A repository is a collection-shaped seam. The service should see only the interface, and the storage detail should live in exactly one class behind it."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Keep a `Map<OrderId, Order>` inside `InMemoryOrderRepository`. `LoyaltyService` keeps a private final `OrderRepository` from its constructor. Filter and sort when you answer `findByCustomer`, so the result is a new list."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The query is a stream over the map values:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "return rows.values().stream()",
+          "    .filter(o -> o.customer().equals(customer))",
+          "    .sorted(Comparator.comparing(o -> o.id().value()))",
+          "    .toList();"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}

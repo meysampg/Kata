@@ -1,0 +1,116 @@
+{
+  "kind": "refactor",
+  "title": "Move the table layout out of Customer",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Customer` knows the shape of its table row. Make the mapper own that knowledge."
+    },
+    {
+      "type": "p",
+      "text": "`Customer` has `fromRow` and `toRow`, so every schema change edits the domain class. Move the conversion into `CustomerMapper`, keeping its constructor, `find(long)` and `save(Customer)`."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`Customer` must no longer mention `Row` or its columns.",
+        "`CustomerMapper` converts in both directions.",
+        "Behaviour stays: `save` stores the email lower-cased, and `find` throws `IllegalArgumentException` for a corrupt row.",
+        "`Row` and `Email` are read-only."
+      ]
+    }
+  ],
+  "starter": [
+    "Row.java",
+    "Email.java",
+    "Customer.java",
+    "CustomerMapper.java"
+  ],
+  "readOnly": [
+    "Row.java",
+    "Email.java"
+  ],
+  "solution": [
+    "Row.java",
+    "Email.java",
+    "Customer.java",
+    "CustomerMapper.java"
+  ],
+  "tests": [
+    "DataMapperKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "find-maps-columns",
+      "kind": "behaviour",
+      "title": "find turns a row into a Customer"
+    },
+    {
+      "id": "find-missing-is-empty",
+      "kind": "behaviour",
+      "title": "An unknown id gives an empty Optional"
+    },
+    {
+      "id": "save-writes-row",
+      "kind": "behaviour",
+      "title": "save inserts a row"
+    },
+    {
+      "id": "save-updates-and-lowercases",
+      "kind": "behaviour",
+      "title": "save updates and lowercases the address"
+    },
+    {
+      "id": "corrupt-row-rejected",
+      "kind": "behaviour",
+      "title": "A row with a bad email is rejected"
+    },
+    {
+      "id": "customer-has-no-row-in-its-api",
+      "kind": "design",
+      "title": "Customer's API has no Row in it"
+    },
+    {
+      "id": "customer-source-free-of-table",
+      "kind": "design",
+      "title": "Customer knows nothing of columns"
+    },
+    {
+      "id": "mapper-owns-conversion",
+      "kind": "design",
+      "title": "CustomerMapper builds both sides"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Who should know that the table has an `emailAddr` column? Not the domain object. The thing between domain and table needs to be a separate class that owns that translation."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Delete `fromRow` and `toRow` from `Customer`. Give `CustomerMapper` two private methods, one per direction, and call them from `find` and `save`. The lower-casing moves with `toRow`."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "In the mapper:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "private Row toRow(Customer c) {",
+          "    return new Row(c.id(), c.name(),",
+          "        c.email().value().toLowerCase());",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}

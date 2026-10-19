@@ -1,0 +1,118 @@
+{
+  "kind": "implement",
+  "title": "A feature flag that saves itself",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "An active record is a row object that also carries its own finders and persistence."
+    },
+    {
+      "type": "p",
+      "text": "Complete `FeatureFlag`. The skeleton, the private table and `reset()` are given; keep the table private and static."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`create(name, percent)` returns an unsaved, disabled flag. Throw `IllegalArgumentException` for a blank name or a percent outside 0 to 100. `rollout(p)` applies the same rule.",
+        "`save()` inserts or updates and returns `this`. Saving a never-persisted flag whose name is taken throws `IllegalStateException`.",
+        "`find(name)` returns a fresh object each time. Unsaved edits never show in the table.",
+        "`all()` returns fresh objects sorted by name.",
+        "`delete()` removes the row and clears `persisted()`; deleting an unsaved flag does nothing.",
+        "`toggle()` flips `enabled` in memory only."
+      ]
+    }
+  ],
+  "starter": [
+    "FeatureFlag.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "FeatureFlag.java"
+  ],
+  "tests": [
+    "ActiveRecordKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "create-validates",
+      "kind": "behaviour",
+      "title": "create checks the name and percent"
+    },
+    {
+      "id": "new-is-not-stored",
+      "kind": "behaviour",
+      "title": "A new flag is stored only by save"
+    },
+    {
+      "id": "find-returns-fresh-copies",
+      "kind": "behaviour",
+      "title": "find builds a fresh object, edits stay local"
+    },
+    {
+      "id": "update-after-edit",
+      "kind": "behaviour",
+      "title": "Edit then save updates the same row"
+    },
+    {
+      "id": "all-sorted-by-name",
+      "kind": "behaviour",
+      "title": "all lists flags sorted by name"
+    },
+    {
+      "id": "delete",
+      "kind": "behaviour",
+      "title": "delete removes the row"
+    },
+    {
+      "id": "duplicate-insert-rejected",
+      "kind": "behaviour",
+      "title": "A second new flag with the same name is rejected"
+    },
+    {
+      "id": "record-persists-itself",
+      "kind": "design",
+      "title": "Finders are static, save and delete are on the record"
+    },
+    {
+      "id": "table-is-hidden",
+      "kind": "design",
+      "title": "The table is a private static map"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Two jobs live in one class: the object holds fields and rules, and it also knows how to read and write its own row. Finders cannot use an instance, so they are static."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Store immutable `Row` values in `TABLE`, not the flag objects. `find` builds a new `FeatureFlag` from a row and marks it persisted. `save` writes a new `Row` from the current fields."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The save rule, with a shared `checkPercent` helper for create and rollout:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "FeatureFlag save() {",
+          "    if (!persisted && TABLE.containsKey(name)) {",
+          "        throw new IllegalStateException(\"already exists: \" + name);",
+          "    }",
+          "    TABLE.put(name, new Row(enabled, percent));",
+          "    persisted = true;",
+          "    return this;",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}

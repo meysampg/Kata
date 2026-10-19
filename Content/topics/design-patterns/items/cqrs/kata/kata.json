@@ -1,0 +1,119 @@
+{
+  "kind": "refactor",
+  "title": "Split Shop into commands and a read view",
+  "minutes": 25,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Shop` accepts orders and answers revenue questions from the same data."
+    },
+    {
+      "type": "p",
+      "text": "Split it in two and keep `Shop.place`, `revenue` and `top` behaving exactly as now (`top` ranks by revenue, ties by name)."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`OrderCommands` is the write side: `void handle(PlaceOrder)` validates (`IllegalArgumentException(\"amount\")`, `IllegalStateException(\"duplicate <id>\")`) and appends an `OrderPlaced` to `List<OrderPlaced> feed()`. It answers no queries.",
+        "`RevenueView` is the read side: `void catchUp(List<OrderPlaced> feed)` applies only events it has not seen, then `int revenue(String)` and `List<String> top(int)` answer from its own totals.",
+        "`Shop` only wires the two. `Messages.java` is read-only."
+      ]
+    }
+  ],
+  "starter": [
+    "Messages.java",
+    "Shop.java"
+  ],
+  "readOnly": [
+    "Messages.java"
+  ],
+  "solution": [
+    "Messages.java",
+    "OrderCommands.java",
+    "RevenueView.java",
+    "Shop.java"
+  ],
+  "tests": [
+    "CqrsKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "revenue-per-customer",
+      "kind": "behaviour",
+      "title": "Revenue adds up per customer"
+    },
+    {
+      "id": "top-ranking",
+      "kind": "behaviour",
+      "title": "top ranks by revenue, ties by name"
+    },
+    {
+      "id": "duplicate-order-rejected",
+      "kind": "behaviour",
+      "title": "A duplicate order id is rejected"
+    },
+    {
+      "id": "bad-amount-rejected",
+      "kind": "behaviour",
+      "title": "A non-positive amount is rejected"
+    },
+    {
+      "id": "write-side-exists",
+      "kind": "design",
+      "title": "OrderCommands handles commands and publishes a feed"
+    },
+    {
+      "id": "write-side-answers-no-queries",
+      "kind": "design",
+      "title": "The write side answers no queries"
+    },
+    {
+      "id": "view-needs-only-events",
+      "kind": "design",
+      "title": "RevenueView is built from the feed alone"
+    },
+    {
+      "id": "view-does-not-reach-the-write-side",
+      "kind": "design",
+      "title": "RevenueView never touches OrderCommands"
+    },
+    {
+      "id": "shop-only-wires",
+      "kind": "design",
+      "title": "Shop keeps no data of its own"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "There are two different jobs: deciding whether an order is allowed, and answering questions about totals. They want different shapes of data, so give each its own model."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "`OrderCommands` keeps what it needs to reject duplicates plus the feed of `OrderPlaced` facts. `RevenueView` keeps `Map<String, Integer>` totals and a count of events already applied. `Shop` calls `handle`, then `catchUp(commands.feed())`."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The projection only moves forward through the feed:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "void catchUp(List<OrderPlaced> feed) {",
+          "    for (; applied < feed.size(); applied++) {",
+          "        var e = feed.get(applied);",
+          "        byCustomer.merge(e.customer(), e.cents(), Integer::sum);",
+          "    }",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}

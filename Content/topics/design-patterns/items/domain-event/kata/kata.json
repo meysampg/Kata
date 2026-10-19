@@ -1,0 +1,117 @@
+{
+  "kind": "refactor",
+  "title": "Let a discharge announce itself",
+  "minutes": 25,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Patient.discharge()` calls billing, housekeeping and the pharmacy itself."
+    },
+    {
+      "type": "p",
+      "text": "Make the patient record a fact and let the departments react. `Ward(Billing, Housekeeping, Pharmacy)`, `admit(id, bed)` and `discharge(id)` keep working exactly as before."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "Add `record PatientDischarged(String patientId, String bedId)`.",
+        "`Patient(String id, String bedId)` keeps `discharge()` and `isDischarged()` and gains `pullEvents()`, which returns the recorded events once and then clears them.",
+        "Add `EventBus` with `<E> void on(Class<E>, Consumer<E>)` and `void publish(List<?>)`, routing by the event's class.",
+        "`Ward` subscribes the three departments in the order billing, housekeeping, pharmacy, and publishes what the patient recorded.",
+        "`Ports.java` is read-only."
+      ]
+    }
+  ],
+  "starter": [
+    "Ports.java",
+    "Patient.java",
+    "Ward.java"
+  ],
+  "readOnly": [
+    "Ports.java"
+  ],
+  "solution": [
+    "Ports.java",
+    "Events.java",
+    "Patient.java",
+    "Ward.java"
+  ],
+  "tests": [
+    "DomainEventKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "discharge-reaches-everyone",
+      "kind": "behaviour",
+      "title": "Discharge still reaches billing, housekeeping and pharmacy"
+    },
+    {
+      "id": "double-discharge-rejected",
+      "kind": "behaviour",
+      "title": "A second discharge is rejected with no side effects"
+    },
+    {
+      "id": "unknown-patient",
+      "kind": "behaviour",
+      "title": "An unknown patient is rejected"
+    },
+    {
+      "id": "patients-are-independent",
+      "kind": "behaviour",
+      "title": "Discharging one patient leaves others alone"
+    },
+    {
+      "id": "event-names-what-happened",
+      "kind": "design",
+      "title": "PatientDischarged is a record with the facts"
+    },
+    {
+      "id": "patient-records-the-event",
+      "kind": "design",
+      "title": "Patient records the event and nothing else"
+    },
+    {
+      "id": "patient-knows-no-department",
+      "kind": "design",
+      "title": "Patient knows no department"
+    },
+    {
+      "id": "bus-routes-by-type",
+      "kind": "design",
+      "title": "EventBus delivers events by type"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Separate what happened from who cares. The patient can state the fact (\"discharged\") without knowing a single department. Someone else delivers that fact to whoever listens."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "`Patient` appends a `PatientDischarged` to a list and hands it out in `pullEvents()`. `EventBus` keeps handlers per event class. `Ward` registers one handler per department in its constructor and publishes after `patient.discharge()`."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The registration in `Ward`:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "bus.on(PatientDischarged.class,",
+          "    e -> billing.invoice(e.patientId()));",
+          "bus.on(PatientDischarged.class,",
+          "    e -> housekeeping.cleanBed(e.bedId()));",
+          "bus.on(PatientDischarged.class,",
+          "    e -> pharmacy.handOff(e.patientId()));"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}

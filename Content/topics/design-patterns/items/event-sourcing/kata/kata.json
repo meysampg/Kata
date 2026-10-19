@@ -1,0 +1,123 @@
+{
+  "kind": "implement",
+  "title": "Rebuild a stock item from its events",
+  "minutes": 30,
+  "task": [
+    {
+      "type": "lead",
+      "text": "A warehouse ledger keeps what happened, and derives how many units are on the shelf."
+    },
+    {
+      "type": "p",
+      "text": "`StockEvent`s and `VersionConflict` are given. Implement `EventStore` and `StockItem`."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`EventStore.load(id)` returns an unmodifiable copy of the stream (empty if unknown). `append(id, expectedVersion, events)` copies the events in only if the stream has exactly `expectedVersion` events, else throws `VersionConflict`.",
+        "`StockItem.replay(history)` applies each event: `Received` adds, `Picked` subtracts, `Adjusted` adds its `delta`. `version()` is the number of events applied.",
+        "`receive`, `pick` and `adjust` check the rules, then record an event and apply it. `units` must be positive (`IllegalArgumentException`); picking more than on hand, or adjusting below zero, is an `IllegalStateException` and records nothing.",
+        "`pendingEvents()` returns what is not saved yet. `saveTo(store, id)` appends it using the version it was loaded at, then clears it."
+      ]
+    }
+  ],
+  "starter": [
+    "Events.java",
+    "EventStore.java",
+    "StockItem.java"
+  ],
+  "readOnly": [
+    "Events.java"
+  ],
+  "solution": [
+    "Events.java",
+    "EventStore.java",
+    "StockItem.java"
+  ],
+  "tests": [
+    "EventSourcingKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "replay-rebuilds-state",
+      "kind": "behaviour",
+      "title": "Replaying events rebuilds the state"
+    },
+    {
+      "id": "replay-any-prefix",
+      "kind": "behaviour",
+      "title": "Any prefix of history is a past state"
+    },
+    {
+      "id": "commands-record-events",
+      "kind": "behaviour",
+      "title": "Commands record events and apply them"
+    },
+    {
+      "id": "rules-reject-without-events",
+      "kind": "behaviour",
+      "title": "Rejected commands leave no event"
+    },
+    {
+      "id": "save-appends-pending",
+      "kind": "behaviour",
+      "title": "saveTo appends pending events once"
+    },
+    {
+      "id": "stale-save-conflicts",
+      "kind": "behaviour",
+      "title": "A stale save is a VersionConflict"
+    },
+    {
+      "id": "history-is-protected",
+      "kind": "behaviour",
+      "title": "Stored history cannot be edited from outside"
+    },
+    {
+      "id": "events-are-immutable-records",
+      "kind": "design",
+      "title": "Events are records"
+    },
+    {
+      "id": "store-keeps-events-not-state",
+      "kind": "design",
+      "title": "The store holds events, not state"
+    },
+    {
+      "id": "rebuild-is-a-static-replay",
+      "kind": "design",
+      "title": "State is rebuilt by StockItem.replay"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "State is never assigned directly. It is a fold over the events, and the same fold runs when you replay history and when a new command succeeds."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Write one private method that applies a single event to `onHand` and bumps `version`. `replay` calls it for each historical event. A command validates, builds the event, then calls a `record` helper that applies it and adds it to a pending list."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The save uses optimistic concurrency:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "void saveTo(EventStore store, String streamId) {",
+          "    store.append(streamId, version - pending.size(), pending);",
+          "    pending.clear();",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 10
+}
