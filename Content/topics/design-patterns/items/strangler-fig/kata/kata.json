@@ -1,0 +1,43 @@
+{
+  "kind": "refactor",
+  "title": "Strangle the legacy pages behind a facade",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`Site` mixes the routing rules with both systems; migrating one more path means editing it."},
+    {"type": "p", "text": "Put a **strangler facade** in front. `new Site().handle(userId, path)` must return exactly what it returns now."},
+    {"type": "bullets", "items": [
+      "Add `interface Backend` with `String handle(String userId, String path)`; the old and new systems each implement it.",
+      "Add `StranglerFacade implements Backend` with `StranglerFacade(Backend legacy, Backend modern)` and a chainable `migrate(String prefix, int percent)`.",
+      "A path starting with a migrated prefix goes to `modern` when `Math.floorMod(userId.hashCode(), 100) < percent`, else `legacy`. The first matching rule wins; no rule means `legacy`.",
+      "`Site` just builds the facade with its two rules and delegates."]}
+  ],
+  "starter": ["Site.java"],
+  "readOnly": [],
+  "solution": ["Site.java", "Backend.java", "StranglerFacade.java"],
+  "tests": ["StranglerFigKataTest.java"],
+  "checks": [
+    {"id": "migrated-prefix-goes-modern", "kind": "behaviour", "title": "/customers is fully migrated"},
+    {"id": "partial-rollout-by-user", "kind": "behaviour", "title": "/invoices is migrated for half the users"},
+    {"id": "a-user-sticks-to-one-side", "kind": "behaviour", "title": "A user always sees the same system"},
+    {"id": "unmigrated-stays-legacy", "kind": "behaviour", "title": "Other paths stay on legacy"},
+    {"id": "backend-is-one-method", "kind": "design", "title": "Backend is a one-method interface"},
+    {"id": "facade-holds-both-systems", "kind": "design", "title": "The facade is a Backend over two Backends"},
+    {"id": "facade-routes-by-rule", "kind": "design", "title": "The facade routes any backends by rule"},
+    {"id": "site-delegates-to-facade", "kind": "design", "title": "Site no longer routes by itself"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Callers must not notice which system answers. Give the old system and the new one the same interface, and put the choosing in one place that is also that interface."}],
+    [{"type": "p", "text": "`StranglerFacade` keeps two `Backend` fields and an ordered `Map<String, Integer>` of prefix to percent. `migrate` adds a rule and returns `this`. `Site` builds one facade and forwards to it."}],
+    [{"type": "p", "text": "Routing inside the facade:"},
+     {"type": "code", "language": "java", "lines": [
+       "for (var rule : migrated.entrySet()) {",
+       "    if (path.startsWith(rule.getKey())) {",
+       "        int bucket = Math.floorMod(userId.hashCode(), 100);",
+       "        return (bucket < rule.getValue() ? modern : legacy)",
+       "            .handle(userId, path);",
+       "    }",
+       "}",
+       "return legacy.handle(userId, path);"]}]
+  ],
+  "timeoutSeconds": 10
+}

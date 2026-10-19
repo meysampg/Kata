@@ -1,0 +1,46 @@
+{
+  "kind": "implement",
+  "title": "Build a pool of competing consumers",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Several workers pull from one queue; each job goes to exactly one of them."},
+    {"type": "p", "text": "Implement `Worker` and `WorkerPool`. `Job`, `Job.STOP` and `JobHandler` are given and must not change."},
+    {"type": "bullets", "items": [
+      "`Worker(BlockingQueue<Job>, JobHandler)` is a `Runnable`: it blocks on the queue, calls the handler for each job, and returns when it takes `Job.STOP`.",
+      "A handler exception skips that job only. An interrupt ends the worker and keeps the interrupt flag.",
+      "`WorkerPool(int workers, JobHandler)` starts that many workers on one shared queue. `submit(Job)` enqueues.",
+      "`shutdown()` lets queued jobs finish, stops every worker with one `Job.STOP` each, and returns once they have ended."]}
+  ],
+  "starter": ["Job.java", "Worker.java", "WorkerPool.java"],
+  "readOnly": ["Job.java"],
+  "solution": ["Job.java", "Worker.java", "WorkerPool.java"],
+  "tests": ["CompetingConsumersKataTest.java"],
+  "checks": [
+    {"id": "worker-drains-until-stop", "kind": "behaviour", "title": "A worker stops at the poison pill"},
+    {"id": "worker-survives-failing-job", "kind": "behaviour", "title": "A failing job does not kill the worker"},
+    {"id": "worker-ends-on-interrupt", "kind": "behaviour", "title": "An interrupt ends an idle worker"},
+    {"id": "each-job-once", "kind": "behaviour", "title": "Every job is handled exactly once"},
+    {"id": "jobs-run-in-parallel", "kind": "behaviour", "title": "Workers really compete in parallel"},
+    {"id": "shutdown-drains-queue", "kind": "behaviour", "title": "shutdown() waits for queued jobs"},
+    {"id": "pool-shares-one-queue", "kind": "design", "title": "All workers share one queue"},
+    {"id": "no-polling-or-locks", "kind": "design", "title": "Waiting is done by the queue, not by sleeping"},
+    {"id": "worker-keeps-no-job-state", "kind": "design", "title": "Workers share nothing mutable but the queue"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The queue is the only thing the workers share, and `take()` already makes an idle worker wait. Which single worker gets a job is the queue's decision, not yours."}],
+    [{"type": "p", "text": "`Worker.run` loops on `queue.take()` and returns on `Job.STOP`. `WorkerPool` owns the `LinkedBlockingQueue`, starts N threads running `Worker`, and in `shutdown` adds one `STOP` per worker then joins."}],
+    [{"type": "p", "text": "Worker loop:"},
+     {"type": "code", "language": "java", "lines": [
+       "try {",
+       "    while (true) {",
+       "        Job job = queue.take();",
+       "        if (job == Job.STOP) return;",
+       "        try { handler.handle(job); } catch (Exception e) { }",
+       "    }",
+       "} catch (InterruptedException e) {",
+       "    Thread.currentThread().interrupt();",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10,
+  "stressRuns": 20
+}

@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Build an API gateway",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Clients talk to one gateway; the gateway authenticates, routes and combines."},
+    {"type": "p", "text": "Implement `Gateway` in `Gateway.java`. `Request`, `Response` and `Service` are given and must not change."},
+    {"type": "bullets", "items": [
+      "`new Gateway(Set<String> tokens)`; `route(prefix, service)` and `aggregate(path, prefixes)` return the gateway so calls chain.",
+      "`handle(request)`: a token that is null or not allowed gives `401 \"unauthorized\"`, before anything else.",
+      "An aggregate path calls each listed route and joins the bodies with `\" | \"`, in order, as `200`. A route that throws, answers 5xx or does not exist contributes `<prefix>:n/a`.",
+      "Otherwise forward to the route with the **longest** matching prefix, whatever the order of registration. No match gives `404 \"no route\"`."]}
+  ],
+  "starter": ["Messages.java", "Gateway.java"],
+  "readOnly": ["Messages.java"],
+  "solution": ["Messages.java", "Gateway.java"],
+  "tests": ["ApiGatewayKataTest.java"],
+  "checks": [
+    {"id": "forwards-to-route", "kind": "behaviour", "title": "Requests reach the matching service"},
+    {"id": "service-receives-request", "kind": "behaviour", "title": "The service sees the original request"},
+    {"id": "longest-prefix-wins", "kind": "behaviour", "title": "The longest prefix wins in any order"},
+    {"id": "unknown-path-is-404", "kind": "behaviour", "title": "Unrouted paths give 404"},
+    {"id": "auth-first", "kind": "behaviour", "title": "Bad tokens never reach a service"},
+    {"id": "aggregate-joins-in-order", "kind": "behaviour", "title": "An aggregate joins its parts in order"},
+    {"id": "aggregate-degrades", "kind": "behaviour", "title": "A failing part degrades to n/a"},
+    {"id": "aggregate-needs-auth", "kind": "behaviour", "title": "Aggregates are authenticated too"},
+    {"id": "api-shape", "kind": "design", "title": "route and aggregate chain"},
+    {"id": "routes-are-data", "kind": "design", "title": "Routes are data, not branches"},
+    {"id": "gateway-names-no-service", "kind": "design", "title": "No fixed service fields"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Routes are data: a table from prefix to service. Authentication happens once, at the door, before any lookup. What decides between two prefixes that both match?"}],
+    [{"type": "p", "text": "Keep a `Map<String, Service>` for routes and a `Map<String, List<String>>` for aggregates. In `handle`: check the token, look for an aggregate by exact path, else scan prefixes keeping the longest match."}],
+    [{"type": "p", "text": "Longest match:"},
+     {"type": "code", "language": "java", "lines": [
+       "String best = null;",
+       "for (String prefix : routes.keySet()) {",
+       "    if (path.startsWith(prefix)",
+       "            && (best == null || prefix.length() > best.length())) {",
+       "        best = prefix;",
+       "    }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

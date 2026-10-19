@@ -1,0 +1,41 @@
+{
+  "kind": "refactor",
+  "title": "Replace the dual write with an outbox",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "`OrderService` saves the order, then publishes; if publishing fails, the event is lost."},
+    {"type": "p", "text": "Write the message into the **outbox** in the same transaction as the order, and let a **relay** publish it later. `Shop.place` and `Shop.deliver` must keep working for callers. `Db`, `Message` and `Broker` are given."},
+    {"type": "bullets", "items": [
+      "`OrderService(Db db)`: `place(id)` saves the order and calls `tx.enqueue(\"OrderPlaced\", id)` in one `inTransaction`. It must not know the broker.",
+      "`Relay(Db db, Broker broker)`: `int pump()` publishes `db.pending()` oldest first and calls `markPublished(id)` only after the broker accepted it. Stop at the first `IOException`; return the number sent.",
+      "`Shop(db, broker)` wires both; `deliver()` calls `pump()`."]}
+  ],
+  "starter": ["Db.java", "OrderService.java"],
+  "readOnly": ["Db.java"],
+  "solution": ["Db.java", "OrderService.java", "Relay.java", "Shop.java"],
+  "tests": ["TransactionalOutboxKataTest.java"],
+  "checks": [
+    {"id": "order-is-saved-and-announced", "kind": "behaviour", "title": "A placed order is saved and announced"},
+    {"id": "rollback-announces-nothing", "kind": "behaviour", "title": "A rejected order announces nothing"},
+    {"id": "messages-keep-order", "kind": "behaviour", "title": "Messages arrive in order"},
+    {"id": "delivered-once", "kind": "behaviour", "title": "Nothing is delivered twice"},
+    {"id": "service-does-not-publish", "kind": "design", "title": "OrderService no longer talks to the broker"},
+    {"id": "order-and-row-commit-together", "kind": "design", "title": "Order and outbox row share one transaction"},
+    {"id": "relay-retries-until-acked", "kind": "design", "title": "The relay keeps rows until acknowledged"},
+    {"id": "relay-stops-at-first-failure", "kind": "design", "title": "The relay preserves order across failures"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Two systems cannot commit together, but one database can. What if the \"message to send\" becomes a row written in the same transaction as the order? Who then sends it?"}],
+    [{"type": "p", "text": "`OrderService` calls `tx.saveOrder` and `tx.enqueue` inside one `inTransaction`. A new `Relay` reads `db.pending()`, publishes each row, and only afterwards calls `db.markPublished`. `Shop` connects them."}],
+    [{"type": "p", "text": "The relay loop:"},
+     {"type": "code", "language": "java", "lines": [
+       "for (Message row : db.pending()) {",
+       "    try { broker.publish(row); }",
+       "    catch (IOException e) { return sent; }",
+       "    db.markPublished(row.id());",
+       "    sent++;",
+       "}",
+       "return sent;"]}]
+  ],
+  "timeoutSeconds": 10
+}

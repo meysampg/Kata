@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Orchestrate a saga with compensation",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A checkout touches services that share no transaction, so a failure must be undone by hand."},
+    {"type": "p", "text": "Implement `Saga` in `Saga.java`. `Step` is given and must not change."},
+    {"type": "bullets", "items": [
+      "`new Saga(List<Step>)`; `run()` executes each `action()` in order and returns `true` if all succeed.",
+      "When an action throws a `RuntimeException`, stop, then run the `compensation()` of the steps that **succeeded**, newest first. The failed step is not compensated. `run()` returns `false`.",
+      "If a compensation throws, keep going with the older ones.",
+      "`log()` lists events in order: `do x`, `fail x`, `undo x`, or `stuck x` (a compensation that threw)."]}
+  ],
+  "starter": ["Step.java", "Saga.java"],
+  "readOnly": ["Step.java"],
+  "solution": ["Step.java", "Saga.java"],
+  "tests": ["SagaKataTest.java"],
+  "checks": [
+    {"id": "happy-path", "kind": "behaviour", "title": "All steps succeed, nothing is undone"},
+    {"id": "undo-in-reverse", "kind": "behaviour", "title": "Compensations run newest first"},
+    {"id": "failed-step-not-undone", "kind": "behaviour", "title": "The failed step is not compensated"},
+    {"id": "stops-at-failure", "kind": "behaviour", "title": "Later steps never run after a failure"},
+    {"id": "undo-continues-after-failure", "kind": "behaviour", "title": "A failing compensation does not stop the rest"},
+    {"id": "empty-saga", "kind": "behaviour", "title": "An empty saga succeeds"},
+    {"id": "saga-uses-compensation", "kind": "design", "title": "Saga drives each step's action and compensation"},
+    {"id": "saga-knows-no-step-names", "kind": "design", "title": "The workflow is data, not branches"},
+    {"id": "saga-takes-step-list", "kind": "design", "title": "Saga is built from a list of steps"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Which steps need undoing when step N fails? Only the ones that already succeeded, and the most recent one first. What data structure hands things back newest first?"}],
+    [{"type": "p", "text": "Keep a `Deque<Step>` of completed steps and `push` after each success. On failure, `pop` until empty, running `compensation()` inside its own try/catch so one bad undo cannot stop the others."}],
+    [{"type": "p", "text": "Compensation loop:"},
+     {"type": "code", "language": "java", "lines": [
+       "while (!done.isEmpty()) {",
+       "    Step step = done.pop();",
+       "    try {",
+       "        step.compensation().run();",
+       "        log.add(\"undo \" + step.name());",
+       "    } catch (RuntimeException e) {",
+       "        log.add(\"stuck \" + step.name());",
+       "    }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

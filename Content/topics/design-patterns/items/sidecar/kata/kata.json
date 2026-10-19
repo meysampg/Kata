@@ -1,0 +1,37 @@
+{
+  "kind": "refactor",
+  "title": "Pull the platform concerns out of OrderApp",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`OrderApp` authenticates, logs and counts requests as well as handling orders."},
+    {"type": "p", "text": "Move the cross-cutting concerns into a **sidecar** that wraps the app. `Pipeline.build(tokens, telemetry)` must keep answering, logging and counting exactly as now."},
+    {"type": "bullets", "items": [
+      "`OrderApp` keeps only the business logic: a no-argument constructor, no tokens, no `Telemetry`.",
+      "Add `Sidecar implements Handler` with constructor `Sidecar(Handler app, Set<String> tokens, Telemetry telemetry)`. It checks the `token` header, forwards to the app, then records the outcome.",
+      "`Pipeline.build` returns the `Sidecar` around a new `OrderApp`."]}
+  ],
+  "starter": ["Handler.java", "OrderApp.java"],
+  "readOnly": ["Handler.java"],
+  "solution": ["Handler.java", "OrderApp.java", "Sidecar.java", "Pipeline.java"],
+  "tests": ["SidecarKataTest.java"],
+  "checks": [
+    {"id": "allowed-request-reaches-app", "kind": "behaviour", "title": "Authorised requests reach the app"},
+    {"id": "bad-token-denied", "kind": "behaviour", "title": "Bad or missing tokens are denied"},
+    {"id": "access-log", "kind": "behaviour", "title": "Every request is logged, denials too"},
+    {"id": "metrics", "kind": "behaviour", "title": "Status codes are counted"},
+    {"id": "app-holds-no-platform-concerns", "kind": "design", "title": "OrderApp holds only business logic"},
+    {"id": "sidecar-wraps-a-handler", "kind": "design", "title": "Sidecar wraps a Handler"},
+    {"id": "sidecar-fronts-any-app", "kind": "design", "title": "Sidecar works with an app it has never seen"},
+    {"id": "pipeline-wires-the-sidecar", "kind": "design", "title": "Pipeline returns the sidecar"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Which lines of `handle` are about orders, and which would be identical in any other service? The second group wants to live next to the app, not inside it."}],
+    [{"type": "p", "text": "`Sidecar` implements the same `Handler` interface as `OrderApp` and holds a `private final Handler app`. It does the token check and `telemetry.record`, and delegates in between."}],
+    [{"type": "p", "text": "The wiring:"},
+     {"type": "code", "language": "java", "lines": [
+       "static Handler build(Set<String> tokens, Telemetry t) {",
+       "    return new Sidecar(new OrderApp(), tokens, t);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

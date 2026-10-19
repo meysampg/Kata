@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Write a client-side ambassador",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "The app asks one `KeyValue`; the ambassador handles shards, retries and timeouts for it."},
+    {"type": "p", "text": "Implement `Ambassador implements KeyValue` in `Ambassador.java`. `KeyValue` and `ProfileService` are given and must not change."},
+    {"type": "bullets", "items": [
+      "`Ambassador(List<List<KeyValue>> shards, int attempts, long timeoutMs)`: the shard of a key is `Math.floorMod(key.hashCode(), shards.size())`; replicas are tried in order.",
+      "Each replica gets up to `attempts` tries. An `IOException`, or a try that takes longer than `timeoutMs`, counts as a failure; then retry, then try the next replica.",
+      "When all are exhausted, throw `IOException` whose message starts `shard N unavailable` and whose cause is the last failure.",
+      "A `RuntimeException` from a replica is a bug: it propagates at once, with no retry."]}
+  ],
+  "starter": ["KeyValue.java", "Ambassador.java"],
+  "readOnly": ["KeyValue.java"],
+  "solution": ["KeyValue.java", "Ambassador.java"],
+  "tests": ["AmbassadorKataTest.java"],
+  "checks": [
+    {"id": "routes-by-key-hash", "kind": "behaviour", "title": "A key goes to its shard"},
+    {"id": "success-calls-once", "kind": "behaviour", "title": "A healthy call is made once"},
+    {"id": "retries-same-replica", "kind": "behaviour", "title": "Transient failures are retried"},
+    {"id": "fails-over-after-attempts", "kind": "behaviour", "title": "Exhausted replicas fail over"},
+    {"id": "gives-up-with-cause", "kind": "behaviour", "title": "A dead shard gives a clear IOException"},
+    {"id": "bugs-are-not-retried", "kind": "behaviour", "title": "Runtime exceptions are not retried"},
+    {"id": "timeout-fails-over", "kind": "behaviour", "title": "A hanging replica times out"},
+    {"id": "profile-service-unchanged", "kind": "behaviour", "title": "ProfileService works through it"},
+    {"id": "ambassador-is-a-keyvalue", "kind": "design", "title": "The ambassador implements the same port"},
+    {"id": "application-stays-unaware", "kind": "design", "title": "The application knows nothing of it"},
+    {"id": "no-sleeping-retry", "kind": "design", "title": "Retries do not sleep"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The ambassador is the same interface as the thing it fronts, so the app cannot tell the difference. Two nested loops: replicas outside, tries inside. Which failures deserve a retry?"}],
+    [{"type": "p", "text": "For the timeout, run each try on its own thread (a virtual thread is cheap) completing a `CompletableFuture`, and `get(timeoutMs, MILLISECONDS)`. Map `TimeoutException` to an `IOException` so the retry logic is one path."}],
+    [{"type": "p", "text": "Skeleton:"},
+     {"type": "code", "language": "java", "lines": [
+       "for (KeyValue replica : shards.get(shard)) {",
+       "    for (int i = 0; i < attempts; i++) {",
+       "        try { return attempt(replica, key); }",
+       "        catch (IOException e) { last = e; }",
+       "    }",
+       "}",
+       "throw new IOException(\"shard \" + shard + \" unavailable\", last);"]}]
+  ],
+  "timeoutSeconds": 10
+}
