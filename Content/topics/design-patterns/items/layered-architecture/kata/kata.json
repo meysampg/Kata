@@ -1,0 +1,40 @@
+{
+  "kind": "refactor",
+  "title": "Split the loan desk into layers",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`LoanController` formats replies, applies lending rules and stores books, all at once."},
+    {"type": "p", "text": "Split it into three layers. `Library.open(List<Book>)` and every reply line must stay exactly as they are."},
+    {"type": "bullets", "items": [
+      "Data: `interface BookRepository` with `Book find(String isbn)` (null when absent) and `void save(Book)`, plus an in-memory implementation.",
+      "Business: `LoanService(BookRepository)` with `Book lend(String)` and `Book giveBack(String)`. Unknown book: `IllegalArgumentException`; wrong state: `IllegalStateException`.",
+      "Presentation: `LoanController(LoanService)` only turns outcomes into `200`, `404` and `409` lines.",
+      "Dependencies point down only. `Library.open` does the wiring."]}
+  ],
+  "starter": ["Library.java"],
+  "readOnly": [],
+  "solution": ["Library.java", "BookRepository.java", "LoanService.java", "LoanController.java"],
+  "tests": ["LayeredKataTest.java"],
+  "checks": [
+    {"id": "lend-and-return", "kind": "behaviour", "title": "Lending and returning behave as before"},
+    {"id": "unknown-book", "kind": "behaviour", "title": "Unknown books give 404"},
+    {"id": "return-not-lent", "kind": "behaviour", "title": "Returning a free book gives 409"},
+    {"id": "layers-exist", "kind": "design", "title": "Repository, service and controller exist"},
+    {"id": "controller-skips-data", "kind": "design", "title": "The controller never touches the data layer"},
+    {"id": "controller-uses-service", "kind": "design", "title": "The controller holds only the service"},
+    {"id": "service-skips-presentation", "kind": "design", "title": "The service knows nothing of presentation"},
+    {"id": "service-runs-on-any-repository", "kind": "design", "title": "The service works on any repository"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Three jobs share one class: talking to the user, deciding what may happen, and keeping books. Each job becomes a layer that may only call the one below it."}],
+    [{"type": "p", "text": "`LoanController` holds a `private final LoanService`. `LoanService` holds a `BookRepository` and returns `Book`s or throws. `InMemoryBookRepository` owns the map. `Library.open` builds all three."}],
+    [{"type": "p", "text": "The controller keeps only the translation of outcomes:"},
+     {"type": "code", "language": "java", "lines": [
+       "String lend(String isbn) {",
+       "    try { return \"200 \" + service.lend(isbn).title(); }",
+       "    catch (IllegalArgumentException e) { return \"404 \" + e.getMessage(); }",
+       "    catch (IllegalStateException e) { return \"409 \" + e.getMessage(); }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

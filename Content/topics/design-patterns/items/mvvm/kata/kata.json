@@ -1,0 +1,39 @@
+{
+  "kind": "implement",
+  "title": "Build a sign-in ViewModel",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A sign-in screen needs state a view can bind to and an action it can call, without the model ever seeing a view."},
+    {"type": "p", "text": "`Observable<T>` is given and must stay as it is. Implement `SignInViewModel(BiPredicate<String, String> auth)`, where `auth.test(email, password)` says whether the sign-in works."},
+    {"type": "bullets", "items": [
+      "Fields `email`, `password`, `canSubmit` (starts `false`) and `status` (starts `\"\"`), all `Observable`.",
+      "`canSubmit` is true when `email` contains `@` and `password` has at least 8 characters, and follows every change by itself.",
+      "`submit()` does nothing unless `canSubmit`; otherwise `status` becomes `Welcome` or `Denied`."]}
+  ],
+  "starter": ["Observable.java", "SignInViewModel.java"],
+  "readOnly": ["Observable.java"],
+  "solution": ["Observable.java", "SignInViewModel.java"],
+  "tests": ["MvvmKataTest.java"],
+  "checks": [
+    {"id": "starts-disabled", "kind": "behaviour", "title": "A fresh form cannot be submitted"},
+    {"id": "can-submit-rule", "kind": "behaviour", "title": "canSubmit follows the email and password rules"},
+    {"id": "bindings-see-changes", "kind": "behaviour", "title": "A bound view sees canSubmit change"},
+    {"id": "submit-reports-outcome", "kind": "behaviour", "title": "submit sets Welcome or Denied"},
+    {"id": "invalid-form-is-not-sent", "kind": "behaviour", "title": "An invalid form never reaches auth"},
+    {"id": "state-is-observable", "kind": "design", "title": "The state is exposed as Observable fields"},
+    {"id": "viewmodel-knows-no-view", "kind": "design", "title": "The ViewModel references no view type"},
+    {"id": "derived-state-is-computed-once", "kind": "design", "title": "canSubmit reacts instead of being polled"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A view should be able to subscribe and render, and the ViewModel should never call the view. Everything the screen shows becomes an `Observable`; everything it can do becomes a method."}],
+    [{"type": "p", "text": "Keep the `auth` predicate in a private field. In the constructor, `bind` on `email` and `password` to a private `refresh()` that sets `canSubmit` from both values. `submit()` returns early when `canSubmit` is false."}],
+    [{"type": "p", "text": "The reactive core:"},
+     {"type": "code", "language": "java", "lines": [
+       "email.bind(e -> refresh());",
+       "password.bind(p -> refresh());",
+       "// refresh():",
+       "canSubmit.set(email.get().contains(\"@\")",
+       "    && password.get().length() >= 8);"]}]
+  ],
+  "timeoutSeconds": 10
+}

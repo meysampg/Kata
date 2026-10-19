@@ -1,0 +1,38 @@
+{
+  "kind": "refactor",
+  "title": "Inject the reminder's collaborators",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`InvoiceReminder` builds its own `InvoiceStore`, calls the `MailGateway` singleton and reads today's date, so no test can control it."},
+    {"type": "p", "text": "Inject what it needs. `Reminders.create()` is the composition root: it keeps its signature and behaviour, and it is the only place that picks implementations."},
+    {"type": "bullets", "items": [
+      "`interface InvoiceSource` with `List<Invoice> all()`; `InvoiceStore` implements it.",
+      "`interface Mailer` with `void send(String to, String body)`.",
+      "`InvoiceReminder(InvoiceSource, Mailer, java.time.Clock)` with `int remind()`.",
+      "Fail fast with `NullPointerException` on a null collaborator."]}
+  ],
+  "starter": ["Reminders.java"],
+  "readOnly": [],
+  "solution": ["Reminders.java", "InvoiceReminder.java"],
+  "tests": ["InjectionKataTest.java"],
+  "checks": [
+    {"id": "overdue-are-reminded", "kind": "behaviour", "title": "Overdue invoices are mailed"},
+    {"id": "later-runs-add-up", "kind": "behaviour", "title": "Each run mails again"},
+    {"id": "collaborators-are-injected", "kind": "design", "title": "Collaborators arrive through the constructor"},
+    {"id": "no-hard-wiring", "kind": "design", "title": "No new, no static singleton inside the reminder"},
+    {"id": "clock-is-injected", "kind": "design", "title": "The reminder follows the injected clock"},
+    {"id": "missing-collaborator-fails-early", "kind": "design", "title": "A null collaborator fails at construction"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Look at every noun the reminder gets for free: a store, a mail gateway, the date. Each is a dependency hidden inside the class. Turn each into something the constructor receives."}],
+    [{"type": "p", "text": "Extract `InvoiceSource` and `Mailer` interfaces, hold all three collaborators in `private final` fields, and move the `new` calls into `Reminders.create()`."}],
+    [{"type": "p", "text": "Ask the injected clock for today and wire the singleton in the root:"},
+     {"type": "code", "language": "java", "lines": [
+       "LocalDate today = LocalDate.now(clock);",
+       "// Reminders.create():",
+       "Mailer mailer = (to, body) -> MailGateway.INSTANCE.send(to, body);",
+       "return new InvoiceReminder(",
+       "    new InvoiceStore(), mailer, Clock.systemDefaultZone());"]}]
+  ],
+  "timeoutSeconds": 10
+}

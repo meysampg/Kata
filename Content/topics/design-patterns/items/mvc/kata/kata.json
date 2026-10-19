@@ -1,0 +1,40 @@
+{
+  "kind": "implement",
+  "title": "Build a thermostat in Model, View, Controller",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Wire a thermostat so the model, the view and the controller each do one job and know the least possible."},
+    {"type": "p", "text": "`ModelListener` is given. Fill in the three skeletons."},
+    {"type": "bullets", "items": [
+      "`Thermostat` (model): `target()`; `adjust(int delta)` clamps the target to 10..30 and tells every listener the new target, even when it did not move.",
+      "`TextView(Consumer<String>)` (view): a `ModelListener` that writes `Target: 23C` style lines.",
+      "`Controller(Thermostat, Consumer<String>)`: `onInput(\"up\")` and `\"down\"` adjust by 1; anything else sends `Unknown: <text>` to the consumer.",
+      "The model knows no view or controller; the view never changes the model."]}
+  ],
+  "starter": ["ModelListener.java", "Thermostat.java", "TextView.java", "Controller.java"],
+  "readOnly": ["ModelListener.java"],
+  "solution": ["ModelListener.java", "Thermostat.java", "TextView.java", "Controller.java"],
+  "tests": ["MvcKataTest.java"],
+  "checks": [
+    {"id": "model-clamps", "kind": "behaviour", "title": "The target stays between 10 and 30"},
+    {"id": "model-notifies", "kind": "behaviour", "title": "Every listener hears every change"},
+    {"id": "view-renders", "kind": "behaviour", "title": "The view writes the target"},
+    {"id": "controller-drives-model", "kind": "behaviour", "title": "Up and down adjust; others are reported"},
+    {"id": "full-loop", "kind": "behaviour", "title": "Input, model and view work together"},
+    {"id": "model-knows-no-view", "kind": "design", "title": "The model knows neither view nor controller"},
+    {"id": "view-only-observes", "kind": "design", "title": "The view only observes the model"},
+    {"id": "controller-does-not-render", "kind": "design", "title": "The controller does not render"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Ask of each class: what does it own, and what may it know? State and rules belong to the model. Showing belongs to the view. Translating input into model calls belongs to the controller."}],
+    [{"type": "p", "text": "The model keeps a `List<ModelListener>` and calls it after each `adjust`. `TextView` implements `ModelListener` and only writes to its `Consumer`. `Controller` holds the `Thermostat` and a `Consumer<String>` for errors."}],
+    [{"type": "p", "text": "Core of the model and controller:"},
+     {"type": "code", "language": "java", "lines": [
+       "void adjust(int delta) {",
+       "    target = Math.max(10, Math.min(30, target + delta));",
+       "    for (ModelListener l : List.copyOf(listeners)) l.changed(target);",
+       "}",
+       "// Controller.onInput: \"up\" -> adjust(1), \"down\" -> adjust(-1)"]}]
+  ],
+  "timeoutSeconds": 10
+}

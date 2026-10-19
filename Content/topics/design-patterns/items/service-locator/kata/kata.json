@@ -1,0 +1,41 @@
+{
+  "kind": "implement",
+  "title": "Build a typed service locator that fails fast",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A service locator hands out services by type. Make it strict, so a missing service shows up at startup, not on a customer's request."},
+    {"type": "p", "text": "`Mailer` is given. Implement the two skeletons."},
+    {"type": "bullets", "items": [
+      "`ServiceLocator.register(Class<T>, T)` stores a service. Registering a type twice throws `IllegalStateException(\"already registered: Mailer\")`, also under concurrent calls.",
+      "`ServiceLocator.get(Class<T>)` throws `IllegalStateException(\"no service registered for Mailer\")` when absent. Names are simple class names.",
+      "Each `ServiceLocator` has its own services; nothing is static.",
+      "`SignupService(ServiceLocator)` looks the `Mailer` up in its constructor, not in `signUp`; `signUp(email)` sends the body `Welcome`."]}
+  ],
+  "starter": ["Mailer.java", "ServiceLocator.java", "SignupService.java"],
+  "readOnly": ["Mailer.java"],
+  "solution": ["Mailer.java", "ServiceLocator.java", "SignupService.java"],
+  "tests": ["LocatorKataTest.java"],
+  "checks": [
+    {"id": "register-and-get", "kind": "behaviour", "title": "get returns what register stored"},
+    {"id": "missing-fails-fast", "kind": "behaviour", "title": "A missing service fails with a clear message"},
+    {"id": "duplicate-is-rejected", "kind": "behaviour", "title": "A second registration is rejected"},
+    {"id": "locators-are-independent", "kind": "behaviour", "title": "Locators do not share services"},
+    {"id": "one-concurrent-winner", "kind": "behaviour", "title": "Racing registrations have one winner"},
+    {"id": "signup-sends", "kind": "behaviour", "title": "SignupService sends the welcome mail"},
+    {"id": "signup-fails-at-startup", "kind": "behaviour", "title": "A missing Mailer fails when SignupService is built"},
+    {"id": "locator-state-is-per-instance", "kind": "design", "title": "The registry is not static"},
+    {"id": "consumer-resolves-once", "kind": "design", "title": "SignupService resolves its Mailer once"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A locator is a map from type to instance. Two rules make it safe: be strict about what you register and what you hand out, and let consumers resolve what they need as early as possible."}],
+    [{"type": "p", "text": "Back `ServiceLocator` with an instance `ConcurrentHashMap<Class<?>, Object>`. Use `putIfAbsent` so two racing threads cannot both win. `SignupService` keeps a `private final Mailer` set in its constructor."}],
+    [{"type": "p", "text": "The strict core:"},
+     {"type": "code", "language": "java", "lines": [
+       "if (services.putIfAbsent(type, service) != null) {",
+       "    throw new IllegalStateException(",
+       "        \"already registered: \" + type.getSimpleName());",
+       "}",
+       "// SignupService: this.mailer = locator.get(Mailer.class);"]}]
+  ],
+  "timeoutSeconds": 10
+}

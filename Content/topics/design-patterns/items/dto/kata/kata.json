@@ -1,0 +1,39 @@
+{
+  "kind": "fix",
+  "title": "Stop the user API leaking password hashes",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`UserApi.show` and `list` return `User` entities, and `Json.fields` serializes every field, so each response carries the `passwordHash`."},
+    {"type": "p", "text": "Fix it with a response DTO. `User`, `Json` and `register`'s return value must not change."},
+    {"type": "bullets", "items": [
+      "Add `record UserSummary(long id, String displayName, boolean admin)`; `displayName` is `firstName lastName`.",
+      "`show(long)` returns a `UserSummary` and `list()` a `List<UserSummary>`; unknown ids still throw `IllegalArgumentException`.",
+      "`RegisterRequest` validates itself: a null email or one without `@` throws `IllegalArgumentException` from its constructor.",
+      "The entity must not know how it is presented."]}
+  ],
+  "starter": ["Json.java", "UserApi.java"],
+  "readOnly": ["Json.java"],
+  "solution": ["Json.java", "UserApi.java"],
+  "tests": ["DtoKataTest.java"],
+  "checks": [
+    {"id": "show-hides-secrets", "kind": "behaviour", "title": "show sends no hash, email or roles"},
+    {"id": "show-has-the-summary", "kind": "behaviour", "title": "show sends exactly id, displayName and admin"},
+    {"id": "list-hides-secrets", "kind": "behaviour", "title": "list sends only summaries"},
+    {"id": "register-checks-the-email", "kind": "behaviour", "title": "A bad email is refused by the request"},
+    {"id": "api-returns-dtos-not-entities", "kind": "design", "title": "The API returns DTOs, not User"},
+    {"id": "dto-is-plain-and-immutable", "kind": "design", "title": "The DTO is immutable and holds no entity"},
+    {"id": "mapping-stays-out-of-the-entity", "kind": "design", "title": "User does not build the response"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Whatever type you return is your public contract. A `User` has more fields than clients should ever see, so return a smaller type made for the wire."}],
+    [{"type": "p", "text": "Add a `UserSummary` record with only the three fields, and a mapping from `User` to it. `show` and `list` map before returning. Give `RegisterRequest` a compact constructor that checks the email."}],
+    [{"type": "p", "text": "The mapping and the request guard:"},
+     {"type": "code", "language": "java", "lines": [
+       "static UserSummary of(User u) {",
+       "    return new UserSummary(",
+       "        u.id(), u.firstName() + \" \" + u.lastName(), u.isAdmin());",
+       "}",
+       "// RegisterRequest { if (email == null || !email.contains(\"@\")) throw ...; }"]}]
+  ],
+  "timeoutSeconds": 10
+}

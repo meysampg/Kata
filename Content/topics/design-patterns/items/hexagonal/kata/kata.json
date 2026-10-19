@@ -1,0 +1,40 @@
+{
+  "kind": "refactor",
+  "title": "Put ports around the registration core",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "`Registration` sends mail through `SmtpClient` and reads the system clock, so it cannot run without them."},
+    {"type": "p", "text": "Make it a hexagon: pure rules behind ports, infrastructure in adapters. `Wiring.create()` and every result string must keep working, and `SmtpClient` stays as the fake SMTP server."},
+    {"type": "bullets", "items": [
+      "`interface UserStore` with `boolean exists(String)` and `void add(String)`.",
+      "`interface Mailer` with `void send(String to, String body)`.",
+      "`Registration(UserStore, Mailer, java.time.Clock)` keeps the rules and no infrastructure.",
+      "Adapters implement the ports. `Wiring.create()` assembles them."]}
+  ],
+  "starter": ["Signup.java"],
+  "readOnly": [],
+  "solution": ["Signup.java", "Registration.java", "Adapters.java"],
+  "tests": ["HexagonalKataTest.java"],
+  "checks": [
+    {"id": "invalid-email", "kind": "behaviour", "title": "Invalid emails are refused without mail"},
+    {"id": "duplicate-email", "kind": "behaviour", "title": "Duplicates are refused without a second mail"},
+    {"id": "welcome-mail", "kind": "behaviour", "title": "A welcome mail goes to the new user"},
+    {"id": "ports-exist", "kind": "design", "title": "UserStore and Mailer are interfaces"},
+    {"id": "domain-takes-ports", "kind": "design", "title": "Registration receives its ports and a Clock"},
+    {"id": "domain-has-no-infrastructure", "kind": "design", "title": "Registration holds no infrastructure"},
+    {"id": "domain-uses-the-injected-clock", "kind": "design", "title": "Registration runs on a fake store, mailer and clock"},
+    {"id": "store-decides-duplicates", "kind": "design", "title": "The store port decides what a duplicate is"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The rules should not know that mail goes over SMTP, that users live in a `Set`, or that time comes from the OS. Each of those is something the outside world provides."}],
+    [{"type": "p", "text": "Declare `UserStore` and `Mailer` next to `Registration` and pass them, plus a `Clock`, to its constructor. Move the `Set` into a `MemoryUserStore` and the `SmtpClient` call into an `SmtpMailer`."}],
+    [{"type": "p", "text": "Inside the core, ask the injected clock, then assemble in `Wiring`:"},
+     {"type": "code", "language": "java", "lines": [
+       "LocalDate trialEnd = LocalDate.now(clock).plusDays(14);",
+       "mailer.send(email, \"Welcome, trial ends \" + trialEnd);",
+       "// Wiring.create():",
+       "new Registration(new MemoryUserStore(), new SmtpMailer(),",
+       "    Clock.systemDefaultZone());"]}]
+  ],
+  "timeoutSeconds": 10
+}
