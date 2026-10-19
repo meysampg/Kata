@@ -1,0 +1,44 @@
+{
+  "kind": "implement",
+  "title": "Undo and redo for a text editor",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Make each edit an object that can run itself and take itself back."},
+    {"type": "p", "text": "`Doc` and `Command` are given. Implement the **command** pattern in `Editor.java`."},
+    {"type": "bullets", "items": [
+      "`Insert(Doc doc, int at, String s)` inserts `s` at `at`; its undo removes it.",
+      "`Delete(Doc doc, int from, int to)` removes `[from, to)`; its undo puts the removed text back. It must remember the text each time it executes.",
+      "`History`: `run(Command)` executes and records; `undo()` and `redo()` step back and forward; `canUndo()` and `canRedo()` report. Undo or redo with nothing to do is a no-op.",
+      "Running a new command discards the redo list.",
+      "`History` may only know `Command`: no `Doc`, `Insert` or `Delete`."]}
+  ],
+  "starter": ["Doc.java", "Editor.java"],
+  "readOnly": ["Doc.java"],
+  "solution": ["Doc.java", "Editor.java"],
+  "tests": ["CommandKataTest.java"],
+  "checks": [
+    {"id": "insert-and-undo", "kind": "behaviour", "title": "Inserts can be undone one by one"},
+    {"id": "delete-restores-what-it-removed", "kind": "behaviour", "title": "Undoing a delete restores the text"},
+    {"id": "redo-replays", "kind": "behaviour", "title": "Redo replays undone commands in order"},
+    {"id": "delete-recaptures-on-redo", "kind": "behaviour", "title": "Delete works across undo/redo cycles"},
+    {"id": "new-command-clears-redo", "kind": "behaviour", "title": "A new command clears the redo list"},
+    {"id": "empty-history-is-safe", "kind": "behaviour", "title": "An empty History ignores undo and redo"},
+    {"id": "history-drives-any-command", "kind": "design", "title": "History drives a Command it has never seen"},
+    {"id": "history-knows-no-edits", "kind": "design", "title": "History never mentions Doc, Insert or Delete"},
+    {"id": "commands-hold-their-target", "kind": "design", "title": "Insert and Delete hold their Doc"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A request becomes an object that carries everything needed to do it and to reverse it. The caller that runs and remembers requests then needs no knowledge of what they do."}],
+    [{"type": "p", "text": "`Insert` and `Delete` keep a `final Doc` and their arguments. `Delete.execute` stores what `doc.delete` returns. `History` keeps two stacks of `Command`: done and undone."}],
+    [{"type": "p", "text": "The heart of `History`:"},
+     {"type": "code", "language": "java", "lines": [
+       "void run(Command c) {",
+       "    c.execute(); done.push(c); undone.clear();",
+       "}",
+       "void undo() {",
+       "    if (done.isEmpty()) return;",
+       "    Command c = done.pop(); c.undo(); undone.push(c);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

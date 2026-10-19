@@ -1,0 +1,42 @@
+{
+  "kind": "refactor",
+  "title": "Split the invoice report into its three jobs",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`ReportService` parses CSV, builds text and delivers it, for three different teams."},
+    {"type": "p", "text": "Give each job its own type, and leave `ReportService` to coordinate them. `Reports.run(csv, outbox)` must keep returning and sending exactly what it does now."},
+    {"type": "bullets", "items": [
+      "`InvoiceParser` (no-arg constructor) with `List<Line> parse(String csv)`.",
+      "`InvoiceFormatter` (no-arg constructor) with `String format(List<Line> lines)`.",
+      "`interface Sender` with `void send(String text)`.",
+      "`ReportService(InvoiceParser, InvoiceFormatter, Sender)` keeps `String run(String csv)`.",
+      "`Line` and the `Reports` entry point stay."]}
+  ],
+  "starter": ["ReportService.java"],
+  "readOnly": [],
+  "solution": ["ReportService.java", "Parts.java"],
+  "tests": ["SrpKataTest.java"],
+  "checks": [
+    {"id": "report-text", "kind": "behaviour", "title": "The report text is unchanged"},
+    {"id": "report-is-sent", "kind": "behaviour", "title": "The report is delivered once"},
+    {"id": "bad-rows-rejected", "kind": "behaviour", "title": "Bad input is rejected and nothing is sent"},
+    {"id": "parser-role", "kind": "design", "title": "InvoiceParser only parses"},
+    {"id": "formatter-role", "kind": "design", "title": "InvoiceFormatter only formats"},
+    {"id": "sender-role", "kind": "design", "title": "Sender is a one-method interface"},
+    {"id": "service-only-coordinates", "kind": "design", "title": "ReportService neither parses, formats nor stores"},
+    {"id": "parts-are-swappable", "kind": "design", "title": "ReportService accepts any Sender"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Ask who asks for each change: the CSV owner, whoever designs the text, whoever runs delivery. Each of those is a reason to change, so each wants its own home."}],
+    [{"type": "p", "text": "Move the row loop into `InvoiceParser.parse` and the `StringBuilder` work into `InvoiceFormatter.format`. Delivery becomes the `Sender` interface, injected into `ReportService`, which just calls the three in order."}],
+    [{"type": "p", "text": "Wire the old entry point to a method reference:"},
+     {"type": "code", "language": "java", "lines": [
+       "String run(String csv) {",
+       "    String text = formatter.format(parser.parse(csv));",
+       "    sender.send(text);",
+       "    return text;",
+       "}",
+       "// Reports.run: new ReportService(..., outbox::add)"]}]
+  ],
+  "timeoutSeconds": 10
+}

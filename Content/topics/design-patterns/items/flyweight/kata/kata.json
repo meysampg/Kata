@@ -1,0 +1,42 @@
+{
+  "kind": "refactor",
+  "title": "Share what every oak looks like",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A forest of a million trees builds a million identical textures."},
+    {"type": "p", "text": "Refactor so trees of the same species and colour **share** one object. `Forest.plant`, `size` and `draw` must return what they return now."},
+    {"type": "bullets", "items": [
+      "Move what is shared (species, colour, `Texture`) into `TreeType`.",
+      "Add `TreeTypes.of(String species, String color)`: the same arguments always give the same `TreeType` instance.",
+      "`Tree` keeps only its position and its `TreeType`.",
+      "`Forest` and `Tree` never call `new Texture` or `new TreeType`.",
+      "Leave `Texture.java` as it is."]}
+  ],
+  "starter": ["Texture.java", "Forest.java"],
+  "readOnly": ["Texture.java"],
+  "solution": ["Texture.java", "Forest.java"],
+  "tests": ["FlyweightKataTest.java"],
+  "checks": [
+    {"id": "draw-text", "kind": "behaviour", "title": "Trees draw the same text"},
+    {"id": "many-trees-keep-their-positions", "kind": "behaviour", "title": "Each tree keeps its own position"},
+    {"id": "textures-load-once-per-kind", "kind": "design", "title": "1000 trees of 3 kinds load at most 3 Textures"},
+    {"id": "two-forests-share", "kind": "design", "title": "A second forest loads nothing new"},
+    {"id": "factory-returns-the-same-instance", "kind": "design", "title": "TreeTypes.of returns one shared instance"},
+    {"id": "tree-and-forest-do-not-build-types", "kind": "design", "title": "Only the factory builds TreeType and Texture"},
+    {"id": "tree-keeps-no-appearance", "kind": "design", "title": "Tree keeps only extrinsic state"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Split each tree's data into what is the same for every oak (species, colour, texture) and what is unique (x, y). Share the first part, keep the second per tree."}],
+    [{"type": "p", "text": "Create `TreeType` for the shared part and `TreeTypes.of` as a cache keyed by species and colour. `Tree` becomes x, y and a `TreeType`; `Forest.plant` asks the factory."}],
+    [{"type": "p", "text": "The factory can be one map:"},
+     {"type": "code", "language": "java", "lines": [
+       "private static final Map<String, TreeType> POOL =",
+       "    new ConcurrentHashMap<>();",
+       "static TreeType of(String species, String color) {",
+       "    return POOL.computeIfAbsent(species + \"/\" + color,",
+       "        k -> new TreeType(species, color,",
+       "            new Texture(species, color)));",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

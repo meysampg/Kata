@@ -1,0 +1,40 @@
+{
+  "kind": "refactor",
+  "title": "Tell the Account instead of asking it",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`Teller` reads an account's balance and overdraft, decides, then writes the new balance back."},
+    {"type": "p", "text": "Move the rule to where the data lives, so no caller can forget it. `Teller.withdraw` and `Teller.transfer` must return and change exactly what they do now, including leaving everything untouched when they refuse."},
+    {"type": "bullets", "items": [
+      "`boolean Account.withdraw(long amount)`: false and no change when `amount` exceeds balance plus overdraft.",
+      "`void Account.deposit(long amount)`.",
+      "Remove `setBalance` and `getOverdraft`; keep `getBalance()` for reading.",
+      "`Teller` keeps its two methods but never reads or writes account state."]}
+  ],
+  "starter": ["Accounts.java"],
+  "readOnly": [],
+  "solution": ["Accounts.java"],
+  "tests": ["TellDontAskKataTest.java"],
+  "checks": [
+    {"id": "withdraw-within-balance", "kind": "behaviour", "title": "Withdrawing within the balance works"},
+    {"id": "overdraft-allowed", "kind": "behaviour", "title": "The overdraft is usable"},
+    {"id": "rejected-withdrawal-changes-nothing", "kind": "behaviour", "title": "A refused withdrawal changes nothing"},
+    {"id": "transfer-moves-money", "kind": "behaviour", "title": "A transfer moves the money"},
+    {"id": "failed-transfer-changes-nothing", "kind": "behaviour", "title": "A refused transfer changes nothing"},
+    {"id": "account-owns-the-rules", "kind": "design", "title": "Account offers withdraw and deposit"},
+    {"id": "no-raw-state-exposed", "kind": "design", "title": "Account no longer exposes setBalance or the overdraft"},
+    {"id": "teller-does-not-ask", "kind": "design", "title": "Teller never asks for state"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Count how many times `Teller` reaches into `Account` for numbers it then computes with. The rule \"can this be afforded?\" is knowledge about the account, so it belongs inside it."}],
+    [{"type": "p", "text": "Give `Account` `withdraw(long)` that checks and mutates itself, and `deposit(long)`. `Teller.withdraw` becomes one delegating call, and `transfer` tells one account to withdraw and the other to deposit."}],
+    [{"type": "p", "text": "The rule moves, unchanged:"},
+     {"type": "code", "language": "java", "lines": [
+       "boolean withdraw(long amount) {",
+       "    if (amount > balance + overdraft) return false;",
+       "    balance -= amount;",
+       "    return true;",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

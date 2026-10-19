@@ -1,0 +1,42 @@
+{
+  "kind": "implement",
+  "title": "Build a directory tree that sizes itself",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "A file and a folder should answer the same questions, so callers never ask which one they hold."},
+    {"type": "p", "text": "`Node` and `File` are given. Implement the **composite**: `Dir` in `Dir.java`."},
+    {"type": "bullets", "items": [
+      "`Dir(String name, Node... children)` and `Dir(String name, List<Node> children)`; a `Dir` keeps its own copy of the list.",
+      "`size()` is the sum of its children's sizes; `fileCount()` the sum of theirs (an empty `Dir` has 0).",
+      "`find(name)` checks the `Dir` itself first, then each child in order, depth-first.",
+      "Work through the `Node` interface only: `Dir` must not test what kind of child it holds."]}
+  ],
+  "starter": ["Node.java", "File.java", "Dir.java"],
+  "readOnly": ["Node.java", "File.java"],
+  "solution": ["Node.java", "File.java", "Dir.java"],
+  "tests": ["CompositeKataTest.java"],
+  "checks": [
+    {"id": "size-sums-recursively", "kind": "behaviour", "title": "Size sums the whole subtree"},
+    {"id": "empty-dir", "kind": "behaviour", "title": "An empty Dir is size 0 with no files"},
+    {"id": "file-count", "kind": "behaviour", "title": "fileCount counts leaves at any depth"},
+    {"id": "find-by-name", "kind": "behaviour", "title": "find locates files and Dirs by name"},
+    {"id": "find-first-match", "kind": "behaviour", "title": "find is depth-first, in order"},
+    {"id": "dir-copies-its-children", "kind": "behaviour", "title": "Dir copies the list it is given"},
+    {"id": "dir-is-a-node", "kind": "design", "title": "Dir is a Node holding a List of children"},
+    {"id": "dir-treats-children-alike", "kind": "design", "title": "Dir never asks what kind a child is"},
+    {"id": "any-node-fits-inside", "kind": "design", "title": "Dir works with a Node it has never seen"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A `Dir` is a `Node` that contains `Node`s. Because a child can be a `File` or another `Dir`, ask the child; each kind of `Node` knows how to answer for itself."}],
+    [{"type": "p", "text": "Store `List.copyOf(children)` in a `private final List<Node>`. `size()` and `fileCount()` map over the children through the `Node` interface and sum. The varargs constructor can delegate to the list one."}],
+    [{"type": "p", "text": "`find` returns itself on a match, otherwise asks each child:"},
+     {"type": "code", "language": "java", "lines": [
+       "if (name.equals(wanted)) return Optional.of(this);",
+       "for (Node child : children) {",
+       "    Optional<Node> hit = child.find(wanted);",
+       "    if (hit.isPresent()) return hit;",
+       "}",
+       "return Optional.empty();"]}]
+  ],
+  "timeoutSeconds": 10
+}

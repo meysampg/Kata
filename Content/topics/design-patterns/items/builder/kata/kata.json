@@ -1,0 +1,46 @@
+{
+  "kind": "implement",
+  "title": "Build an immutable HttpRequest",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A request has many optional parts and some illegal combinations. Make a **builder** that only produces valid, immutable requests."},
+    {"type": "p", "text": "`HttpRequest` is a record; `HttpRequest.builder(String uri)` returns its nested `Builder`. Fill in the signatures already declared in `HttpRequest.java`:"},
+    {"type": "bullets", "items": [
+      "`method`, `header(name, value)` (repeatable, call order kept), `body` and `timeout` all return the builder.",
+      "Defaults: method `GET`, timeout 30 seconds, no headers, no body.",
+      "`build()` throws `IllegalStateException` for a `GET` with a body, a missing or non-positive timeout, or a blank URI.",
+      "Products never change afterwards: not through the builder, not through `headers()`.",
+      "The builder can be reused: each `build()` gives an equal, independent request."]}
+  ],
+  "starter": ["HttpRequest.java"],
+  "readOnly": [],
+  "solution": ["HttpRequest.java"],
+  "tests": ["BuilderKataTest.java"],
+  "checks": [
+    {"id": "defaults", "kind": "behaviour", "title": "Defaults are GET and 30 seconds"},
+    {"id": "fluent-chain", "kind": "behaviour", "title": "Every setting reaches the product"},
+    {"id": "headers-keep-order-and-repeats", "kind": "behaviour", "title": "Headers keep order and repeats"},
+    {"id": "rejects-get-with-body", "kind": "behaviour", "title": "A GET with a body is rejected"},
+    {"id": "rejects-bad-timeout", "kind": "behaviour", "title": "Zero or negative timeouts are rejected"},
+    {"id": "rejects-blank-uri", "kind": "behaviour", "title": "A blank URI is rejected by build()"},
+    {"id": "builder-reusable", "kind": "behaviour", "title": "A builder can build twice, independently"},
+    {"id": "product-immutable", "kind": "design", "title": "The product is immutable"},
+    {"id": "defensive-copy", "kind": "design", "title": "Later builder calls cannot change a product"},
+    {"id": "fluent-returns-builder", "kind": "design", "title": "Setters return the Builder"},
+    {"id": "no-telescoping-constructor", "kind": "design", "title": "No telescoping constructors"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Collect the parts one at a time in a mutable helper, validate everything once at the end, and only then create the immutable product."}],
+    [{"type": "p", "text": "`Builder` keeps fields with the defaults and a `List<Header>`. Each setter assigns and returns `this`. `build()` validates, then calls the record constructor. Copy the list in the record's compact constructor."}],
+    [{"type": "p", "text": "Copy on the way into the product:"},
+     {"type": "code", "language": "java", "lines": [
+       "record HttpRequest(String method, String uri, List<Header> headers,",
+       "                   String body, Duration timeout) {",
+       "    HttpRequest {",
+       "        headers = List.copyOf(headers);",
+       "    }",
+       "    // ...",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

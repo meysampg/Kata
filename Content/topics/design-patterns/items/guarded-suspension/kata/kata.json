@@ -1,0 +1,48 @@
+{
+  "kind": "implement",
+  "title": "A hand-off slot that waits instead of spinning",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Producers and consumers share one slot; each must wait until its guard holds."},
+    {"type": "p", "text": "Implement `Slot<T>`, a one-item hand-off (**guarded suspension**). Waiting must block the thread, with no polling."},
+    {"type": "bullets", "items": [
+      "`void put(T item)` waits while the slot is full, then stores the item. `null` throws `NullPointerException`.",
+      "`T take()` waits while the slot is empty, then removes and returns the item.",
+      "`Optional<T> take(long timeoutMs)` does the same but returns `Optional.empty()` once `timeoutMs` has really passed.",
+      "Every wait throws `InterruptedException` when interrupted.",
+      "A wakeup is not proof that the guard holds: recheck it."]}
+  ],
+  "starter": ["Slot.java"],
+  "readOnly": [],
+  "solution": ["Slot.java"],
+  "tests": ["GuardedSuspensionKataTest.java"],
+  "checks": [
+    {"id": "take-waits-for-put", "kind": "behaviour", "title": "take() waits for an item"},
+    {"id": "put-waits-while-full", "kind": "behaviour", "title": "put() waits while the slot is full"},
+    {"id": "fifo-handoff", "kind": "behaviour", "title": "50 items arrive in order"},
+    {"id": "producers-and-consumers", "kind": "behaviour", "title": "Three producers and three consumers finish"},
+    {"id": "timed-take", "kind": "behaviour", "title": "take(timeout) returns an item or empty"},
+    {"id": "timed-take-wakes-on-put", "kind": "behaviour", "title": "A timed take wakes when an item arrives"},
+    {"id": "interrupt-wakes-taker", "kind": "behaviour", "title": "Interrupting a waiter throws"},
+    {"id": "wakeup-without-change-is-ignored", "kind": "behaviour", "title": "A wakeup with a false guard keeps waiting"},
+    {"id": "timed-take-keeps-waiting", "kind": "behaviour", "title": "A timed take waits out the remaining time"},
+    {"id": "no-polling", "kind": "design", "title": "No sleeping or spinning"},
+    {"id": "no-single-notify", "kind": "design", "title": "No lone notify()"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Each operation has a guard: put needs an empty slot, take needs an item. The thread should sleep until the guard can hold, and after waking it must check again, because another thread may have got there first."}],
+    [{"type": "p", "text": "Make the methods `synchronized`, wait in a `while` loop on the guard, and call `notifyAll()` after every change of state. For the timed take, compute a deadline once and recompute the time left after every wakeup."}],
+    [{"type": "p", "text": "The classic shape:"},
+     {"type": "code", "language": "java", "lines": [
+       "synchronized T take() throws InterruptedException {",
+       "    while (item == null) {",
+       "        wait();",
+       "    }",
+       "    T taken = item;",
+       "    item = null;",
+       "    notifyAll();",
+       "    return taken;",
+       "}"]}]
+  ],
+  "stressRuns": 20
+}

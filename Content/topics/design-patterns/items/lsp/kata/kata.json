@@ -1,0 +1,38 @@
+{
+  "kind": "fix",
+  "title": "Stop Square from breaking Rect's contract",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`Geometry.stretch(Rect)` sets a width of 5 and a height of 4 and expects 20. Pass it a `Square` and it returns 16."},
+    {"type": "p", "text": "`Square` must stop being usable where a `Rect` is promised. Do not weaken `Rect`: its `setW` and `setH` stay independent. Keep what clients already rely on."},
+    {"type": "bullets", "items": [
+      "`Rect(int, int)`, `setW`, `setH`, `area()` and `Geometry.stretch(Rect)` keep their behaviour.",
+      "`Square(int side)` keeps `area()`.",
+      "Add `interface Shape` with `int area()`, implemented by both `Rect` and `Square`."]}
+  ],
+  "starter": ["Shapes.java"],
+  "readOnly": [],
+  "solution": ["Shapes.java"],
+  "tests": ["LspKataTest.java"],
+  "checks": [
+    {"id": "rect-stretch", "kind": "behaviour", "title": "A Rect stretches to 20"},
+    {"id": "square-area", "kind": "behaviour", "title": "A Square still reports its area"},
+    {"id": "square-honours-rect-contract", "kind": "behaviour", "title": "A Square never breaks the Rect contract"},
+    {"id": "shape-interface", "kind": "design", "title": "Shape is a one-method interface"},
+    {"id": "both-are-shapes", "kind": "design", "title": "Rect and Square are both Shapes"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "`stretch` relies on a promise made by `Rect`: setting the width leaves the height alone. `Square` cannot keep it, so the problem is the `extends`, not the setters."}],
+    [{"type": "p", "text": "Break the subtype link. Put what both really share, `area()`, into `Shape`, and let `Rect` and `Square` each implement it. `Square` keeps its own state and no longer inherits `setW` or `setH`."}],
+    [{"type": "p", "text": "The shape of the fix:"},
+     {"type": "code", "language": "java", "lines": [
+       "interface Shape { int area(); }",
+       "class Rect implements Shape { /* as before */ }",
+       "final class Square implements Shape {",
+       "    private int side;",
+       "    Square(int side) { this.side = side; }",
+       "    public int area() { return side * side; }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

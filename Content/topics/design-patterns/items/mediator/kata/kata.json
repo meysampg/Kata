@@ -1,0 +1,43 @@
+{
+  "kind": "refactor",
+  "title": "Untangle the sign-up form widgets",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Each widget holds references to the others, so every new rule edits all of them."},
+    {"type": "p", "text": "Introduce a **mediator**. `SignupForm` and its widgets must keep behaving exactly as they do now."},
+    {"type": "bullets", "items": [
+      "Add `interface Dialog { void changed(Object source); }`.",
+      "`TextBox`, `Checkbox` and `Button` each get a constructor taking a `Dialog`, keep it in one `private final` field, and report to it when the user acts (`type`, `toggle`, `click`).",
+      "Widgets keep their own state and methods, but no widget may reference another widget type.",
+      "`SignupForm` owns the rules (when Submit is enabled, what a click does) and keeps its fields and `sent()`."]}
+  ],
+  "starter": ["Widgets.java"],
+  "readOnly": [],
+  "solution": ["Widgets.java"],
+  "tests": ["MediatorKataTest.java"],
+  "checks": [
+    {"id": "starts-disabled", "kind": "behaviour", "title": "A new form starts empty and disabled"},
+    {"id": "needs-name-and-terms", "kind": "behaviour", "title": "Submit needs a name and accepted terms"},
+    {"id": "submit-sends-and-resets", "kind": "behaviour", "title": "Submit sends the name and resets the form"},
+    {"id": "disabled-click-ignored", "kind": "behaviour", "title": "A disabled Submit does nothing"},
+    {"id": "can-submit-again", "kind": "behaviour", "title": "The form can be submitted twice"},
+    {"id": "dialog-interface", "kind": "design", "title": "Dialog is a one-method interface"},
+    {"id": "widgets-know-only-the-dialog", "kind": "design", "title": "Widgets reference only the Dialog"},
+    {"id": "widgets-report-to-the-dialog", "kind": "design", "title": "Widgets report their changes to any Dialog"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Widgets are coupled in a many-to-many web. Route everything through one object that all of them know, and move the knowledge of who reacts to whom into that object."}],
+    [{"type": "p", "text": "Give each widget a `Dialog` instead of references to its neighbours. Let `SignupForm` implement `Dialog`: it creates the widgets with `this`, and `changed` decides what to update."}],
+    [{"type": "p", "text": "The mediator's whole job:"},
+     {"type": "code", "language": "java", "lines": [
+       "public void changed(Object source) {",
+       "    if (source == submit) {",
+       "        sent.add(name.text());",
+       "        name.clear();",
+       "        terms.uncheck();",
+       "    }",
+       "    submit.setEnabled(terms.checked() && !name.text().isBlank());",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

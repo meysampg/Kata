@@ -1,0 +1,42 @@
+{
+  "kind": "fix",
+  "title": "Make AppConfig a real singleton",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`AppConfig.get()` is supposed to give every thread the same object. It does not."},
+    {"type": "p", "text": "Three things break the guarantee: threads can race through lazy creation, reflection can call the private constructor, and deserialization quietly makes a new instance. Fix `AppConfig` so that exactly one instance exists, however it is reached."},
+    {"type": "bullets", "items": [
+      "Keep `AppConfig.get()`, `region()` and `Serializable`.",
+      "Keep the constructor calling `Probe.constructed()` once per instance. `Probe.java` is a read-only test seam.",
+      "Lazy initialization is fine, an `enum` or holder class is welcome, but a plain unsynchronized check is not."]}
+  ],
+  "starter": ["Probe.java", "AppConfig.java"],
+  "readOnly": ["Probe.java"],
+  "solution": ["Probe.java", "AppConfig.java"],
+  "tests": ["SingletonKataTest.java"],
+  "checks": [
+    {"id": "one-instance-under-contention", "kind": "behaviour", "title": "Eight racing threads share one instance"},
+    {"id": "same-instance-every-call", "kind": "behaviour", "title": "get() returns the same object"},
+    {"id": "config-still-works", "kind": "behaviour", "title": "The configuration still answers"},
+    {"id": "reflection-cannot-make-a-second", "kind": "behaviour", "title": "Reflection cannot build a second instance"},
+    {"id": "serialization-keeps-identity", "kind": "behaviour", "title": "Deserialization returns the shared instance"},
+    {"id": "shared-field-is-safe", "kind": "design", "title": "No racy static instance field"},
+    {"id": "no-open-constructor", "kind": "design", "title": "Constructors are private"},
+    {"id": "get-is-still-static", "kind": "design", "title": "get() stays a static method"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "There are three separate doors to a second instance: concurrent first calls, the reflection API, and Java serialization. Each needs its own answer. The class loader already makes one of them safe for free."}],
+    [{"type": "p", "text": "Put the instance in a private nested `Holder` class so the JVM initializes it once, on first use. Make the constructor refuse a second call, and give the class a `readResolve` that returns the shared instance."}],
+    [{"type": "p", "text": "Two guards on the holder idiom:"},
+     {"type": "code", "language": "java", "lines": [
+       "private AppConfig() {",
+       "    if (Holder.INSTANCE != null) {",
+       "        throw new IllegalStateException(\"already created\");",
+       "    }",
+       "    Probe.constructed();",
+       "}",
+       "private Object readResolve() { return get(); }"]}]
+  ],
+  "timeoutSeconds": 10,
+  "stressRuns": 20
+}

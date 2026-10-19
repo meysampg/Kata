@@ -1,0 +1,44 @@
+{
+  "kind": "refactor",
+  "title": "Untangle message kinds from channels",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Two kinds of message times two channels is four classes. A third channel makes six."},
+    {"type": "p", "text": "Refactor with a **bridge** so message kinds and channels vary separately. `Messages.alert(channel, problem)` and `Messages.digest(channel, items)` must keep returning messages whose `deliver(to)` output is unchanged, including the SMS cut-off."},
+    {"type": "bullets", "items": [
+      "Add `interface Channel` with `String send(String to, String text)`, implemented by `Email` and `Sms` (Sms owns the cut-off).",
+      "`Message` keeps a `Channel`, set by `Message(Channel)`.",
+      "Replace the four combination classes with `Alert(Channel, String)` and `Digest(Channel, List<String>)`.",
+      "Unknown channel names still throw `IllegalArgumentException`."]}
+  ],
+  "starter": ["Messages.java"],
+  "readOnly": [],
+  "solution": ["Messages.java"],
+  "tests": ["BridgeKataTest.java"],
+  "checks": [
+    {"id": "email-alert", "kind": "behaviour", "title": "Email alerts are unchanged"},
+    {"id": "email-digest", "kind": "behaviour", "title": "Email digests are unchanged"},
+    {"id": "sms-short-messages", "kind": "behaviour", "title": "Short SMS messages are unchanged"},
+    {"id": "sms-cuts-long-messages", "kind": "behaviour", "title": "Long SMS messages are still cut"},
+    {"id": "unknown-channel", "kind": "behaviour", "title": "Unknown channels are rejected"},
+    {"id": "channel-is-an-interface", "kind": "design", "title": "Channel is a one-method interface"},
+    {"id": "message-holds-the-channel", "kind": "design", "title": "Message holds a final Channel"},
+    {"id": "combination-classes-are-gone", "kind": "design", "title": "No class per kind and channel"},
+    {"id": "messages-accept-any-channel", "kind": "design", "title": "Alert and Digest accept any Channel"},
+    {"id": "messages-do-not-know-channels", "kind": "design", "title": "Messages never name a concrete channel"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Two things vary independently: what is said (alert, digest) and how it travels (email, SMS). Inheritance multiplies them. Keep one of them behind a reference instead."}],
+    [{"type": "p", "text": "Make the delivery mechanism a `Channel` interface with `Email` and `Sms`. `Message` holds a `Channel`; `Alert` and `Digest` build the text and hand it to `channel.send`. `Messages` maps names to channels."}],
+    [{"type": "p", "text": "The abstraction delegates to the implementor:"},
+     {"type": "code", "language": "java", "lines": [
+       "abstract class Message {",
+       "    protected final Channel channel;",
+       "    protected Message(Channel channel) { this.channel = channel; }",
+       "    abstract String deliver(String to);",
+       "}",
+       "// Alert.deliver:",
+       "//   channel.send(to, \"ALERT: \" + problem)"]}]
+  ],
+  "timeoutSeconds": 10
+}

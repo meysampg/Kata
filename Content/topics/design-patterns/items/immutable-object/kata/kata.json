@@ -1,0 +1,43 @@
+{
+  "kind": "fix",
+  "title": "Make Route really immutable",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`Route` is shared between threads, but callers can change it in three ways."},
+    {"type": "p", "text": "Make `Route` an **immutable object**. Keep the constructor, the accessors, `withName`, `withStop` and `sample()` as they are; only their behaviour changes."},
+    {"type": "bullets", "items": [
+      "The constructor must not keep the caller's list or `Date`.",
+      "`stops()` and `departure()` must not let a caller change the route (a copy or an unmodifiable view).",
+      "`withName` and `withStop` return a new `Route` and leave the original untouched.",
+      "Every field is `final`, and `Route` has no setter."]},
+    {"type": "p", "text": "`departure` stays a `java.util.Date`."}
+  ],
+  "starter": ["Route.java"],
+  "readOnly": [],
+  "solution": ["Route.java"],
+  "tests": ["ImmutableObjectKataTest.java"],
+  "checks": [
+    {"id": "constructor-copies-list", "kind": "behaviour", "title": "Changing the source list does not leak in"},
+    {"id": "constructor-copies-date", "kind": "behaviour", "title": "Changing the source Date does not leak in"},
+    {"id": "stops-getter-is-safe", "kind": "behaviour", "title": "stops() cannot be used to change the route"},
+    {"id": "departure-getter-is-safe", "kind": "behaviour", "title": "departure() cannot be used to change the route"},
+    {"id": "withers-derive-new-routes", "kind": "behaviour", "title": "Withers leave the original unchanged"},
+    {"id": "shared-base-under-contention", "kind": "behaviour", "title": "Eight threads derive from one base safely"},
+    {"id": "all-fields-final", "kind": "design", "title": "Route and all its fields are final"},
+    {"id": "no-mutators", "kind": "design", "title": "Route has no void mutators"},
+    {"id": "withers-never-return-this", "kind": "design", "title": "Withers build a new Route"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "An object is immutable only if nobody holds a reference that can change it. Look for every place a mutable object crosses the boundary: going in, coming out, and the methods that edit `this`."}],
+    [{"type": "p", "text": "Copy defensively on the way in (constructor) and on the way out (`Date`). Make `name` final. A wither builds a modified copy and calls the constructor; it never writes a field."}],
+    [{"type": "p", "text": "The constructor makes the copies, so the withers can reuse it:"},
+     {"type": "code", "language": "java", "lines": [
+       "this.stops = List.copyOf(stops);",
+       "this.departure = new Date(departure.getTime());",
+       "// wither:",
+       "List<String> next = new ArrayList<>(stops);",
+       "next.add(stop);",
+       "return new Route(name, next, departure);"]}]
+  ],
+  "stressRuns": 20
+}

@@ -1,0 +1,42 @@
+{
+  "kind": "implement",
+  "title": "Add three operations to an expression tree",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Expressions are a stable tree; the operations over it keep growing."},
+    {"type": "p", "text": "Finish the **Visitor** over `Expr` (`Num`, `Add`, `Mul`, `Neg`). `ExprVisitor<R>` is given and must not change."},
+    {"type": "bullets", "items": [
+      "Each node's `accept(ExprVisitor<R>)` calls the visit method for its own type and returns its result.",
+      "`Eval` returns the value as `Integer`.",
+      "`Show` returns fully parenthesised text: `((2 + 3) * 4)`, `-(5)`, a lone number as `9`.",
+      "`Depth` returns 1 for a number, otherwise 1 plus its deepest child.",
+      "Operations reach children only through `accept(this)`: no `instanceof`, no `switch`, and no operation named in a node class."]}
+  ],
+  "starter": ["Expr.java", "Operations.java", "ExprVisitor.java"],
+  "readOnly": ["ExprVisitor.java"],
+  "solution": ["Expr.java", "Operations.java", "ExprVisitor.java"],
+  "tests": ["VisitorKataTest.java"],
+  "checks": [
+    {"id": "eval", "kind": "behaviour", "title": "Eval computes the value"},
+    {"id": "show", "kind": "behaviour", "title": "Show prints parenthesised text"},
+    {"id": "depth", "kind": "behaviour", "title": "Depth measures the tree"},
+    {"id": "each-node-picks-its-method", "kind": "behaviour", "title": "Each node calls its own visit method"},
+    {"id": "new-operation-needs-no-change", "kind": "behaviour", "title": "A visitor written elsewhere works"},
+    {"id": "operations-do-not-test-types", "kind": "design", "title": "Operations never test node types"},
+    {"id": "operations-recurse-through-accept", "kind": "design", "title": "Operations recurse with accept"},
+    {"id": "nodes-know-no-operations", "kind": "design", "title": "Nodes do not name operations"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Double dispatch: the node knows its own type, the visitor knows the operation. Each `accept` hands `this` to the visit method that matches the node. That is the only thing a node does."}],
+    [{"type": "p", "text": "Write `accept` as a single return in every record. In the operations, evaluate a child with `child.accept(this)` and combine the results; the visitor's result type `R` carries the answer."}],
+    [{"type": "p", "text": "Node side, then operation side:"},
+     {"type": "code", "language": "java", "lines": [
+       "record Neg(Expr operand) implements Expr {",
+       "    public <R> R accept(ExprVisitor<R> v) {",
+       "        return v.visitNeg(this);",
+       "    }",
+       "}",
+       "// in Eval:",
+       "public Integer visitNeg(Neg n) { return -n.operand().accept(this); }"]}]
+  ]
+}

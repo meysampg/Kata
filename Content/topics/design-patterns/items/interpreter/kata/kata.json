@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Evaluate eligibility rules as a tree",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Marketing writes rules like `(and pro (not trial))`. Make each grammar rule a class that evaluates itself."},
+    {"type": "p", "text": "`Rule` is given: `boolean eval(Map<String, Boolean> flags)`. Fill in `Rules.java`."},
+    {"type": "bullets", "items": [
+      "`Flag(String name)` returns its flag, or throws `IllegalStateException` if the flag is unbound.",
+      "`Not(Rule)`, `And(Rule, Rule)` and `Or(Rule, Rule)` combine their children. `And` and `Or` must short-circuit.",
+      "`Rules.parse(String)` builds the tree from the text: a flag name, `(not r)`, `(and r r)` or `(or r r)`, with any amount of whitespace.",
+      "`parse` never evaluates. Malformed input throws `IllegalArgumentException`.",
+      "One parsed tree must evaluate against many contexts."]},
+    {"type": "p", "text": "Do not change `Rule` or the constructors above."}
+  ],
+  "starter": ["Rule.java", "Rules.java"],
+  "readOnly": ["Rule.java"],
+  "solution": ["Rule.java", "Rules.java"],
+  "tests": ["InterpreterKataTest.java"],
+  "checks": [
+    {"id": "flag-lookup", "kind": "behaviour", "title": "A flag reads the context, unbound flags fail"},
+    {"id": "not-and-or", "kind": "behaviour", "title": "Not, And and Or follow their truth tables"},
+    {"id": "short-circuit", "kind": "behaviour", "title": "And and Or skip the branch they do not need"},
+    {"id": "same-tree-many-contexts", "kind": "behaviour", "title": "One tree evaluates against many contexts"},
+    {"id": "parse-evaluates", "kind": "behaviour", "title": "Parsed sentences give the right answers"},
+    {"id": "parse-rejects-bad-input", "kind": "behaviour", "title": "Malformed sentences are rejected"},
+    {"id": "nodes-evaluate-themselves", "kind": "design", "title": "Nodes evaluate without switching on types"},
+    {"id": "nodes-are-immutable", "kind": "design", "title": "Nodes hold only final fields"},
+    {"id": "parse-builds-the-nodes", "kind": "design", "title": "Parsing builds the tree and stops there"},
+    {"id": "operands-are-any-rule", "kind": "design", "title": "Operators accept any Rule"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Each grammar rule is a class. A terminal answers directly from the context; a nonterminal asks its children and combines the answers. No central `switch` should decide how to evaluate."}],
+    [{"type": "p", "text": "Write `eval` in each record: `Flag` reads the map, `Not`, `And`, `Or` call `eval` on their children. For `parse`, read tokens recursively: `(` starts an operator, then its operands, then `)`."}],
+    [{"type": "p", "text": "`&&` and `||` short-circuit for free. The parser's core:"},
+     {"type": "code", "language": "java", "lines": [
+       "Rule rule = switch (op) {",
+       "    case \"not\" -> new Not(read(tokens));",
+       "    case \"and\" -> new And(read(tokens), read(tokens));",
+       "    case \"or\" -> new Or(read(tokens), read(tokens));",
+       "    default -> throw new IllegalArgumentException(op);",
+       "};"]}]
+  ],
+  "timeoutSeconds": 10
+}

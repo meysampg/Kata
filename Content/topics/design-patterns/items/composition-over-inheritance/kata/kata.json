@@ -1,0 +1,38 @@
+{
+  "kind": "fix",
+  "title": "Fix the double-counting set by wrapping it",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`CountingSet.addAll(List.of(\"a\", \"b\"))` reports 4 additions, not 2."},
+    {"type": "p", "text": "`HashSet.addAll` calls `add` internally, so the subclass counts twice, and patching the arithmetic would break on the next JDK. Stop inheriting the implementation: wrap a `Set` and forward to it."},
+    {"type": "bullets", "items": [
+      "`added()` counts every element offered through `add` or `addAll`, duplicates included.",
+      "`CountingSet<E>` is still a `Set<E>` with a no-arg constructor, and no longer extends `HashSet`.",
+      "Add `CountingSet(Set<E> inner)`; all storage, ordering and equality come from `inner`."]}
+  ],
+  "starter": ["CountingSet.java"],
+  "readOnly": [],
+  "solution": ["CountingSet.java"],
+  "tests": ["CompositionKataTest.java"],
+  "checks": [
+    {"id": "add-counts-each-offer", "kind": "behaviour", "title": "add counts every offer"},
+    {"id": "add-all-counts-once", "kind": "behaviour", "title": "addAll counts each element once"},
+    {"id": "still-a-set", "kind": "behaviour", "title": "It still behaves as a Set"},
+    {"id": "no-hashset-inheritance", "kind": "design", "title": "CountingSet does not extend HashSet"},
+    {"id": "wraps-any-set", "kind": "design", "title": "CountingSet wraps any Set it is given"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The bug lives in `HashSet`, which calls `add` from `addAll`. A subclass depends on that private detail. Hold a set instead of being one."}],
+    [{"type": "p", "text": "Keep a `private final Set<E> inner`. Count in `add`, make `addAll` loop over its argument calling your own `add`, and forward everything else. Extending `AbstractSet` saves most of the boilerplate."}],
+    [{"type": "p", "text": "The core of it:"},
+     {"type": "code", "language": "java", "lines": [
+       "final class CountingSet<E> extends AbstractSet<E> {",
+       "    private final Set<E> inner;",
+       "    CountingSet() { this(new HashSet<>()); }",
+       "    @Override public boolean add(E e) { added++; return inner.add(e); }",
+       "    @Override public int size() { return inner.size(); }",
+       "    @Override public Iterator<E> iterator() { return inner.iterator(); }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

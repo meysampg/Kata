@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Undo for an editor with opaque snapshots",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "Give the editor undo without letting anyone outside it read or forge its state."},
+    {"type": "p", "text": "In `Editor.java`, `type`, `delete`, `moveTo`, `text()` and `cursor()` already work."},
+    {"type": "bullets", "items": [
+      "`Editor.save()` returns a **memento** of the text and cursor; `Editor.restore(m)` returns the editor to it. Replace the `Object` placeholders with a dedicated type that exposes nothing.",
+      "A snapshot is immutable and unaffected by later edits. Restoring one twice gives the same result.",
+      "`History(Editor)` is the caretaker: `checkpoint()` stores the current snapshot, `undo()` restores the latest one and returns `true`, or returns `false` when none is left.",
+      "`History` never looks inside a snapshot or reads the editor's state."]}
+  ],
+  "starter": ["Editor.java"],
+  "readOnly": [],
+  "solution": ["Editor.java"],
+  "tests": ["MementoKataTest.java"],
+  "checks": [
+    {"id": "restores-text-and-cursor", "kind": "behaviour", "title": "Restore brings back text and cursor"},
+    {"id": "snapshot-is-a-copy", "kind": "behaviour", "title": "Later edits do not change a snapshot"},
+    {"id": "snapshots-are-independent", "kind": "behaviour", "title": "Several snapshots coexist"},
+    {"id": "undo-steps-back", "kind": "behaviour", "title": "Undo walks back through checkpoints"},
+    {"id": "undo-with-nothing-saved", "kind": "behaviour", "title": "Undo with no checkpoint returns false"},
+    {"id": "checkpoint-after-undo", "kind": "behaviour", "title": "Checkpoints still work after an undo"},
+    {"id": "memento-is-its-own-type", "kind": "design", "title": "save() returns a dedicated memento type"},
+    {"id": "memento-exposes-nothing", "kind": "design", "title": "The memento offers no way to read state"},
+    {"id": "memento-is-immutable", "kind": "design", "title": "The memento's fields are final"},
+    {"id": "history-never-reads-state", "kind": "design", "title": "History only stores and hands back mementos"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Only the originator understands its own state, so only it should create and open snapshots. The caretaker stores them blindly. Copy mutable state; never share the `StringBuilder`."}],
+    [{"type": "p", "text": "Declare a nested `Memento` type with no readable members, backed by a private immutable record inside `Editor`. `History` keeps a `Deque` of them and calls only `save` and `restore`."}],
+    [{"type": "p", "text": "The originator side:"},
+     {"type": "code", "language": "java", "lines": [
+       "sealed interface Memento permits Snapshot { }",
+       "private record Snapshot(String text, int cursor) implements Memento { }",
+       "Memento save() { return new Snapshot(text.toString(), cursor); }",
+       "void restore(Memento m) {",
+       "    var s = (Snapshot) m;",
+       "    text = new StringBuilder(s.text());",
+       "    cursor = s.cursor();",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

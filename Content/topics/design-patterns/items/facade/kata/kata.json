@@ -1,0 +1,39 @@
+{
+  "kind": "refactor",
+  "title": "Give the storefront one door to ordering",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "The web layer juggles three subsystems and their failure rules just to place one order."},
+    {"type": "p", "text": "Put a **facade** in front of them. `Storefront.buy(...)` must keep returning the same replies, `OK <tracking>` or `REJECTED <reason>`, and must still trim and upper-case the SKU."},
+    {"type": "bullets", "items": [
+      "Add `OrderService` with `Outcome place(String sku, int qty, String card, String address)`.",
+      "`OrderService` owns `Inventory`, `Payments` and `Shipping`, runs them in order, and releases stock when payment fails.",
+      "`Storefront` talks only to `OrderService` and turns its `Outcome` into the reply text.",
+      "Leave `Subsystems.java` as it is."]}
+  ],
+  "starter": ["Subsystems.java", "Storefront.java"],
+  "readOnly": ["Subsystems.java"],
+  "solution": ["Subsystems.java", "Storefront.java", "OrderService.java"],
+  "tests": ["FacadeKataTest.java"],
+  "checks": [
+    {"id": "order-is-placed", "kind": "behaviour", "title": "An order is placed and numbered"},
+    {"id": "out-of-stock", "kind": "behaviour", "title": "Too many units are rejected for stock"},
+    {"id": "payment-failure-releases-stock", "kind": "behaviour", "title": "A declined card gives the stock back"},
+    {"id": "nothing-booked-on-rejection", "kind": "behaviour", "title": "Rejections book no shipment"},
+    {"id": "facade-has-place", "kind": "design", "title": "OrderService.place returns an Outcome"},
+    {"id": "facade-owns-the-subsystems", "kind": "design", "title": "OrderService owns the subsystems"},
+    {"id": "storefront-sees-only-the-facade", "kind": "design", "title": "Storefront never names a subsystem"},
+    {"id": "storefront-holds-no-subsystem", "kind": "design", "title": "Storefront keeps no subsystem fields"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Placing an order is one idea for the caller, yet the steps and the undo rule are spread through the web layer. Name that one idea and move the steps behind it."}],
+    [{"type": "p", "text": "Create `OrderService` with the three subsystems as private fields and a `place` method that returns an `Outcome`. `Storefront` keeps only an `OrderService` and formats the reply."}],
+    [{"type": "p", "text": "In `OrderService.place`, reserve, charge (release on failure), then book. In `Storefront`:"},
+     {"type": "code", "language": "java", "lines": [
+       "return switch (orders.place(id, qty, card, address)) {",
+       "    case Outcome.Placed p -> \"OK \" + p.tracking();",
+       "    case Outcome.Rejected r -> \"REJECTED \" + r.reason();",
+       "};"]}]
+  ],
+  "timeoutSeconds": 10
+}

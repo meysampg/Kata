@@ -1,0 +1,41 @@
+{
+  "kind": "refactor",
+  "title": "Stop subclassing for every notifier combo",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "A new option should add one class, not double the list of subclasses."},
+    {"type": "p", "text": "`Notifiers.create(tag, shout, out)` must keep returning a `Notifier` that behaves exactly as now. Replace the per-combination subclasses with **decorators** over `Notifier`."},
+    {"type": "bullets", "items": [
+      "Keep `Notifier` and `ListNotifier`.",
+      "Add `Prefixing(Notifier next, String tag)`: sends `[tag] message`.",
+      "Add `Shouting(Notifier next)`: sends the message in upper case.",
+      "Delete the three combination classes and `ListNotifierBase`.",
+      "`create` stacks the decorators; the tag keeps its case, so `Shouting` is the outer one."]}
+  ],
+  "starter": ["Notifier.java"],
+  "readOnly": [],
+  "solution": ["Notifier.java"],
+  "tests": ["DecoratorKataTest.java"],
+  "checks": [
+    {"id": "plain", "kind": "behaviour", "title": "No options sends the message as is"},
+    {"id": "prefix-only", "kind": "behaviour", "title": "A tag prefixes the message"},
+    {"id": "shout-only", "kind": "behaviour", "title": "Shout upper-cases the message"},
+    {"id": "shout-and-prefix", "kind": "behaviour", "title": "Tag and shout combine as before"},
+    {"id": "decorators-wrap-a-notifier", "kind": "design", "title": "Prefixing and Shouting each wrap a Notifier"},
+    {"id": "no-combination-classes", "kind": "design", "title": "The combination subclasses are gone"},
+    {"id": "stack-in-any-order", "kind": "design", "title": "Decorators stack in any order"},
+    {"id": "wraps-any-notifier", "kind": "design", "title": "Decorators wrap a Notifier they have never seen"},
+    {"id": "create-does-not-branch-on-combos", "kind": "design", "title": "create builds one base and stacks on it"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Find what varies independently: adding a tag and shouting. Each is one small behaviour that could wrap any `Notifier` and still be a `Notifier`."}],
+    [{"type": "p", "text": "Write `Prefixing` and `Shouting` as `Notifier`s with a `private final Notifier next`. Each changes the message and calls `next.send(...)`. `create` builds a `ListNotifier` and wraps it."}],
+    [{"type": "p", "text": "Then `create` becomes:"},
+     {"type": "code", "language": "java", "lines": [
+       "Notifier n = new ListNotifier(out);",
+       "if (tag != null) n = new Prefixing(n, tag);",
+       "if (shout) n = new Shouting(n);",
+       "return n;"]}]
+  ],
+  "timeoutSeconds": 10
+}

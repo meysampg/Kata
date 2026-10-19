@@ -1,0 +1,45 @@
+{
+  "kind": "implement",
+  "title": "Adapt a legacy sensor to Thermometer",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "The system speaks `Thermometer`; the vendor driver speaks text."},
+    {"type": "p", "text": "`Thermometer` and `LegacySensor` (in `Legacy.java`, read-only) cannot change. Write the **adapter** `SensorThermometer(LegacySensor)` so that anything that needs a `Thermometer` can use the sensor."},
+    {"type": "bullets", "items": [
+      "`celsius()` polls the sensor once per call and returns degrees Celsius as an `OptionalDouble`.",
+      "`\"C:21.5\"` gives 21.5, `\"F:212\"` gives 100.0, and an empty reading gives `OptionalDouble.empty()`.",
+      "Any other unit throws `IllegalArgumentException`.",
+      "The adapter wraps the sensor; it does not extend it."]}
+  ],
+  "starter": ["Legacy.java", "SensorThermometer.java"],
+  "readOnly": ["Legacy.java"],
+  "solution": ["Legacy.java", "SensorThermometer.java"],
+  "tests": ["AdapterKataTest.java"],
+  "checks": [
+    {"id": "fahrenheit-is-converted", "kind": "behaviour", "title": "Fahrenheit is converted to Celsius"},
+    {"id": "celsius-passes-through", "kind": "behaviour", "title": "Celsius passes through"},
+    {"id": "offline-is-empty", "kind": "behaviour", "title": "An offline sensor gives an empty reading"},
+    {"id": "unknown-unit-is-rejected", "kind": "behaviour", "title": "Unknown units are rejected"},
+    {"id": "one-poll-per-reading", "kind": "behaviour", "title": "Each reading polls once"},
+    {"id": "every-reading-is-fresh", "kind": "behaviour", "title": "Readings are never cached"},
+    {"id": "adapter-is-a-thermometer", "kind": "design", "title": "The adapter implements Thermometer"},
+    {"id": "adapter-wraps-instead-of-extending", "kind": "design", "title": "The adapter holds the sensor, privately"},
+    {"id": "legacy-format-stays-inside", "kind": "design", "title": "The sensor's text format stays inside"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The caller wants one interface, the vendor offers another. Do the translation (text to a typed number, units, absence) in one place that implements the interface callers expect."}],
+    [{"type": "p", "text": "`SensorThermometer` implements `Thermometer` and keeps a `private final LegacySensor`. In `celsius()`, poll, split the text at the colon, and switch on the unit."}],
+    [{"type": "p", "text": "The core of the translation:"},
+     {"type": "code", "language": "java", "lines": [
+       "String raw = sensor.poll().trim();",
+       "if (raw.isEmpty()) return OptionalDouble.empty();",
+       "String[] parts = raw.split(\":\", 2);",
+       "double v = Double.parseDouble(parts[1]);",
+       "return switch (parts[0]) {",
+       "    case \"C\" -> OptionalDouble.of(v);",
+       "    case \"F\" -> OptionalDouble.of((v - 32) * 5 / 9);",
+       "    default -> throw new IllegalArgumentException(raw);",
+       "};"]}]
+  ],
+  "timeoutSeconds": 10
+}

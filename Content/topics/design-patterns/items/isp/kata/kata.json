@@ -1,0 +1,38 @@
+{
+  "kind": "refactor",
+  "title": "Split the fat Machine into roles",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`BasicPrinter` implements `Machine` but throws on `scan` and `fax`."},
+    {"type": "p", "text": "Split `Machine` into role interfaces so that every implementation honours everything it promises, and every client asks only for the role it uses. What `BasicPrinter` and `MultiFunction` print, scan and fax must not change."},
+    {"type": "bullets", "items": [
+      "`Printer.print(String)`, `DocScanner.scan()` and `Fax.fax(String, String)`.",
+      "`BasicPrinter` is only a `Printer`; `MultiFunction` plays all three.",
+      "`Office.printAll`, `digitise` and `send` take the narrowest role they need.",
+      "You may keep `Machine` as a combination of the roles, or remove it."]}
+  ],
+  "starter": ["Machines.java"],
+  "readOnly": [],
+  "solution": ["Machines.java"],
+  "tests": ["IspKataTest.java"],
+  "checks": [
+    {"id": "printer-prints", "kind": "behaviour", "title": "BasicPrinter still prints"},
+    {"id": "multifunction-roles", "kind": "behaviour", "title": "MultiFunction prints, scans and faxes as before"},
+    {"id": "role-interfaces", "kind": "design", "title": "Printer, DocScanner and Fax are one-method roles"},
+    {"id": "basic-printer-only-prints", "kind": "design", "title": "BasicPrinter promises only printing"},
+    {"id": "multifunction-plays-all-roles", "kind": "design", "title": "MultiFunction plays all three roles"},
+    {"id": "office-asks-for-roles", "kind": "design", "title": "Office depends on roles, not on Machine"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A method that throws `UnsupportedOperationException` is a promise the type cannot keep. Look at which clients use which of the three methods."}],
+    [{"type": "p", "text": "One interface per capability: `Printer`, `DocScanner`, `Fax`. Each class implements exactly the ones it can do. Change each `Office` method to take only the role it calls."}],
+    [{"type": "p", "text": "The new signatures:"},
+     {"type": "code", "language": "java", "lines": [
+       "interface Printer { void print(String doc); }",
+       "final class BasicPrinter implements Printer { ... }",
+       "final class MultiFunction implements Printer, DocScanner, Fax { ... }",
+       "static int printAll(Printer p, List<String> docs)",
+       "static String digitise(DocScanner s)"]}]
+  ],
+  "timeoutSeconds": 10
+}

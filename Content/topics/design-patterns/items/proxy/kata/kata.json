@@ -1,0 +1,43 @@
+{
+  "kind": "implement",
+  "title": "A lazy, caching stand-in for slow documents",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Connecting is slow and reading is slow, so do each as late and as rarely as possible."},
+    {"type": "p", "text": "Implement the **proxy** `CachedDocuments` in `Documents.java`. It is a `Documents`, built from a `Supplier<Documents>` factory."},
+    {"type": "bullets", "items": [
+      "Creating it must not call the factory; the first `read` does, once, even when many threads read at the same moment.",
+      "Reading an id that was read before returns the earlier reply without touching the real `Documents`.",
+      "Different ids each reach the real `Documents` once.",
+      "If the real read throws, the exception reaches the caller and nothing is cached for that id.",
+      "Do not name `RemoteDocuments` inside the proxy."]}
+  ],
+  "starter": ["Documents.java"],
+  "readOnly": [],
+  "solution": ["Documents.java"],
+  "tests": ["ProxyKataTest.java"],
+  "checks": [
+    {"id": "nothing-built-before-first-read", "kind": "behaviour", "title": "Creating the proxy builds nothing"},
+    {"id": "built-once", "kind": "behaviour", "title": "The real Documents is built exactly once"},
+    {"id": "same-id-read-once", "kind": "behaviour", "title": "A repeated id is read from the real one once"},
+    {"id": "failures-are-not-cached", "kind": "behaviour", "title": "A failed read can be retried"},
+    {"id": "concurrent-first-reads", "kind": "behaviour", "title": "Eight simultaneous first reads build and read once"},
+    {"id": "proxy-is-a-documents", "kind": "design", "title": "CachedDocuments is a Documents with a factory"},
+    {"id": "proxy-does-not-hardwire-the-real-one", "kind": "design", "title": "The proxy never names RemoteDocuments"}
+  ],
+  "timeoutSeconds": 10,
+  "stressRuns": 20,
+  "hints": [
+    [{"type": "p", "text": "The proxy stands in for the real thing and adds two decisions: when to create it (first use) and when to skip it (already answered). Callers see only `Documents`."}],
+    [{"type": "p", "text": "Keep the `Supplier`, a nullable real `Documents` created under a lock, and a `ConcurrentHashMap<String, String>` cache. `computeIfAbsent` does not store a value if the mapping function throws."}],
+    [{"type": "p", "text": "The read path can be tiny:"},
+     {"type": "code", "language": "java", "lines": [
+       "public String read(String id) {",
+       "    return cache.computeIfAbsent(id, k -> real().read(k));",
+       "}",
+       "private synchronized Documents real() {",
+       "    if (real == null) real = factory.get();",
+       "    return real;",
+       "}"]}]
+  ]
+}

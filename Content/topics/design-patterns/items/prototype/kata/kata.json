@@ -1,0 +1,39 @@
+{
+  "kind": "fix",
+  "title": "Make unit copies independent",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "Spawning a `Unit` from a prototype changes the prototype too."},
+    {"type": "p", "text": "`Unit.copy()` builds a new `Unit`, but the new unit and the old one still share state. A grunt that learns `rage` teaches it to every orc ever spawned."},
+    {"type": "bullets", "items": [
+      "A copy has the same name, hp and abilities as its source, and shares no mutable state with it, in either direction.",
+      "A `Unit` never keeps the list its caller passed to the constructor.",
+      "Keep the `Prototype<Unit>` contract, `Unit.copy()` returning `Unit`, and `Barracks.spawn(kind)` returning a fresh copy."]}
+  ],
+  "starter": ["Unit.java"],
+  "readOnly": [],
+  "solution": ["Unit.java"],
+  "tests": ["PrototypeKataTest.java"],
+  "checks": [
+    {"id": "copy-has-the-same-state", "kind": "behaviour", "title": "A copy carries the same state"},
+    {"id": "learning-on-the-copy-leaves-the-original", "kind": "behaviour", "title": "Teaching the copy leaves the original alone"},
+    {"id": "learning-on-the-original-leaves-the-copy", "kind": "behaviour", "title": "Teaching the original leaves the copy alone"},
+    {"id": "constructor-does-not-keep-the-callers-list", "kind": "behaviour", "title": "The constructor copies its input list"},
+    {"id": "barracks-spawns-independent-units", "kind": "behaviour", "title": "Spawned units are independent"},
+    {"id": "unknown-kind", "kind": "behaviour", "title": "Unknown kinds are rejected"},
+    {"id": "copy-returns-unit", "kind": "design", "title": "copy() returns Unit, not Object"},
+    {"id": "mutable-fields-are-not-shared", "kind": "design", "title": "No mutable field is shared by a copy"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "A copy that reuses the same `List` object is a shallow copy: two references, one list. Ask which fields are mutable objects rather than values."}],
+    [{"type": "p", "text": "Give every `Unit` its own `ArrayList`. Do it in the constructor, so it covers both `copy()` and callers that pass in a list they keep using."}],
+    [{"type": "p", "text": "Copy at the boundary:"},
+     {"type": "code", "language": "java", "lines": [
+       "Unit(String name, int hp, List<String> abilities) {",
+       "    this.name = name;",
+       "    this.hp = hp;",
+       "    this.abilities = new ArrayList<>(abilities);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

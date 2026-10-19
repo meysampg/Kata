@@ -1,0 +1,40 @@
+{
+  "kind": "refactor",
+  "title": "Untangle the expense approval ifs",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Each approval rule is buried in the nesting of one method."},
+    {"type": "p", "text": "Turn the rules into a **chain of responsibility**. `ApprovalService.approve(Expense)` must return exactly what it returns now, and `Expense` stays as it is."},
+    {"type": "bullets", "items": [
+      "`interface Approver` with one method, `Optional<String> decide(Expense)`: empty means \"not mine, pass it on\".",
+      "`ApprovalChain(List<Approver>)` with `String approve(Expense)`: the first present answer wins; if nobody answers, `escalate:board`.",
+      "`ApprovalChain` knows no rules; each rule lives in an `Approver`.",
+      "`ApprovalService` delegates to a chain and keeps it in a field and decides nothing itself."]}
+  ],
+  "starter": ["Approval.java"],
+  "readOnly": [],
+  "solution": ["Approval.java"],
+  "tests": ["ChainKataTest.java"],
+  "checks": [
+    {"id": "small-expenses-are-automatic", "kind": "behaviour", "title": "Small expenses are approved automatically"},
+    {"id": "bigger-expenses-escalate-upwards", "kind": "behaviour", "title": "Bigger expenses climb to manager, director, board"},
+    {"id": "gifts-have-their-own-rule", "kind": "behaviour", "title": "Gifts over 50.00 are rejected"},
+    {"id": "approver-is-a-one-method-interface", "kind": "design", "title": "Approver is a one-method interface"},
+    {"id": "chain-runs-links-in-order", "kind": "design", "title": "The chain asks links in order and stops at an answer"},
+    {"id": "chain-falls-through-to-board", "kind": "design", "title": "An unanswered request goes to the board"},
+    {"id": "chain-does-not-know-the-rules", "kind": "design", "title": "ApprovalChain contains no rules"},
+    {"id": "service-delegates-to-a-chain", "kind": "design", "title": "ApprovalService holds an ApprovalChain"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Every rule has the same shape: look at the expense, then either decide or say \"not mine\". Name that shape, and the nesting turns into a sequence."}],
+    [{"type": "p", "text": "Write `Approver` returning `Optional<String>`. Give `ApprovalChain` a list of approvers and loop until one answers. Build the standard chain, gift rule first, in `Approvals.standard()`; `ApprovalService` holds that chain."}],
+    [{"type": "p", "text": "A threshold rule is one small lambda factory:"},
+     {"type": "code", "language": "java", "lines": [
+       "static Approver upTo(long cents, String who) {",
+       "    return e -> e.cents() <= cents",
+       "        ? Optional.of(\"approved:\" + who)",
+       "        : Optional.empty();",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

@@ -1,0 +1,39 @@
+{
+  "kind": "refactor",
+  "title": "Make OrderService depend on a port, not SMTP",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`OrderService` does `new SmtpClient()`, so it cannot run without the mail library."},
+    {"type": "p", "text": "Let the policy own an abstraction and let the detail implement it. `Orders.place(customer)` must still return the same receipt and still put the same confirmation on `SmtpClient.WIRE`."},
+    {"type": "bullets", "items": [
+      "Add `interface Notifier` with `void notify(String customer, String message)`.",
+      "`OrderService(Notifier)` keeps `String place(String customer)` and never mentions `SmtpClient`.",
+      "Add an adapter that implements `Notifier` over `SmtpClient`; wire it in `Orders.place`.",
+      "`SmtpClient` itself stays as it is."]}
+  ],
+  "starter": ["Orders.java"],
+  "readOnly": [],
+  "solution": ["Orders.java"],
+  "tests": ["DipKataTest.java"],
+  "checks": [
+    {"id": "place-returns-receipt", "kind": "behaviour", "title": "The receipt is unchanged"},
+    {"id": "confirmation-goes-over-smtp", "kind": "behaviour", "title": "Confirmations still reach SMTP"},
+    {"id": "port-interface", "kind": "design", "title": "Notifier is a one-method interface"},
+    {"id": "service-does-not-know-smtp", "kind": "design", "title": "OrderService does not mention SmtpClient"},
+    {"id": "service-takes-its-port", "kind": "design", "title": "OrderService receives a final Notifier"},
+    {"id": "any-notifier-works", "kind": "design", "title": "OrderService accepts a Notifier it has never seen"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The business rule (\"confirm the order\") should not depend on how the mail goes out. Invert it: the rule states what it needs, and the mail library adapts to that."}],
+    [{"type": "p", "text": "Declare `Notifier` next to `OrderService`. Pass it through the constructor. Write `SmtpNotifier implements Notifier` that wraps an `SmtpClient`, and build the pair inside `Orders.place`."}],
+    [{"type": "p", "text": "The adapter and the wiring:"},
+     {"type": "code", "language": "java", "lines": [
+       "final class SmtpNotifier implements Notifier {",
+       "    private final SmtpClient smtp;",
+       "    SmtpNotifier(SmtpClient smtp) { this.smtp = smtp; }",
+       "    public void notify(String c, String m) { smtp.send(c, m); }",
+       "}",
+       "// Orders.place: new OrderService(new SmtpNotifier(new SmtpClient()))"]}]
+  ],
+  "timeoutSeconds": 10
+}

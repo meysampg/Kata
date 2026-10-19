@@ -1,0 +1,38 @@
+{
+  "kind": "fix",
+  "title": "Stop listeners from breaking the ticker",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "Alerts that unsubscribe themselves, or subscribe others, crash `Ticker` mid-notification."},
+    {"type": "p", "text": "Fix `Ticker` so these hold. Keep `PriceListener`, `Ticker(String, int)`, `set(int)` and `Runnable subscribe(PriceListener)` as they are."},
+    {"type": "bullets", "items": [
+      "A listener may subscribe or cancel from inside `onChange`. Every listener present when `set` started is still notified, once, in subscription order.",
+      "A listener subscribed during a notification first hears the next change.",
+      "Each `subscribe` call is its own registration. Running its handle removes exactly that registration, however many times it is run, even if the same listener was subscribed twice.",
+      "Do not call listeners while holding a lock."]}
+  ],
+  "starter": ["Ticker.java"],
+  "readOnly": [],
+  "solution": ["Ticker.java"],
+  "tests": ["ObserverKataTest.java"],
+  "checks": [
+    {"id": "delivers-in-order", "kind": "behaviour", "title": "Listeners hear a change in subscription order"},
+    {"id": "unchanged-price-is-silent", "kind": "behaviour", "title": "An unchanged price notifies nobody"},
+    {"id": "cancel-stops-delivery", "kind": "behaviour", "title": "A cancelled listener hears nothing more"},
+    {"id": "cancel-during-notify", "kind": "behaviour", "title": "A listener can cancel itself while notified"},
+    {"id": "subscribe-during-notify", "kind": "behaviour", "title": "A listener can subscribe another while notified"},
+    {"id": "cancel-is-per-registration", "kind": "behaviour", "title": "A handle removes only its own registration"},
+    {"id": "notify-outside-lock", "kind": "design", "title": "Listeners are not called under a lock"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Run the failing checks and read the exception. The loop in `set` walks a list that a listener is allowed to change. Decide which list the loop should walk: the live one, or a stable view of it."}],
+    [{"type": "p", "text": "Iterate over a snapshot (`CopyOnWriteArrayList`, or copy before looping). Separately, `remove(listener)` removes by equality, so wrap each subscription in its own small object and remove that."}],
+    [{"type": "p", "text": "Identity-based registration:"},
+     {"type": "code", "language": "java", "lines": [
+       "var registration = new Registration(listener);",
+       "registrations.add(registration);",
+       "return () -> registrations.remove(registration);"]},
+     {"type": "p", "text": "Registration has no `equals`, so a second run removes nothing."}]
+  ],
+  "timeoutSeconds": 10
+}

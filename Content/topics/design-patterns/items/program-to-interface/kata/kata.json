@@ -1,0 +1,39 @@
+{
+  "kind": "refactor",
+  "title": "Declare capabilities, not collection classes",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`Stats` and `Tally` force every caller onto `ArrayList` and `HashMap`."},
+    {"type": "p", "text": "Change the declarations, not the logic, so each one asks for the weakest type that still works. Results must stay identical for the lists the callers pass today."},
+    {"type": "bullets", "items": [
+      "`Stats.total(Collection<Integer>)` and `Stats.lengths(Collection<String>)`, which both only iterate.",
+      "`Stats.lengths` returns `Map<String, Integer>`.",
+      "`Tally` stores and returns a `List<Integer>` from `history()`.",
+      "No method or field of `Stats` or `Tally` names `ArrayList`, `HashMap` or another concrete collection."]}
+  ],
+  "starter": ["Stats.java"],
+  "readOnly": [],
+  "solution": ["Stats.java"],
+  "tests": ["ProgramToInterfaceKataTest.java"],
+  "checks": [
+    {"id": "total-sums", "kind": "behaviour", "title": "total still sums"},
+    {"id": "lengths-maps-words", "kind": "behaviour", "title": "lengths still maps words to sizes"},
+    {"id": "tally-records", "kind": "behaviour", "title": "Tally still records in order"},
+    {"id": "total-accepts-any-collection", "kind": "design", "title": "total accepts a List, a Set and a Deque"},
+    {"id": "lengths-accepts-any-collection", "kind": "design", "title": "lengths accepts a Set"},
+    {"id": "signatures-name-no-concrete-class", "kind": "design", "title": "No signature names a concrete collection"},
+    {"id": "lengths-returns-an-interface", "kind": "design", "title": "lengths returns Map"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Ask of each method: what does it actually do with the argument? Both only loop over it. That loop is the capability to ask for."}],
+    [{"type": "p", "text": "Parameters that are only iterated become `Collection` (or `Iterable`). Return types and fields become `Map` and `List`. The `new ArrayList<>()` and `new HashMap<>()` calls stay, because something must choose a class."}],
+    [{"type": "p", "text": "Only the left-hand types change:"},
+     {"type": "code", "language": "java", "lines": [
+       "static int total(Collection<Integer> xs) { ... }",
+       "static Map<String, Integer> lengths(Collection<String> words) {",
+       "    Map<String, Integer> out = new HashMap<>();",
+       "    ...",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

@@ -1,0 +1,36 @@
+{
+  "kind": "refactor",
+  "title": "Add a pricing tier without editing Pricer",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "Each new customer tier means editing the `switch` in `Pricer`."},
+    {"type": "p", "text": "Make `Pricer` closed for modification: a new tier must be a new rule that is registered, not a new `case`. `Pricing.price(tier, cents)` must keep returning exactly what it returns now, including full price for unknown tiers."},
+    {"type": "bullets", "items": [
+      "Add `interface PriceRule` with one method, `long apply(long cents)`.",
+      "`Pricer(Map<String, PriceRule>)` keeps `long price(String tier, long cents)`.",
+      "Define VIP, STAFF and CLEARANCE as rules outside `Pricer`, in `Tiers.standard()`."]}
+  ],
+  "starter": ["Pricer.java"],
+  "readOnly": [],
+  "solution": ["Pricer.java", "Tiers.java"],
+  "tests": ["OcpKataTest.java"],
+  "checks": [
+    {"id": "percent-tiers", "kind": "behaviour", "title": "VIP and STAFF prices are unchanged"},
+    {"id": "clearance-floor", "kind": "behaviour", "title": "CLEARANCE never goes below zero"},
+    {"id": "unknown-tier-pays-full", "kind": "behaviour", "title": "Unknown tiers pay full price"},
+    {"id": "rule-interface", "kind": "design", "title": "PriceRule is a one-method interface"},
+    {"id": "pricer-does-not-branch", "kind": "design", "title": "Pricer has no tier branches"},
+    {"id": "new-tier-needs-no-edit", "kind": "design", "title": "Pricer accepts a tier it has never seen"},
+    {"id": "tiers-defined-outside-pricer", "kind": "design", "title": "Tier rules live outside Pricer"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "What changes monthly is the set of tiers, and what stays is \"look up a rule, apply it\". Name the rule, then make `Pricer` know only that name."}],
+    [{"type": "p", "text": "Give `Pricer` a `Map<String, PriceRule>` through its constructor. `Pricer.price` finds the rule and applies it. The three tiers move to `Tiers.standard()`, and `Pricing` wires them together."}],
+    [{"type": "p", "text": "The whole of `Pricer.price` becomes:"},
+     {"type": "code", "language": "java", "lines": [
+       "long price(String tier, long cents) {",
+       "    return rules.getOrDefault(tier, c -> c).apply(cents);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

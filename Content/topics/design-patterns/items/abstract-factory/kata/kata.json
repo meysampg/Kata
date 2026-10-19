@@ -1,0 +1,40 @@
+{
+  "kind": "implement",
+  "title": "Local and cloud infrastructure families",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`Uploader` needs a blob store and an event bus that belong to the same environment."},
+    {"type": "p", "text": "`BlobStore`, `EventBus` and the **abstract factory** `Infra` are given (read-only). Implement the two families, the client and the selector."},
+    {"type": "bullets", "items": [
+      "`LocalInfra()` and `CloudInfra(String bucket)` implement `Infra`; the comments in `Infra.java` give each product's output. A blank bucket throws `IllegalArgumentException`.",
+      "`Uploader(Infra)`: `upload(key, body)` stores the body, then publishes the location on topic `uploaded` and returns the receipt.",
+      "`Infras.forEnv(String)`: `dev` is local, `prod` is `CloudInfra(\"acme-prod\")`, anything else throws `IllegalArgumentException`."]},
+    {"type": "p", "text": "`Uploader` must never name a concrete family."}
+  ],
+  "starter": ["Products.java", "Infra.java"],
+  "readOnly": ["Products.java"],
+  "solution": ["Products.java", "Infra.java"],
+  "tests": ["AbstractFactoryKataTest.java"],
+  "checks": [
+    {"id": "local-family", "kind": "behaviour", "title": "LocalInfra produces local products"},
+    {"id": "cloud-family", "kind": "behaviour", "title": "CloudInfra produces cloud products"},
+    {"id": "cloud-needs-a-bucket", "kind": "behaviour", "title": "CloudInfra rejects a blank bucket"},
+    {"id": "uploader-follows-its-family", "kind": "behaviour", "title": "Uploader uses the family it is given"},
+    {"id": "env-selects-a-family", "kind": "behaviour", "title": "Infras.forEnv picks a family"},
+    {"id": "families-implement-the-factory", "kind": "design", "title": "Both families implement Infra"},
+    {"id": "uploader-holds-only-the-factory", "kind": "design", "title": "Uploader holds a private final Infra"},
+    {"id": "uploader-ignores-concrete-families", "kind": "design", "title": "Uploader never names a concrete family"},
+    {"id": "families-do-not-mix", "kind": "design", "title": "Each family stays within itself"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "The point is consistency: a blob store and a bus must come from the same environment. The thing that varies is the whole family, so one object should hand out all of its products."}],
+    [{"type": "p", "text": "`LocalInfra` and `CloudInfra` each return their own `BlobStore` and `EventBus` (lambdas work, since both are single-method). `Uploader` stores only an `Infra` and calls `blobs()` and `events()`. Only `Infras` chooses a family."}],
+    [{"type": "p", "text": "The client sees only the factory:"},
+     {"type": "code", "language": "java", "lines": [
+       "String upload(String key, String body) {",
+       "    String where = infra.blobs().put(key, body);",
+       "    return infra.events().publish(\"uploaded\", where);",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

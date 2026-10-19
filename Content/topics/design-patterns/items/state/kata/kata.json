@@ -1,0 +1,39 @@
+{
+  "kind": "refactor",
+  "title": "Give each order status its own state",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`Order` switches on a status enum in every method."},
+    {"type": "p", "text": "Refactor to the **State** pattern: each phase of an order becomes an object that decides what every event does. The public behaviour of `Order` must not change, including which events are rejected with `IllegalStateException`."},
+    {"type": "bullets", "items": [
+      "Add `interface OrderState` with `OrderState pay(String)`, `OrderState ship(String)`, `OrderState cancel()`, each returning the next state, and `String describe()`.",
+      "Make one class per phase: new, paid, shipped, cancelled. Receipt and tracking live only in the states that have them.",
+      "`Order` keeps a single private `OrderState` and forwards events: `state = state.pay(r)`. Keep `new Order()`. The `Status` enum goes away."]}
+  ],
+  "starter": ["Order.java"],
+  "readOnly": [],
+  "solution": ["Order.java", "OrderState.java"],
+  "tests": ["StateKataTest.java"],
+  "checks": [
+    {"id": "happy-path", "kind": "behaviour", "title": "New, paid, shipped read as before"},
+    {"id": "cancel-before-shipping", "kind": "behaviour", "title": "New and paid orders can be cancelled"},
+    {"id": "illegal-events-rejected", "kind": "behaviour", "title": "Illegal events raise and change nothing"},
+    {"id": "cancelled-is-final", "kind": "behaviour", "title": "A cancelled order accepts no events"},
+    {"id": "state-interface", "kind": "design", "title": "OrderState returns the next state"},
+    {"id": "order-holds-one-state", "kind": "design", "title": "Order holds one private OrderState"},
+    {"id": "order-does-not-branch", "kind": "design", "title": "Order has no status switches"},
+    {"id": "one-class-per-phase", "kind": "design", "title": "Each phase is its own class"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Find what varies: what each event does depends on the phase. Give the phase an object of its own, so that `Order` no longer asks which phase it is in."}],
+    [{"type": "p", "text": "Declare `OrderState` with a default for every event that rejects it, then let each phase override only the events it allows. An event returns the successor state, which `Order` stores."}],
+    [{"type": "p", "text": "A record per phase carries its own data:"},
+     {"type": "code", "language": "java", "lines": [
+       "record Paid(String receipt) implements OrderState {",
+       "    public OrderState ship(String tracking) {",
+       "        return new Shipped(tracking);",
+       "    }",
+       "    // cancel() and describe() ...",
+       "}"]}]
+  ]
+}

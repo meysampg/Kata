@@ -1,0 +1,40 @@
+{
+  "kind": "refactor",
+  "title": "Share one import skeleton between two importers",
+  "minutes": 20,
+  "task": [
+    {"type": "lead", "text": "`CsvImporter` and `PipeImporter` copy the same skeleton."},
+    {"type": "p", "text": "Refactor to a **template method**: one abstract class owns the fixed sequence, and each importer supplies only what differs. `run(List<String>)`, `saved()` and `log()` must behave exactly as they do now, including logging `close` when a row fails."},
+    {"type": "bullets", "items": [
+      "Move the skeleton (open, skip blank lines, parse, filter minors, store, report, close) into one abstract superclass of both importers.",
+      "Its `run(List<String>)` is `final`. The steps subclasses fill in are not `public`.",
+      "`CsvImporter` and `PipeImporter` keep their no-argument constructors and contain only format knowledge: how to split a row, and that pipe files ignore `#` lines."]}
+  ],
+  "starter": ["Importers.java"],
+  "readOnly": [],
+  "solution": ["Importer.java"],
+  "tests": ["TemplateMethodKataTest.java"],
+  "checks": [
+    {"id": "csv-import", "kind": "behaviour", "title": "CSV rows import as before"},
+    {"id": "pipe-import", "kind": "behaviour", "title": "Pipe rows import as before"},
+    {"id": "comments-only-in-pipe", "kind": "behaviour", "title": "Only pipe files ignore # lines"},
+    {"id": "closes-after-bad-row", "kind": "behaviour", "title": "A bad row still logs close"},
+    {"id": "shared-abstract-base", "kind": "design", "title": "Both importers extend one abstract class"},
+    {"id": "run-is-final", "kind": "design", "title": "The template run is final"},
+    {"id": "steps-are-not-public", "kind": "design", "title": "The abstract steps are not public"},
+    {"id": "subclasses-only-parse", "kind": "design", "title": "Subclasses hold no skeleton code"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Compare the two classes line by line. The order of the steps is identical; only splitting a row and the comment rule differ. The sequence is what should be written once."}],
+    [{"type": "p", "text": "Create an abstract class holding `saved`, `log` and a `final run`. Add an abstract `parse(String)` step and a hook `ignore(String)` with a default. Both importers extend it."}],
+    [{"type": "p", "text": "The skeleton calls the steps, and the subclass fills them:"},
+     {"type": "code", "language": "java", "lines": [
+       "if (line.isBlank() || ignore(line)) {",
+       "    continue;",
+       "}",
+       "User u = parse(line);",
+       "// ...",
+       "protected abstract User parse(String line);",
+       "protected boolean ignore(String line) { return false; }"]}]
+  ]
+}

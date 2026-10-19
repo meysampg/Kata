@@ -1,0 +1,47 @@
+{
+  "kind": "implement",
+  "title": "A fail-fast ring buffer you can loop over",
+  "minutes": 25,
+  "task": [
+    {"type": "lead", "text": "A log viewer keeps the latest lines in a ring buffer. Make it `Iterable` without exposing its array."},
+    {"type": "p", "text": "Finish `RingBuffer<T>` in `RingBuffer.java`; the constructor and `size()` are done."},
+    {"type": "bullets", "items": [
+      "`add(T)` appends. When the buffer is full it overwrites the oldest element.",
+      "`iterator()` walks from the oldest element to the newest, so `for (T x : buffer)` works.",
+      "Every call returns an independent cursor; `hasNext()` never advances it.",
+      "`next()` past the end throws `NoSuchElementException`; `remove()` is unsupported.",
+      "The cursor is fail-fast: if the buffer was changed by `add` after the cursor was created, `next()` throws `ConcurrentModificationException`."]},
+    {"type": "p", "text": "Keep the storage private."}
+  ],
+  "starter": ["RingBuffer.java"],
+  "readOnly": [],
+  "solution": ["RingBuffer.java"],
+  "tests": ["IteratorKataTest.java"],
+  "checks": [
+    {"id": "oldest-first", "kind": "behaviour", "title": "Elements come out oldest first"},
+    {"id": "wraps-when-full", "kind": "behaviour", "title": "A full buffer overwrites the oldest element"},
+    {"id": "empty-and-exhausted", "kind": "behaviour", "title": "Running out of elements raises NoSuchElementException"},
+    {"id": "has-next-does-not-advance", "kind": "behaviour", "title": "hasNext() does not move the cursor"},
+    {"id": "independent-iterators", "kind": "behaviour", "title": "Two cursors move independently"},
+    {"id": "fail-fast", "kind": "behaviour", "title": "A stale cursor throws ConcurrentModificationException"},
+    {"id": "fresh-iterator-after-change", "kind": "behaviour", "title": "A new cursor sees the changed buffer"},
+    {"id": "remove-unsupported", "kind": "behaviour", "title": "remove() is unsupported"},
+    {"id": "buffer-is-not-its-own-cursor", "kind": "design", "title": "The buffer hands out separate cursor objects"},
+    {"id": "storage-stays-private", "kind": "design", "title": "The storage is not exposed"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Traversal state (how far you are) does not belong in the collection. Put it in a small cursor object that the buffer creates on every `iterator()` call."}],
+    [{"type": "p", "text": "Return an anonymous `Iterator<T>` that remembers `modCount` when created and keeps its own `offset`. The element at `offset` lives at slot `(start + offset) % slots.length`."}],
+    [{"type": "p", "text": "Core of the cursor:"},
+     {"type": "code", "language": "java", "lines": [
+       "private final int expected = modCount;",
+       "private int offset;",
+       "public boolean hasNext() { return offset < size; }",
+       "public T next() {",
+       "    if (expected != modCount) throw new ConcurrentModificationException();",
+       "    if (offset >= size) throw new NoSuchElementException();",
+       "    return (T) slots[(start + offset++) % slots.length];",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}

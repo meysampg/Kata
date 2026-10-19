@@ -1,0 +1,43 @@
+{
+  "kind": "refactor",
+  "title": "Let each report choose its own sink",
+  "minutes": 15,
+  "task": [
+    {"type": "lead", "text": "`Report` decides which `Sink` to build with an `if` chain on a format name."},
+    {"type": "p", "text": "Refactor it into a **factory method**. `Reports.render(format, totals)` must keep returning exactly what it returns now, and `Sink`, `CsvSink` and `JsonSink` stay as they are."},
+    {"type": "bullets", "items": [
+      "`Report` becomes `abstract` with one abstract method returning a `Sink`, and a `render(Map<String, Integer>)` that calls it.",
+      "Add one subclass per format: `CsvReport` and `JsonReport`.",
+      "`Reports.forFormat(String)` returns the right `Report`; unknown formats throw `IllegalArgumentException`."]}
+  ],
+  "starter": ["Report.java"],
+  "readOnly": [],
+  "solution": ["Report.java"],
+  "tests": ["FactoryMethodKataTest.java"],
+  "checks": [
+    {"id": "csv-output", "kind": "behaviour", "title": "CSV output is unchanged"},
+    {"id": "json-output", "kind": "behaviour", "title": "JSON output is unchanged"},
+    {"id": "empty-totals", "kind": "behaviour", "title": "Empty totals render as before"},
+    {"id": "unknown-format", "kind": "behaviour", "title": "Unknown formats are rejected"},
+    {"id": "report-has-factory-method", "kind": "design", "title": "Report is abstract with one Sink factory method"},
+    {"id": "render-uses-the-hook", "kind": "design", "title": "render gets its Sink from the factory method"},
+    {"id": "report-does-not-choose-a-sink", "kind": "design", "title": "Report never creates a concrete Sink"},
+    {"id": "report-keeps-no-format", "kind": "design", "title": "Report no longer stores a format name"},
+    {"id": "format-lookup-in-reports", "kind": "design", "title": "Reports.forFormat picks the Report"}
+  ],
+  "hints": [
+    [{"type": "p", "text": "Find what varies: which `Sink` gets created. The rest of `render` is the same for every format. Separate the step that varies from the steps that do not."}],
+    [{"type": "p", "text": "Declare a `protected abstract Sink createSink()` in an abstract `Report`, keep `render` as the fixed algorithm that calls it, and move each `new` into `CsvReport` or `JsonReport`. Choose the subclass in `Reports`."}],
+    [{"type": "p", "text": "The creator calls its own hook:"},
+     {"type": "code", "language": "java", "lines": [
+       "abstract class Report {",
+       "    protected abstract Sink createSink();",
+       "    final String render(Map<String, Integer> totals) {",
+       "        Sink sink = createSink();",
+       "        totals.forEach(sink::write);",
+       "        return sink.close();",
+       "    }",
+       "}"]}]
+  ],
+  "timeoutSeconds": 10
+}
