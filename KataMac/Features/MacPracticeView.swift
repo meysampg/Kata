@@ -31,6 +31,12 @@ struct MacPracticeView: View {
     .task {
       if session == nil {
         session = PracticeSessionModel(kind: request.kind, model: model.study)
+        #if DEBUG
+        // `-KataSkip N` answers and rates the first N exercises, to land on a given one.
+        for _ in 0..<DebugLaunch.skipExercises {
+          session?.submit(.option(0)); session?.commit(.good)
+        }
+        #endif
       }
     }
   }
@@ -58,6 +64,7 @@ struct MacPracticeView: View {
           .id(session.step)
           .frame(maxWidth: MacLayout.readableWidth + 2 * MacLayout.pageMargin)
           .frame(maxWidth: .infinity)
+          .boundedHeight()
       }
       .safeAreaInset(edge: .bottom, spacing: 0) { feedbackPanel(session) }
       .background { shortcuts(session) }

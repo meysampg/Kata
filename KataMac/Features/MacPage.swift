@@ -79,3 +79,19 @@ struct MacItemListCard: View {
     .background(.background.secondary, in: .rect(cornerRadius: Theme.cardRadius))
   }
 }
+
+/// Pins a flexible child to the height it is offered (min = ideal = offered), so a vertical
+/// `ScrollView` inside can never size the window's content to its full document height.
+struct BoundedHeight: ViewModifier {
+  func body(content: Content) -> some View {
+    GeometryReader { geo in
+      content.frame(width: geo.size.width, height: geo.size.height)
+    }
+  }
+}
+
+extension View {
+  /// See `BoundedHeight`: use on screens that hold a `ScrollView` or `List` which must fill the
+  /// window rather than size it.
+  func boundedHeight() -> some View { modifier(BoundedHeight()) }
+}

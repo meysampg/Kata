@@ -34,7 +34,13 @@ struct MacItemView: View {
   @Environment(AppSettings.self) private var settings
   @State private var tab: ItemTab
   @State private var role: String?
-  @State private var codeMode: CodeViewMode = .read
+  @State private var codeMode: CodeViewMode = {
+    #if DEBUG
+    return DebugLaunch.walkStep > 0 ? .walkthrough : .read
+    #else
+    return .read
+    #endif
+  }()
   @State private var isNotePresented = false
   @State private var noteDraft = ""
   @State private var comingSoon: String?
@@ -252,6 +258,7 @@ private struct CardsTab: View {
       .frame(maxWidth: 900)
       .frame(maxWidth: .infinity)
       .padding(.top, 14)
+      .boundedHeight()
       .overlay(alignment: .bottomTrailing) {
         if isLast && hasExercises { practiceButton.padding(20) }
       }

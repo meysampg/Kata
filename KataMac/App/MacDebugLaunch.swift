@@ -35,6 +35,11 @@ enum DebugLaunch {
     var running = 0
   }
 
+  /// `-KataSkip N`: practice sessions skip their first N exercises. `-KataWalk N`: the code card
+  /// opens in Walkthrough mode at step N (1-based).
+  static var skipExercises: Int { isDemo ? UserDefaults.standard.integer(forKey: "KataSkip") : 0 }
+  static var walkStep: Int { isDemo ? UserDefaults.standard.integer(forKey: "KataWalk") : 0 }
+
   static var autoRun: Bool { isDemo && UserDefaults.standard.bool(forKey: "KataAutoRun") }
   static var autoSolve: String? { isDemo ? UserDefaults.standard.string(forKey: "KataAutoSolve") : nil }
   static var autoRate: String? { isDemo ? UserDefaults.standard.string(forKey: "KataAutoRate") : nil }
@@ -96,6 +101,21 @@ enum DebugLaunch {
       NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     default: break
     }
+  }
+
+  /// `-KataDump YES`: prints the AppKit view tree (class and frame) once the screen has settled.
+  static func dumpIfRequested() async {
+    guard isDemo, UserDefaults.standard.bool(forKey: "KataDump") else { return }
+    try? await Task.sleep(for: .seconds(3))
+    func walk(_ v: NSView, _ depth: Int) {
+      let f = v.frame
+      if f.height > 100 || depth < 6 {
+        print(String(repeating: " ", count: depth) + "\(type(of: v)) \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height))")
+      }
+      for c in v.subviews { walk(c, depth + 1) }
+    }
+    for w in NSApp.windows where w.isVisible { if let v = w.contentView?.superview { walk(v, 0) } }
+    fflush(stdout)
   }
 
   /// Writes window snapshots when `-KataSnapshot <path>` was passed, then terminates.

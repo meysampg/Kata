@@ -17,6 +17,7 @@ public struct CodeModePicker: View {
       ForEach(CodeViewMode.allCases) { Text($0.rawValue).tag($0) }
     }
     .pickerStyle(.segmented)
+    .labelsHidden()
   }
 }
 
@@ -67,6 +68,13 @@ public struct CodeWalkthroughView: View {
         scrollsVertically: true, scrollToLine: walking ? state.current?.lines.lowerBound : nil,
         footer: walking ? nil : readFooter
       )
+      #if DEBUG
+      .onAppear {
+        // Screenshot hook: `-KataWalk N` (demo mode) starts at step N.
+        let n = UserDefaults.standard.integer(forKey: "KataWalk")
+        if UserDefaults.standard.bool(forKey: "KataDemo"), n > 1 { state.go(to: n - 1) }
+      }
+      #endif
       .animation(.smooth, value: state.index)
       .animation(.smooth, value: walking)
       .safeAreaInset(edge: .bottom, spacing: 0) {

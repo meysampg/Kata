@@ -22,6 +22,9 @@ public struct FeedbackPanel: View {
   let onRate: (Rating) -> Void
 
   @Environment(\.dynamicTypeSize) private var typeSize
+  #if os(macOS)
+  @State private var contentHeight: CGFloat = 0
+  #endif
 
   public init(
     isCorrect: Bool, headline: String, lines: [FeedbackLine], suggested: Rating,
@@ -52,8 +55,16 @@ public struct FeedbackPanel: View {
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(macOS)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        #endif
       }
+      #if os(macOS)
+      // A macOS ScrollView takes all the height it is offered; fit it to its text instead.
+      .frame(height: min(contentHeight, typeSize.isAccessibilitySize ? 220 : 170))
+      #else
       .frame(maxHeight: typeSize.isAccessibilitySize ? 220 : 170)
+      #endif
       .scrollBounceBehavior(.basedOnSize)
 
       GlassEffectContainer(spacing: 8) {

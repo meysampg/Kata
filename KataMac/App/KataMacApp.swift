@@ -14,6 +14,7 @@ struct KataMacApp: App {
         .task {
           #if DEBUG
           await DebugLaunch.run(model)
+          await DebugLaunch.dumpIfRequested()
           await DebugLaunch.snapshotIfRequested()
           #endif
         }
