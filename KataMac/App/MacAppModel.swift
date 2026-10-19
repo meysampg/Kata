@@ -1,5 +1,6 @@
 import Foundation
 import KataCore
+import KataRun
 import KataSRS
 import KataStore
 import OSLog
@@ -43,6 +44,14 @@ final class MacAppModel {
   let macSettings: MacSettings
   /// Set when a pack failed to decode; the app then runs with an empty library.
   let libraryError: String?
+  /// The JDK and the check runner shared by every kata.
+  let toolchain: JavaToolchain
+  /// Kata sessions by item, kept while the app runs so an IDE watch and results survive tab switches.
+  private(set) var kataSessions: [ItemKey: KataSessionModel] = [:]
+  /// Items whose soft gate the learner overrode.
+  private(set) var kataGateOverrides: Set<ItemKey> = []
+  /// Known IDEs that are installed.
+  private(set) var ides: [IDE] = []
 
   var library: ContentLibrary { study.library }
   var store: ProgressStore { study.store }
@@ -68,6 +77,8 @@ final class MacAppModel {
     self.container = container
     self.libraryError = libraryError
     self.macSettings = macSettings
+    self.toolchain = JavaToolchain(preferredHome: { macSettings.jdkHome })
+    self.ides = IDELauncher.installed()
     self.study = StudyModel(
       library: library, store: ProgressStore(container: container), settings: settings,
       kataKeys: Set(library.katas.keys))
@@ -142,6 +153,43 @@ final class MacAppModel {
   }
 
   func startReview() { practice = PracticeRequest(kind: .review) }
+
+  // MARK: Katas
+
+  /// Creates the session for `key` on first use.
+  func ensureKataSession(_ key: ItemKey) {
+    guard kataSessions[key] == nil, let kata = library.kata(key) else { return }
+    kataSessions[key] = makeKataSession(key, kata: kata)
+  }
+
+  func overrideKataGate(_ key: ItemKey) {
+    kataGateOverrides.insert(key)
+    ensureKataSession(key)
+  }
+
+  func makeKataSession(_ key: ItemKey, kata: Kata) -> KataSessionModel {
+    KataSessionModel(
+      key: key, kata: kata, store: store, settings: settings, checker: JavaKataChecker(toolchain: toolchain),
+      workspaceRoot: { [macSettings] in macSettings.workspaceRoot },
+      recheckOnSave: { [macSettings] in macSettings.recheckOnSave })
+  }
+
+  /// Throws the session away (progress was reset, or a due review should start over).
+  func resetKataSession(_ key: ItemKey) {
+    kataSessions[key]?.flushDraft()
+    kataSessions[key]?.leaveIDEMode()
+    kataSessions[key] = nil
+    ensureKataSession(key)
+  }
+
+  /// The IDE "Open in IDE" uses: the Settings choice, else the first one installed.
+  func selectedIDE() -> IDE? {
+    if let path = macSettings.ideAppPath, let ide = IDELauncher.ide(at: URL(fileURLWithPath: path)) { return ide }
+    if let id = macSettings.ideBundleID, let ide = IDELauncher.ide(bundleID: id) { return ide }
+    return ides.first
+  }
+
+  func refreshIDEs() { ides = IDELauncher.installed() }
 
   /// Resolves a `kata:<item-id>` link (optionally `kata:<topic>/<item-id>`) relative to a topic.
   func resolve(link url: URL, in topic: TopicID) -> ItemKey? {

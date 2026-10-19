@@ -17,6 +17,7 @@
 		CA7A00000000000000006751 /* KataSRS in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006750 /* KataSRS */; };
 		CA7A00000000000000006761 /* KataCode in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006760 /* KataCode */; };
 		CA7A00000000000000006771 /* KataDiagram in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006770 /* KataDiagram */; };
+		CA7A00000000000000006781 /* KataEditor in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006780 /* KataEditor */; };
 		CA7A00000000000000006800 /* design-patterns.kpack in Resources */ = {isa = PBXBuildFile; fileRef = CA7A00000000000000000600 /* design-patterns.kpack */; };
 		CA7A00000000000000006810 /* design-patterns.kkata in Resources */ = {isa = PBXBuildFile; fileRef = CA7A00000000000000000610 /* design-patterns.kkata */; };
 /* End PBXBuildFile section */
@@ -113,6 +114,7 @@
 				CA7A00000000000000006751 /* KataSRS in Frameworks */,
 				CA7A00000000000000006761 /* KataCode in Frameworks */,
 				CA7A00000000000000006771 /* KataDiagram in Frameworks */,
+				CA7A00000000000000006781 /* KataEditor in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,6 +244,7 @@
 				CA7A00000000000000006750 /* KataSRS */,
 				CA7A00000000000000006760 /* KataCode */,
 				CA7A00000000000000006770 /* KataDiagram */,
+				CA7A00000000000000006780 /* KataEditor */,
 			);
 			productName = KataMac;
 			productReference = CA7A00000000000000001200 /* KataMac.app */;
@@ -750,6 +753,10 @@
 		CA7A00000000000000006770 /* KataDiagram */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KataDiagram;
+		};
+		CA7A00000000000000006780 /* KataEditor */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataEditor;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

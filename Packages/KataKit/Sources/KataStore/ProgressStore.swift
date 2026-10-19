@@ -408,6 +408,16 @@ public final class ProgressStore {
     return result
   }
 
+  /// Moves a kata card's due date (the Debug "Make due now" command and tests). Returns false
+  /// when the item has no kata card yet.
+  @discardableResult
+  public func setKataDue(_ item: ItemKey, to date: Date) -> Bool {
+    guard let m = cardModel(Self.kataCardKey(item)) else { return false }
+    m.due = date
+    save()
+    return true
+  }
+
   /// Cards of katas (exercise id `kata`).
   public func kataCards() -> [CardRecord] {
     allCardRecords().filter { $0.key.exercise == "kata" }

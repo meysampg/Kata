@@ -1,9 +1,11 @@
+import KataRun
 import SwiftUI
 
 /// Menu commands and their shortcuts (MAC_PLAN §5.5, the part that exists before the kata screen).
 struct MacCommands: Commands {
   let model: MacAppModel
   @FocusedValue(\.itemNavigation) private var item
+  @FocusedValue(\.kataSession) private var kata
 
   var body: some Commands {
     CommandGroup(replacing: .newItem) {}  // one main window
@@ -34,5 +36,41 @@ struct MacCommands: Commands {
           .disabled(!(item?.isCards ?? false) || n > (item?.pageCount ?? 0))
       }
     }
+    CommandMenu("Kata") {
+      Button("Run Checks") { kata?.startRun() }
+        .keyboardShortcut("r", modifiers: .command)
+        .disabled(kata == nil || kata?.isRunning == true)
+      Button("Show Next Hint") { kata?.requestHint() }
+        .keyboardShortcut("h", modifiers: [.command, .shift])
+        .disabled(kata == nil || (kata?.hintsRemaining ?? 0) == 0)
+      Button("Reveal Solution") { kata?.requestReveal() }
+        .keyboardShortcut("s", modifiers: [.command, .option])
+        .disabled(kata == nil)
+      Button("Reset to Starter") { kata?.confirmation = .reset }
+        .keyboardShortcut(.delete, modifiers: [.command, .shift])
+        .disabled(kata == nil)
+      Divider()
+      Button("Open in IDE") { openInIDE(model.selectedIDE()) }
+        .keyboardShortcut("o", modifiers: .command)
+        .disabled(kata == nil)
+      Menu("Open in") {
+        ForEach(model.ides) { ide in
+          Button(ide.name) { openInIDE(ide) }
+        }
+      }
+      .disabled(kata == nil || model.ides.isEmpty)
+      Button("Back to Built-in Editor") { kata?.leaveIDEMode() }
+        .disabled(kata?.mode != .ide)
+      Divider()
+      Button("Jump to Next Diagnostic") { kata?.jumpToNextDiagnostic() }
+        .keyboardShortcut("'", modifiers: .command)
+        .disabled(kata == nil)
+    }
+  }
+
+  private func openInIDE(_ ide: IDE?) {
+    guard let kata else { return }
+    guard let ide else { kata.reportIDEUnavailable(); return }
+    Task { await kata.startIDEMode(ide: ide) }
   }
 }

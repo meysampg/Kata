@@ -2,15 +2,20 @@ import KataStore
 import KataUI
 import SwiftUI
 
-/// The Settings window (⌘,). Only the General tab exists so far; Editor, Java and IDE arrive with
-/// the kata screen.
+/// The Settings window (⌘,): General, Editor, Java and IDE.
 struct MacSettingsView: View {
   var body: some View {
     TabView {
       GeneralSettingsView()
         .tabItem { Label("General", systemImage: "gearshape") }
+      EditorSettingsView()
+        .tabItem { Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right") }
+      JavaSettingsView()
+        .tabItem { Label("Java", systemImage: "cup.and.saucer") }
+      IDESettingsView()
+        .tabItem { Label("IDE", systemImage: "macwindow") }
     }
-    .frame(width: 520)
+    .frame(width: 540)
   }
 }
 

@@ -12,6 +12,7 @@ let package = Package(
     .library(name: "KataUI", targets: ["KataUI"]),
     .library(name: "KataStore", targets: ["KataStore"]),
     .library(name: "KataRun", targets: ["KataRun"]),
+    .library(name: "KataEditor", targets: ["KataEditor"]),
     .executable(name: "kata-pack", targets: ["kata-pack"])
   ],
   targets: [
@@ -23,6 +24,8 @@ let package = Package(
     .target(name: "KataStore", dependencies: ["KataCore", "KataSRS"]),
     // macOS only: spawns a JDK. Never link it into the iOS app.
     .target(name: "KataRun", dependencies: ["KataCore"], resources: [.copy("Harness")]),
+    // macOS only (AppKit): the source editor for the kata screen.
+    .target(name: "KataEditor", dependencies: ["KataCode", "KataUI"]),
     .executableTarget(name: "kata-pack", dependencies: ["KataCore", "KataRun"]),
     .testTarget(name: "KataSRSTests", dependencies: ["KataSRS"]),
     .testTarget(name: "KataCodeTests", dependencies: ["KataCode"]),
@@ -32,6 +35,7 @@ let package = Package(
       resources: [.copy("Fixtures")]),
     .testTarget(name: "KataStoreTests", dependencies: ["KataStore", "KataCore", "KataSRS"]),
     .testTarget(name: "KataUITests", dependencies: ["KataUI", "KataSRS", "KataCode"]),
+    .testTarget(name: "KataEditorTests", dependencies: ["KataEditor", "KataCode", "KataUI"]),
     .testTarget(
       name: "KataRunTests", dependencies: ["KataRun", "KataCore"],
       resources: [.copy("Fixtures")]),

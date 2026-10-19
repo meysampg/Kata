@@ -14,6 +14,9 @@ import SwiftUI
 /// `today`, `path`, `library`, `category:<id>`, `bookmarks`, `search` (optionally `search:<query>`),
 /// `item` (or `item:<role>`, e.g. `item:structure`), `itempractice`, `kata`, `practice` (a review
 /// session) and `settings`.
+/// With `-KataScreen kata`, `-KataAutoRun YES` runs the checks once when the screen appears and
+/// `-KataAutoSolve strategy` runs them, loads the reference solution and runs them again (a
+/// no-UI end-to-end smoke; the snapshot waits for it). `-KataAutoRate good` then rates the pass.
 /// `-KataSnapshot <file.png>` additionally writes the main window (and the Settings window, as
 /// `<file>-settings.png`) to disk after the screen has settled, then quits: a screenshot that needs
 /// no screen-recording permission.
@@ -23,6 +26,34 @@ enum DebugLaunch {
 
   static var screen: String? {
     isDemo ? UserDefaults.standard.string(forKey: "KataScreen") : nil
+  }
+
+  /// Counts debug jobs still running (kata auto-runs); the snapshot waits for zero.
+  @MainActor @Observable
+  final class Jobs {
+    static let shared = Jobs()
+    var running = 0
+  }
+
+  static var autoRun: Bool { isDemo && UserDefaults.standard.bool(forKey: "KataAutoRun") }
+  static var autoSolve: String? { isDemo ? UserDefaults.standard.string(forKey: "KataAutoSolve") : nil }
+  static var autoRate: String? { isDemo ? UserDefaults.standard.string(forKey: "KataAutoRate") : nil }
+
+  /// Drives a kata session from launch arguments.
+  static func driveKata(_ session: KataSessionModel) async {
+    guard autoRun || autoSolve != nil else { return }
+    Jobs.shared.running += 1
+    defer { Jobs.shared.running -= 1 }
+    await session.run()
+    if let which = autoSolve, session.key.item == which {
+      session.replaceFiles(session.kata.solution)
+      await session.run()
+      print("KataAutoSolve: passed=\(session.passed) checks=\(session.passedCount)/\(session.kata.checks.count) hints=\(session.hintsShown)")
+      if let r = autoRate {
+        let rating: Rating = ["again": .again, "hard": .hard, "good": .good, "easy": .easy][r] ?? .good
+        if let scheduled = session.rate(rating) { print("KataAutoRate: \(rating) next due \(scheduled.card.due)") }
+      }
+    }
   }
 
   static func makeModel() -> MacAppModel {
@@ -71,12 +102,28 @@ enum DebugLaunch {
   static func snapshotIfRequested() async {
     guard isDemo, let path = UserDefaults.standard.string(forKey: "KataSnapshot") else { return }
     try? await Task.sleep(for: .seconds(2.5))
+    var waited = 0
+    while Jobs.shared.running > 0, waited < 600 {
+      try? await Task.sleep(for: .milliseconds(100))
+      waited += 1
+    }
+    try? await Task.sleep(for: .seconds(1))
     let base = URL(fileURLWithPath: path)
     for window in NSApp.windows where window.isVisible && window.contentView != nil {
       guard let view = window.contentView?.superview ?? window.contentView else { continue }
       let isSettings = window.title == "General" || window.title.hasSuffix("Settings")
       let url = isSettings
         ? base.deletingPathExtension().appendingPathExtension("settings.png") : base
+      // The window server's own capture of just this window renders rulers and AppKit text
+      // views faithfully; `cacheDisplay` below is the fallback.
+      let capture = Process()
+      capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+      capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.path]
+      try? FileManager.default.removeItem(at: url)
+      if (try? capture.run()) != nil {
+        capture.waitUntilExit()
+        if capture.terminationStatus == 0, FileManager.default.fileExists(atPath: url.path) { continue }
+      }
       guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
       view.cacheDisplay(in: view.bounds, to: rep)
       if let data = rep.representation(using: .png, properties: [:]) { try? data.write(to: url) }

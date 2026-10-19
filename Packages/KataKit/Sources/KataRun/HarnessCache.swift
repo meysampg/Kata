@@ -167,7 +167,7 @@
       }
     }
 
-    static func environment(tmp: URL) -> [String: String] {
+    public static func environment(tmp: URL) -> [String: String] {
       [
         "PATH": "/usr/bin:/bin", "HOME": NSHomeDirectory(), "LANG": "en_US.UTF-8", "TMPDIR": tmp.path + "/",
       ]

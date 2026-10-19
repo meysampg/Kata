@@ -25,6 +25,11 @@ Kata is an iOS 26+ SwiftUI app for mastering design patterns (and, later, other 
 │ KataUI       SwiftUI renderers (iOS + macOS): CodeView, CodeWalkthroughView,    │
 │              DiagramView, BlocksView, MasteryRing, RatingBar, HoldToConfirm,    │
 │              Platform.swift (UIFont/NSFont, UIColor/NSColor shim)               │
+│ KataRun      (macOS) JDKLocator, HarnessCache, KataProcess, KataCheckRunner,    │
+│              KataReport, KataVerifier, WorkspaceWriter, FolderWatcher,          │
+│              IDELauncher; Java harness sources as a resource                    │
+│ KataEditor   (macOS, AppKit) CodeEditorView, CodeTextView, LineNumberRuler,     │
+│              EditorHighlighter                                                  │
 │ kata-pack    CLI: build | validate | check-java                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 Content/topics/<topic>/  →  kata-pack build  →  Kata/Resources/Packs/<topic>.kpack
@@ -80,6 +85,16 @@ Content/topics/<topic>/  →  kata-pack build  →  Kata/Resources/Packs/<topic>
 ### Reminders
 
 `ReminderScheduler` replaces seven one-shot `UNCalendarNotificationTrigger`s (`review-reminder-0...6`) on launch, when the app becomes active, after a session, and when settings change. `ReminderScheduler.plan(...)` is pure and unit tested: today is skipped when the time has passed, or when today has activity and nothing is due.
+
+### Mac app (KataMac target, `docs/MAC_PLAN.md`)
+
+`KataMac/` is a separate macOS 26 app (bundle `com.github.meysampg.kata.mac`, not sandboxed, hardened runtime) over the same packages. `MacAppModel` composes `StudyModel`, `MacSettings` (`mac.*` keys: katas per day, editor font, re-check on save, JDK home, IDE, workspace root), a `JavaToolchain` and one `KataSessionModel` per item. Katas load from `KataMac/Resources/Katas/*.kkata`.
+
+- **KataRun** runs checks in a separate JVM: `HarnessCache` compiles the bundled harness once per JDK, `KataCheckRunner` (actor, one run at a time) spawns `KataProcess` with a wall-clock kill and output cap, and `KataReport.parse` reads the NDJSON. `FolderWatcher` (FSEvents, 0.3 s debounce, SHA-256 content compare so atomic safe-writes and no-op saves are handled; the only `@unchecked Sendable` type) reports real changes to `src/*.java`. `IDELauncher` finds IntelliJ, Zed and Cursor by bundle id and opens a folder through `NSWorkspace`.
+- **KataEditor** is TextKit 1: `CodeTextView` (Tab, ⇧Tab, auto-indent, `}` outdent and ⌘/ from `KataCode/Indentation.swift`; find bar; smart substitutions off), `EditorHighlighter` (JavaLexer diff, temporary attributes, flushed from `didChangeText` because the layout manager cannot be touched during `didProcessEditing`), `LineNumberRuler` (a sibling gutter view, not an `NSRulerView`, which let the text scroll under it) and diagnostics as underlines, gutter dots and tooltips.
+- **KataSessionModel** (`KataMac/Kata/`) owns files, drafts (autosaved 1 s after the last edit), run state, the 3-step hint ladder, reveal, rating (`KataGrader` then `ProgressStore.recordKataPass`), review-from-starter and IDE mode (`WorkspaceWriter` at `<root>/workspaces/<topic>/<item>/`, watcher, re-check on save). It talks to the JDK only through the `KataChecking` protocol, so most of it is tested with a fake. `KataView` is task, editor and results panes (results move below the editor under 1200 pt).
+- **Debug**: `-KataScreen kata`, `-KataAutoRun YES`, `-KataAutoSolve strategy [-KataAutoRate good]` and `-KataSnapshot <png>` (window capture through `screencapture -l`) drive the kata screen without UI automation. A Debug-only menu in the results pane has "Make due now".
+- **Tests**: `KataMacTests` (hosted; real Strategy runs are skipped when no JDK 21+ exists), `KataEditorTests`, `KataRunTests` (including `FolderWatcherTests`).
 
 ## 3. Concurrency rules (Swift 6, strict)
 
