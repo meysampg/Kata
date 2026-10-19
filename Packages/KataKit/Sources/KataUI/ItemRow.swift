@@ -1,11 +1,9 @@
 import KataCore
-import KataStore
-import KataUI
 import SwiftUI
 
 /// One item in a list: mastery ring, title, intent or note, bookmark glyph.
 /// Items without a body are dimmed and marked "Coming soon".
-struct ItemRow: View {
+public struct ItemRow: View {
   let meta: ItemMeta
   let mastery: ItemMastery?
   let hasContent: Bool
@@ -14,7 +12,16 @@ struct ItemRow: View {
   var isNext = false
   var showsCategory: String?
 
-  var body: some View {
+  public init(
+    meta: ItemMeta, mastery: ItemMastery?, hasContent: Bool, isBookmarked: Bool = false,
+    note: String = "", isNext: Bool = false, showsCategory: String? = nil
+  ) {
+    self.meta = meta; self.mastery = mastery; self.hasContent = hasContent
+    self.isBookmarked = isBookmarked; self.note = note; self.isNext = isNext
+    self.showsCategory = showsCategory
+  }
+
+  public var body: some View {
     HStack(spacing: 14) {
       MasteryRing(level: mastery?.level ?? .notStarted, fraction: mastery?.fraction ?? 0)
         .frame(width: 26, height: 26)

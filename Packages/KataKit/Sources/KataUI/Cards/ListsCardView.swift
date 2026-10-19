@@ -1,11 +1,12 @@
 import KataCore
-import KataUI
 import SwiftUI
 
-struct ListsCardView: View {
+public struct ListsCardView: View {
   let groups: [ListGroup]
 
-  var body: some View {
+  public init(groups: [ListGroup]) { self.groups = groups }
+
+  public var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
         VStack(alignment: .leading, spacing: 10) {

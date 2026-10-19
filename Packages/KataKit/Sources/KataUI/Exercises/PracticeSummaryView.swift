@@ -1,13 +1,33 @@
 import KataSRS
-import KataStore
-import KataUI
 import SwiftUI
 
-struct PracticeSummaryView: View {
-  let summary: PracticeSessionModel.Summary
+/// The numbers shown at the end of a session.
+public struct PracticeSummaryValues {
+  public var total: Int
+  public var correct: Int
+  public var counts: [Rating: Int]
+  public var streak: Int
+  public var firstStudy: Bool
+  public var itemTitle: String?
+
+  public init(
+    total: Int, correct: Int, counts: [Rating: Int], streak: Int, firstStudy: Bool,
+    itemTitle: String?
+  ) {
+    self.total = total; self.correct = correct; self.counts = counts; self.streak = streak
+    self.firstStudy = firstStudy; self.itemTitle = itemTitle
+  }
+}
+
+public struct PracticeSummaryView: View {
+  let summary: PracticeSummaryValues
   let onDone: () -> Void
 
-  var body: some View {
+  public init(summary: PracticeSummaryValues, onDone: @escaping () -> Void) {
+    self.summary = summary; self.onDone = onDone
+  }
+
+  public var body: some View {
     VStack(spacing: 24) {
       Spacer()
       Image(systemName: "checkmark.circle")
@@ -45,6 +65,7 @@ struct PracticeSummaryView: View {
         Text("Done").font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
       }
       .buttonStyle(.glassProminent)
+      .keyboardShortcut(.defaultAction)
       .frame(maxWidth: 420)
     }
     .padding(.horizontal, Theme.pageMargin)

@@ -1,4 +1,5 @@
 import KataCore
+import KataUI
 import SwiftUI
 
 struct SearchView: View {

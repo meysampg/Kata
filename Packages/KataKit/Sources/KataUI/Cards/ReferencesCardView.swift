@@ -1,11 +1,12 @@
 import KataCore
-import KataUI
 import SwiftUI
 
-struct ReferencesCardView: View {
+public struct ReferencesCardView: View {
   let entries: [Reference]
 
-  var body: some View {
+  public init(entries: [Reference]) { self.entries = entries }
+
+  public var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
         VStack(alignment: .leading, spacing: 6) {

@@ -1,14 +1,12 @@
 import KataCore
-import KataStore
-import KataUI
 import SwiftUI
 
 struct TapLineExerciseView: View {
   let exercise: Exercise
-  let session: PracticeSessionModel
-  let feedback: PracticeSessionModel.Feedback?
-  @Environment(AppSettings.self) private var settings
+  let context: ExerciseContext
   @State private var selected: Int?
+
+  private var feedback: ExerciseFeedback? { context.feedback }
 
   var body: some View {
     if case .tapLine(let lines, let flaw, _) = exercise.body {
@@ -16,7 +14,7 @@ struct TapLineExerciseView: View {
         VStack(alignment: .leading, spacing: 16) {
           ExercisePrompt(text: exercise.prompt)
           CodeView(
-            source: lines.joined(separator: "\n"), fontSize: settings.codeFontPoints,
+            source: lines.joined(separator: "\n"), fontSize: context.codeFontSize,
             showLineNumbers: true,
             onTapLine: { n in if feedback == nil { selected = n } },
             lineDecorations: decorations(flaw: flaw)
@@ -33,11 +31,12 @@ struct TapLineExerciseView: View {
       .safeAreaInset(edge: .bottom) {
         if feedback == nil {
           Button {
-            if let selected { session.submit(.line(selected)) }
+            if let selected { context.submit(.line(selected)) }
           } label: {
             Text("Check").font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
           }
           .buttonStyle(.glassProminent)
+          .keyboardShortcut(.defaultAction)
           .disabled(selected == nil)
           .padding(.horizontal, Theme.pageMargin)
           .padding(.bottom, 8)

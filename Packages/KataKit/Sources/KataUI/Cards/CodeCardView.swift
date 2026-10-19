@@ -1,18 +1,22 @@
 import KataCore
-import KataStore
-import KataUI
 import SwiftUI
 
 /// Code card: Read / Walkthrough (the mode switch lives in the deck's toolbar). The walkthrough
 /// view owns its vertical scroll, so this view must not be wrapped in another ScrollView.
-struct CodeCardView: View {
+public struct CodeCardView: View {
   let card: CodeCard
+  let fontSize: CGFloat
+  let showLineNumbers: Bool
   @Binding var mode: CodeViewMode
-  @Environment(AppSettings.self) private var settings
 
-  var body: some View {
+  public init(card: CodeCard, fontSize: CGFloat, showLineNumbers: Bool, mode: Binding<CodeViewMode>) {
+    self.card = card; self.fontSize = fontSize; self.showLineNumbers = showLineNumbers
+    _mode = mode
+  }
+
+  public var body: some View {
     CodeWalkthroughView(
-      card: card, fontSize: settings.codeFontPoints, showLineNumbers: settings.showLineNumbers,
+      card: card, fontSize: fontSize, showLineNumbers: showLineNumbers,
       mode: $mode,
       readFooter: card.expectedOutput.flatMap { $0.isEmpty ? nil : AnyView(outputSection($0)) })
   }
@@ -23,7 +27,7 @@ struct CodeCardView: View {
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       Text(output)
-        .font(.system(size: settings.codeFontPoints, design: .monospaced))
+        .font(.system(size: fontSize, design: .monospaced))
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -87,12 +87,18 @@ public struct CodeWalkthroughView: View {
         Button { state.previous() } label: { Image(systemName: "chevron.left") }
           .disabled(!state.canGoPrevious)
           .accessibilityLabel("Previous step")
+          #if os(macOS)
+          .keyboardShortcut(.upArrow, modifiers: [])
+          #endif
         Spacer()
         Text(state.progressText).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
         Spacer()
         Button { state.next() } label: { Image(systemName: "chevron.right") }
           .disabled(!state.canGoNext)
           .accessibilityLabel("Next step")
+          #if os(macOS)
+          .keyboardShortcut(.downArrow, modifiers: [])
+          #endif
       }
       .buttonStyle(.glass)
     }

@@ -35,7 +35,7 @@ struct PracticeSessionView: View {
         if session.isEmpty {
           emptyState
         } else {
-          PracticeSummaryView(summary: session.summary) { close(session) }
+          PracticeSummaryView(summary: summaryValues(session.summary)) { close(session) }
         }
       }
     default:
@@ -53,6 +53,12 @@ struct PracticeSessionView: View {
         }
       }
     }
+  }
+
+  private func summaryValues(_ s: PracticeSessionModel.Summary) -> PracticeSummaryValues {
+    PracticeSummaryValues(
+      total: s.total, correct: s.correct, counts: s.counts, streak: s.streak,
+      firstStudy: s.firstStudy, itemTitle: s.itemTitle)
   }
 
   private var emptyState: some View {
@@ -112,17 +118,20 @@ struct PracticeSessionView: View {
   @ViewBuilder
   private func exercise(_ session: PracticeSessionModel) -> some View {
     if let ex = session.currentExercise, let key = session.currentKey {
-      let fb = feedbackOrNil(session)
-      switch ex.body {
-      case .identify: IdentifyExerciseView(exercise: ex, key: key, session: session, feedback: fb)
-      case .choose: ChooseExerciseView(exercise: ex, key: key, session: session, feedback: fb)
-      case .tapLine: TapLineExerciseView(exercise: ex, session: session, feedback: fb)
-      case .reorder: ReorderExerciseView(exercise: ex, key: key, session: session, feedback: fb)
-      case .recall: RecallExerciseView(exercise: ex, session: session)
-      }
+      ExerciseView(exercise: ex, context: context(session, key: key))
     } else {
       ProgressView()
     }
+  }
+
+  private func context(_ session: PracticeSessionModel, key: ExerciseKey) -> ExerciseContext {
+    ExerciseContext(
+      key: key, reps: session.reps, previews: session.previews,
+      feedback: feedbackOrNil(session).map { ExerciseFeedback(response: $0.response, grade: $0.grade) },
+      codeFontSize: model.settings.codeFontPoints,
+      title: { session.title(of: $0, topic: key.item.topic) },
+      submit: { session.submit($0) },
+      rateRecall: { session.rateRecall($0, checked: $1) })
   }
 
   // MARK: Feedback
@@ -139,38 +148,14 @@ struct PracticeSessionView: View {
     if let fb = feedbackOrNil(session), let ex = session.currentExercise {
       FeedbackPanel(
         isCorrect: fb.grade.correct, headline: fb.grade.correct ? "Correct" : "Not quite",
-        lines: Self.lines(for: ex, grade: fb.grade, topic: session.currentKey?.item.topic ?? "", session: session),
+        lines: FeedbackLines.make(
+          for: ex, grade: fb.grade,
+          title: { session.title(of: $0, topic: session.currentKey?.item.topic ?? "") }),
         suggested: fb.grade.suggestedRating, previews: session.previews, now: .now
       ) { rating in
         withAnimation(.smooth) { session.commit(rating) }
       }
       .transition(.move(edge: .bottom).combined(with: .opacity))
     }
-  }
-
-  static func lines(for exercise: Exercise, grade: GradeResult, topic: TopicID, session: PracticeSessionModel) -> [FeedbackLine] {
-    let f = grade.feedback
-    var out: [FeedbackLine] = []
-    switch exercise.body {
-    case .identify(_, let options), .choose(_, let options):
-      let correctTitle = options.first(where: \.correct).map { o in
-        o.ref.map { session.title(of: $0, topic: topic) } ?? o.text ?? ""
-      }
-      if grade.correct {
-        if let why = f.correctWhy { out.append(FeedbackLine(text: why)) }
-      } else {
-        if let why = f.chosenWhy { out.append(FeedbackLine(label: "Your answer", text: why)) }
-        if let why = f.correctWhy {
-          out.append(FeedbackLine(label: "Correct answer: \(correctTitle ?? "")", text: why))
-        }
-      }
-    case .tapLine, .reorder:
-      if let e = f.explanation { out.append(FeedbackLine(text: e)) }
-    case .recall:
-      if !f.missedPoints.isEmpty {
-        out.append(FeedbackLine(label: "Missed", text: f.missedPoints.joined(separator: "\n")))
-      }
-    }
-    return out
   }
 }

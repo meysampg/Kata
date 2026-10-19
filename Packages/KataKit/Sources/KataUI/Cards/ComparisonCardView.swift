@@ -1,19 +1,29 @@
 import KataCore
-import KataUI
 import SwiftUI
 
-struct ComparisonCardView: View {
+public struct ComparisonCardView: View {
   let rows: [ComparisonRow]
   let topic: Topic
-  @Environment(AppModel.self) private var model
+  let hasContent: (ItemKey) -> Bool
+  let onOpen: (ItemKey) -> Void
 
-  var body: some View {
+  /// - Parameters:
+  ///   - hasContent: whether a referenced item has a body (rows without one are not tappable).
+  ///   - onOpen: opens the referenced item.
+  public init(
+    rows: [ComparisonRow], topic: Topic, hasContent: @escaping (ItemKey) -> Bool,
+    onOpen: @escaping (ItemKey) -> Void
+  ) {
+    self.rows = rows; self.topic = topic; self.hasContent = hasContent; self.onOpen = onOpen
+  }
+
+  public var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
         let key = topic.key(for: row.ref)
-        let hasContent = model.hasContent(key)
+        let available = hasContent(key)
         Button {
-          if hasContent { model.push(DeckRoute(key: key)) }
+          if available { onOpen(key) }
         } label: {
           VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -24,7 +34,7 @@ struct ComparisonCardView: View {
                 .padding(.horizontal, 7).padding(.vertical, 2)
                 .background(.quaternary, in: .capsule)
               Spacer(minLength: 0)
-              if hasContent {
+              if available {
                 Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
               } else {
                 ComingSoonBadge()
@@ -38,14 +48,14 @@ struct ComparisonCardView: View {
           .cardSurface()
         }
         .buttonStyle(.plain)
-        .disabled(!hasContent)
-        .accessibilityHint(hasContent ? "Opens \(topic.meta(for: row.ref)?.title ?? row.ref)" : "No content yet")
+        .disabled(!available)
+        .accessibilityHint(available ? "Opens \(topic.meta(for: row.ref)?.title ?? row.ref)" : "No content yet")
       }
     }
   }
 }
 
-extension ComparisonRelation {
+public extension ComparisonRelation {
   var label: String {
     switch self {
     case .lookAlike: "Look-alike"

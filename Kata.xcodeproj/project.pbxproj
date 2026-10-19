@@ -10,7 +10,16 @@
 		CA7A00000000000000006200 /* KataCore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006100 /* KataCore */; };
 		CA7A00000000000000006300 /* KataUI in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006400 /* KataUI */; };
 		CA7A00000000000000006500 /* KataStore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006600 /* KataStore */; };
-
+		CA7A00000000000000006711 /* KataCore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006710 /* KataCore */; };
+		CA7A00000000000000006721 /* KataUI in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006720 /* KataUI */; };
+		CA7A00000000000000006731 /* KataStore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006730 /* KataStore */; };
+		CA7A00000000000000006741 /* KataRun in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006740 /* KataRun */; };
+		CA7A00000000000000006751 /* KataSRS in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006750 /* KataSRS */; };
+		CA7A00000000000000006761 /* KataCode in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006760 /* KataCode */; };
+		CA7A00000000000000006771 /* KataDiagram in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006770 /* KataDiagram */; };
+		CA7A00000000000000006800 /* design-patterns.kpack in Resources */ = {isa = PBXBuildFile; fileRef = CA7A00000000000000000600 /* design-patterns.kpack */; };
+		CA7A00000000000000006810 /* design-patterns.kkata in Resources */ = {isa = PBXBuildFile; fileRef = CA7A00000000000000000610 /* design-patterns.kkata */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		CA7A00000000000000005000 /* PBXContainerItemProxy */ = {
@@ -20,13 +29,34 @@
 			remoteGlobalIDString = CA7A00000000000000003000;
 			remoteInfo = Kata;
 		};
+		CA7A00000000000000005200 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CA7A00000000000000000100 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA7A00000000000000003200;
+			remoteInfo = KataMac;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		CA7A00000000000000000500 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CA7A00000000000000000600 /* design-patterns.kpack */ = {isa = PBXFileReference; lastKnownFileType = text; name = "design-patterns.kpack"; path = "Kata/Resources/Packs/design-patterns.kpack"; sourceTree = SOURCE_ROOT; };
+		CA7A00000000000000000610 /* design-patterns.kkata */ = {isa = PBXFileReference; lastKnownFileType = text; name = "design-patterns.kkata"; path = "KataMac/Resources/Katas/design-patterns.kkata"; sourceTree = SOURCE_ROOT; };
 		CA7A00000000000000001000 /* Kata.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kata.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA7A00000000000000001100 /* KataTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KataTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA7A00000000000000001200 /* KataMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KataMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA7A00000000000000001300 /* KataMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KataMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CA7A00000000000000002400 /* Exceptions for "KataMac" folder in "KataMac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Resources/Katas/design-patterns.kkata",
+			);
+			target = CA7A00000000000000003200 /* KataMac */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CA7A00000000000000002000 /* Kata */ = {
@@ -37,6 +67,19 @@
 		CA7A00000000000000002100 /* KataTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = KataTests;
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000002200 /* KataMac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CA7A00000000000000002400 /* Exceptions for "KataMac" folder in "KataMac" target */,
+			);
+			path = KataMac;
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000002300 /* KataMacTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KataMacTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -59,6 +102,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CA7A00000000000000004700 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA7A00000000000000006711 /* KataCore in Frameworks */,
+				CA7A00000000000000006721 /* KataUI in Frameworks */,
+				CA7A00000000000000006731 /* KataStore in Frameworks */,
+				CA7A00000000000000006741 /* KataRun in Frameworks */,
+				CA7A00000000000000006751 /* KataSRS in Frameworks */,
+				CA7A00000000000000006761 /* KataCode in Frameworks */,
+				CA7A00000000000000006771 /* KataDiagram in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004A00 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -67,6 +131,9 @@
 			children = (
 				CA7A00000000000000002000 /* Kata */,
 				CA7A00000000000000002100 /* KataTests */,
+				CA7A00000000000000002200 /* KataMac */,
+				CA7A00000000000000002300 /* KataMacTests */,
+				CA7A00000000000000000700 /* Shared content */,
 				CA7A00000000000000000400 /* Config */,
 				CA7A00000000000000000300 /* Products */,
 			);
@@ -77,6 +144,8 @@
 			children = (
 				CA7A00000000000000001000 /* Kata.app */,
 				CA7A00000000000000001100 /* KataTests.xctest */,
+				CA7A00000000000000001200 /* KataMac.app */,
+				CA7A00000000000000001300 /* KataMacTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,6 +156,15 @@
 				CA7A00000000000000000500 /* Info.plist */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		CA7A00000000000000000700 /* Shared content */ = {
+			isa = PBXGroup;
+			children = (
+				CA7A00000000000000000600 /* design-patterns.kpack */,
+				CA7A00000000000000000610 /* design-patterns.kkata */,
+			);
+			name = "Shared content";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,6 +218,58 @@
 			productReference = CA7A00000000000000001100 /* KataTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		CA7A00000000000000003200 /* KataMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA7A00000000000000007B00 /* Build configuration list for PBXNativeTarget "KataMac" */;
+			buildPhases = (
+				CA7A00000000000000004600 /* Sources */,
+				CA7A00000000000000004700 /* Frameworks */,
+				CA7A00000000000000004800 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CA7A00000000000000002200 /* KataMac */,
+			);
+			name = KataMac;
+			packageProductDependencies = (
+				CA7A00000000000000006710 /* KataCore */,
+				CA7A00000000000000006720 /* KataUI */,
+				CA7A00000000000000006730 /* KataStore */,
+				CA7A00000000000000006740 /* KataRun */,
+				CA7A00000000000000006750 /* KataSRS */,
+				CA7A00000000000000006760 /* KataCode */,
+				CA7A00000000000000006770 /* KataDiagram */,
+			);
+			productName = KataMac;
+			productReference = CA7A00000000000000001200 /* KataMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CA7A00000000000000003300 /* KataMacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA7A00000000000000007E00 /* Build configuration list for PBXNativeTarget "KataMacTests" */;
+			buildPhases = (
+				CA7A00000000000000004900 /* Sources */,
+				CA7A00000000000000004A00 /* Frameworks */,
+				CA7A00000000000000004B00 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CA7A00000000000000005300 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CA7A00000000000000002300 /* KataMacTests */,
+			);
+			name = KataMacTests;
+			packageProductDependencies = (
+			);
+			productName = KataMacTests;
+			productReference = CA7A00000000000000001300 /* KataMacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -156,6 +286,13 @@
 					CA7A00000000000000003100 = {
 						CreatedOnToolsVersion = 27.1;
 						TestTargetID = CA7A00000000000000003000;
+					};
+					CA7A00000000000000003200 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					CA7A00000000000000003300 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = CA7A00000000000000003200;
 					};
 				};
 			};
@@ -178,6 +315,8 @@
 			targets = (
 				CA7A00000000000000003000 /* Kata */,
 				CA7A00000000000000003100 /* KataTests */,
+				CA7A00000000000000003200 /* KataMac */,
+				CA7A00000000000000003300 /* KataMacTests */,
 			);
 		};
 /* End PBXProject section */
@@ -191,6 +330,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CA7A00000000000000004500 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004800 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA7A00000000000000006800 /* design-patterns.kpack in Resources */,
+				CA7A00000000000000006810 /* design-patterns.kkata in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004B00 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -214,6 +369,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CA7A00000000000000004600 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7A00000000000000004900 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -221,6 +390,11 @@
 			isa = PBXTargetDependency;
 			target = CA7A00000000000000003000 /* Kata */;
 			targetProxy = CA7A00000000000000005000 /* PBXContainerItemProxy */;
+		};
+		CA7A00000000000000005300 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA7A00000000000000003200 /* KataMac */;
+			targetProxy = CA7A00000000000000005200 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -343,10 +517,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				DEVELOPMENT_TEAM = N9GSW3M5U8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -364,10 +538,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				DEVELOPMENT_TEAM = N9GSW3M5U8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -376,6 +550,106 @@
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kata.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Kata";
+			};
+			name = Release;
+		};
+		CA7A00000000000000007900 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Kata;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CA7A00000000000000007A00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Kata;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		CA7A00000000000000007C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KataMac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KataMac";
+			};
+			name = Debug;
+		};
+		CA7A00000000000000007D00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N9GSW3M5U8;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.github.meysampg.kata.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KataMac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KataMac";
 			};
 			name = Release;
 		};
@@ -409,6 +683,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		CA7A00000000000000007B00 /* Build configuration list for PBXNativeTarget "KataMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7A00000000000000007900 /* Debug */,
+				CA7A00000000000000007A00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA7A00000000000000007E00 /* Build configuration list for PBXNativeTarget "KataMacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7A00000000000000007C00 /* Debug */,
+				CA7A00000000000000007D00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -430,6 +722,34 @@
 		CA7A00000000000000006600 /* KataStore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KataStore;
+		};
+		CA7A00000000000000006710 /* KataCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataCore;
+		};
+		CA7A00000000000000006720 /* KataUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataUI;
+		};
+		CA7A00000000000000006730 /* KataStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataStore;
+		};
+		CA7A00000000000000006740 /* KataRun */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataRun;
+		};
+		CA7A00000000000000006750 /* KataSRS */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataSRS;
+		};
+		CA7A00000000000000006760 /* KataCode */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataCode;
+		};
+		CA7A00000000000000006770 /* KataDiagram */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataDiagram;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -82,6 +82,9 @@ public struct RatingBar: View {
     }
     .tint(rating.tint)
     .accessibilityLabel(label(rating))
+    #if os(macOS)
+    .keyboardShortcut(KeyEquivalent(Character("\((Rating.allCases.firstIndex(of: rating) ?? 0) + 1)")), modifiers: [])
+    #endif
     if rating == suggested { b.buttonStyle(.glassProminent) } else { b.buttonStyle(.glass) }
   }
 

@@ -291,9 +291,26 @@ public struct ZoomableDiagramView: View {
         .onEnded { _ in baseZoom = zoom }
     )
     .onTapGesture(count: 2) { withAnimation(.smooth) { zoom = 1; baseZoom = 1 } }
+    #if os(macOS)
+    .background {
+      // Command-plus / command-minus zoom, like a document viewer.
+      HStack {
+        Button("Zoom in") { step(1.25) }.keyboardShortcut("+", modifiers: .command)
+        Button("Zoom out") { step(0.8) }.keyboardShortcut("-", modifiers: .command)
+      }
+      .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
+    }
+    #endif
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(DiagramDescriber.describe(diagram))
     .accessibilityAddTraits(.isImage)
+  }
+
+  private func step(_ factor: CGFloat) {
+    withAnimation(.smooth) {
+      zoom = min(max(zoom * factor, 0.5), 4)
+      baseZoom = zoom
+    }
   }
 }
 

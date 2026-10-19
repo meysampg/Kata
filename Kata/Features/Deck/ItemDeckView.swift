@@ -171,13 +171,16 @@ private struct CardPage: View {
   @Binding var codeMode: CodeViewMode
 
   @Environment(AppModel.self) private var model
+  @Environment(AppSettings.self) private var settings
 
   var body: some View {
     switch card.content {
     case .code(let code):
       VStack(spacing: 8) {
         heading.padding(.horizontal, Theme.pageMargin)
-        CodeCardView(card: code, mode: $codeMode)
+        CodeCardView(
+          card: code, fontSize: settings.codeFontPoints, showLineNumbers: settings.showLineNumbers,
+          mode: $codeMode)
       }
       .padding(.top, 8)
       .overlay(alignment: .bottomTrailing) {
@@ -206,11 +209,14 @@ private struct CardPage: View {
   @ViewBuilder
   private var content: some View {
     switch card.content {
-    case .text(let blocks): TextCardView(blocks: blocks)
+    case .text(let blocks): TextCardView(blocks: blocks, codeFontSize: max(12, settings.codeFontPoints - 1))
     case .code: EmptyView()
     case .diagram(let diagrams): DiagramCardView(diagrams: diagrams)
     case .lists(let groups): ListsCardView(groups: groups)
-    case .comparison(let rows): ComparisonCardView(rows: rows, topic: topic)
+    case .comparison(let rows):
+      ComparisonCardView(
+        rows: rows, topic: topic, hasContent: { model.hasContent($0) },
+        onOpen: { model.push(DeckRoute(key: $0)) })
     case .references(let entries): ReferencesCardView(entries: entries)
     }
   }

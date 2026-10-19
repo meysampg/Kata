@@ -1,13 +1,11 @@
 import KataCore
 import KataSRS
-import KataStore
-import KataUI
 import SwiftUI
 
 /// Free recall: think, reveal, tick the key points you had, then self-rate.
 struct RecallExerciseView: View {
   let exercise: Exercise
-  let session: PracticeSessionModel
+  let context: ExerciseContext
   @State private var revealed = false
   @State private var checked: Set<Int> = []
 
@@ -63,12 +61,13 @@ struct RecallExerciseView: View {
               Text("Reveal answer").font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.glassProminent)
+            .keyboardShortcut(.space, modifiers: [])
           } else {
             RatingBar(
-              previews: session.previews, now: .now,
+              previews: context.previews, now: .now,
               suggested: ExerciseGrader.grade(exercise, response: .recall(checked: checked)).suggestedRating
             ) { rating in
-              session.rateRecall(rating, checked: checked)
+              context.rateRecall(rating, checked)
             }
           }
         }

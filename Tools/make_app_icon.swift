@@ -1,5 +1,6 @@
 #!/usr/bin/env swift
-// Renders the Kata app icon (three opaque 1024x1024 PNGs) into the AppIcon asset set.
+// Renders the Kata app icon into the iOS AppIcon asset set (three opaque 1024x1024 PNGs) and into the
+// macOS AppIcon asset set of KataMac (the same art inside a rounded rectangle with a soft shadow, 16...1024 px).
 // An ensō (brush circle, drawn as a variable-width filled path) around a small UML-style pattern motif.
 // Run from the repository root:  swift Tools/make_app_icon.swift
 import CoreGraphics
@@ -9,6 +10,7 @@ import UniformTypeIdentifiers
 
 let size = 1024
 let outDir = "Kata/Resources/Assets.xcassets/AppIcon.appiconset"
+let macOutDir = "KataMac/Resources/Assets.xcassets/AppIcon.appiconset"
 
 struct Variant {
     let file: String
@@ -70,7 +72,8 @@ func roundedRect(_ c: CGPoint, _ w: CGFloat, _ h: CGFloat) -> CGRect {
     CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h)
 }
 
-func render(_ v: Variant) {
+/// Draws the full-bleed 1024x1024 artwork of a variant.
+func artwork(_ v: Variant) -> CGImage {
     let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
                         space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
     let mid = CGPoint(x: 512, y: 512)
@@ -142,9 +145,12 @@ func render(_ v: Variant) {
         ctx.fillPath()
     }
 
-    let url = URL(fileURLWithPath: outDir).appendingPathComponent(v.file)
+    return ctx.makeImage()!
+}
+
+func write(_ image: CGImage, to url: URL) {
     let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
-    CGImageDestinationAddImage(dest, ctx.makeImage()!, nil)
+    CGImageDestinationAddImage(dest, image, nil)
     guard CGImageDestinationFinalize(dest) else {
         FileHandle.standardError.write(Data("failed to write \(url.path)\n".utf8))
         exit(1)
@@ -152,4 +158,66 @@ func render(_ v: Variant) {
     print("wrote \(url.path)")
 }
 
+func render(_ v: Variant) {
+    write(artwork(v), to: URL(fileURLWithPath: outDir).appendingPathComponent(v.file))
+}
+
+// MARK: - macOS icon
+
+/// macOS icon master: the artwork clipped to a rounded rectangle (824 pt body on a 1024 canvas, corner
+/// radius about 22.5%) with a soft drop shadow, on a transparent background.
+func macMaster(_ art: CGImage) -> CGImage {
+    let rgba = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+                         space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    let body = CGRect(x: 100, y: 100, width: 824, height: 824)
+    let shape = CGPath(roundedRect: body, cornerWidth: 185, cornerHeight: 185, transform: nil)
+    rgba.saveGState()
+    rgba.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: color(0x000000, alpha: 0.35))
+    rgba.setFillColor(color(0x083F47))
+    rgba.addPath(shape)
+    rgba.fillPath()
+    rgba.restoreGState()
+    rgba.saveGState()
+    rgba.addPath(shape)
+    rgba.clip()
+    rgba.interpolationQuality = .high
+    rgba.draw(art, in: body)
+    rgba.restoreGState()
+    // A hairline highlight along the top edge keeps the shape readable on dark backgrounds.
+    rgba.saveGState()
+    rgba.addPath(shape)
+    rgba.setStrokeColor(color(0xFFFFFF, alpha: 0.12))
+    rgba.setLineWidth(2)
+    rgba.strokePath()
+    rgba.restoreGState()
+    return rgba.makeImage()!
+}
+
+func scaled(_ image: CGImage, to px: Int) -> CGImage {
+    let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.interpolationQuality = .high
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: px, height: px))
+    return ctx.makeImage()!
+}
+
+func renderMac() {
+    let master = macMaster(artwork(variants[0]))
+    let dir = URL(fileURLWithPath: macOutDir)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    var images: [[String: String]] = []
+    for points in [16, 32, 128, 256, 512] {
+        for scale in [1, 2] {
+            let px = points * scale
+            let name = "icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"
+            write(px == 1024 ? master : scaled(master, to: px), to: dir.appendingPathComponent(name))
+            images.append(["filename": name, "idiom": "mac", "scale": "\(scale)x", "size": "\(points)x\(points)"])
+        }
+    }
+    let contents: [String: Any] = ["images": images, "info": ["author": "xcode", "version": 1]]
+    let data = try! JSONSerialization.data(withJSONObject: contents, options: [.prettyPrinted, .sortedKeys])
+    try! data.write(to: dir.appendingPathComponent("Contents.json"))
+}
+
 variants.forEach(render)
+renderMac()

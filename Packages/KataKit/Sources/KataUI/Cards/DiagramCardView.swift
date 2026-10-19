@@ -1,9 +1,8 @@
 import KataCore
 import KataDiagram
-import KataUI
 import SwiftUI
 
-struct DiagramCardView: View {
+public struct DiagramCardView: View {
   let diagrams: [Diagram]
   @State private var index = 0
   @State private var isExpanded = false
@@ -11,7 +10,9 @@ struct DiagramCardView: View {
 
   private var diagram: Diagram? { diagrams.indices.contains(index) ? diagrams[index] : nil }
 
-  var body: some View {
+  public init(diagrams: [Diagram]) { self.diagrams = diagrams }
+
+  public var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       if diagrams.count > 1 {
         Picker("Diagram", selection: $index) {
@@ -29,7 +30,7 @@ struct DiagramCardView: View {
           if let selectedRole {
             Label(selectedRole, systemImage: "tag").font(.subheadline.weight(.medium))
           } else {
-            Text("Tap a type to see its role.").font(.footnote).foregroundStyle(.secondary)
+            Text(Self.hint).font(.footnote).foregroundStyle(.secondary)
           }
           Spacer()
           Button { isExpanded = true } label: {
@@ -46,15 +47,26 @@ struct DiagramCardView: View {
         NavigationStack {
           ZoomableDiagramView(diagram: diagram)
             .navigationTitle(diagram.title)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
               ToolbarItem(placement: .confirmationAction) { Button("Done") { isExpanded = false } }
             }
         }
         .presentationDetents([.large])
+        #if os(macOS)
+        .frame(minWidth: 640, idealWidth: 820, minHeight: 480, idealHeight: 600)
+        #endif
       }
     }
   }
+
+  #if os(macOS)
+  private static let hint = "Click a type to see its role."
+  #else
+  private static let hint = "Tap a type to see its role."
+  #endif
 
   private static func role(of id: String, in diagram: Diagram) -> String? {
     func label(_ name: String, _ role: String?) -> String { role.map { "\(name): \($0)" } ?? name }

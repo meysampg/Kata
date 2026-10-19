@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Layout constants and small shared modifiers. Content surfaces are plain
 /// `.background.secondary` cards: glass is reserved for the floating control layer.
-enum Theme {
-  static let pageMargin: CGFloat = 20
-  static let cardRadius: CGFloat = 20
-  static let cardPadding: CGFloat = 16
-  static let rowSpacing: CGFloat = 12
+public enum Theme {
+  public static let pageMargin: CGFloat = 20
+  public static let cardRadius: CGFloat = 20
+  public static let cardPadding: CGFloat = 16
+  public static let rowSpacing: CGFloat = 12
 }
 
-extension View {
+public extension View {
   /// A calm content card: secondary background, rounded, no glass.
   func cardSurface(padding: CGFloat = Theme.cardPadding) -> some View {
     self
@@ -20,11 +20,11 @@ extension View {
 }
 
 /// Small uppercase-free section caption used above cards.
-struct SectionCaption: View {
+public struct SectionCaption: View {
   let text: String
-  init(_ text: String) { self.text = text }
+  public init(_ text: String) { self.text = text }
 
-  var body: some View {
+  public var body: some View {
     Text(text)
       .font(.footnote.weight(.semibold))
       .foregroundStyle(.secondary)
@@ -34,8 +34,10 @@ struct SectionCaption: View {
 }
 
 /// Shown for registry items that have no body yet.
-struct ComingSoonBadge: View {
-  var body: some View {
+public struct ComingSoonBadge: View {
+  public init() {}
+
+  public var body: some View {
     Text("Coming soon")
       .font(.caption2.weight(.medium))
       .foregroundStyle(.secondary)
@@ -46,10 +48,11 @@ struct ComingSoonBadge: View {
 }
 
 /// Difficulty as 1-3 filled dots.
-struct DifficultyDots: View {
+public struct DifficultyDots: View {
   let level: Int
+  public init(level: Int) { self.level = level }
 
-  var body: some View {
+  public var body: some View {
     HStack(spacing: 3) {
       ForEach(1...3, id: \.self) { i in
         Circle()

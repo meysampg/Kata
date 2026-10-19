@@ -1,13 +1,9 @@
 import KataCore
-import KataStore
-import KataUI
 import SwiftUI
 
 struct ChooseExerciseView: View {
   let exercise: Exercise
-  let key: ExerciseKey
-  let session: PracticeSessionModel
-  let feedback: PracticeSessionModel.Feedback?
+  let context: ExerciseContext
 
   var body: some View {
     if case .choose(let scenario, let options) = exercise.body {
@@ -20,9 +16,9 @@ struct ChooseExerciseView: View {
           ExercisePrompt(text: exercise.prompt)
           OptionListView(
             options: options,
-            order: ExerciseGrader.presentationOrder(count: options.count, key: key, reps: session.reps),
-            topic: key.item.topic, session: session, feedback: feedback
-          ) { session.submit(.option($0)) }
+            order: ExerciseGrader.presentationOrder(count: options.count, key: context.key, reps: context.reps),
+            context: context
+          ) { context.submit(.option($0)) }
         }
         .padding(.horizontal, Theme.pageMargin)
         .padding(.vertical, 12)

@@ -1,17 +1,18 @@
+import KataCore
 import KataSRS
-import KataUI
 import SwiftUI
 
 /// One labelled paragraph of feedback ("You chose", "Why", ...).
-struct FeedbackLine: Identifiable {
-  let id = UUID()
-  var label: String?
-  var text: String
+public struct FeedbackLine: Identifiable {
+  public let id = UUID()
+  public var label: String?
+  public var text: String
+  public init(label: String? = nil, text: String) { self.label = label; self.text = text }
 }
 
 /// Floating panel under an exercise after it was answered. Wrong answers continue as Again;
 /// right answers continue as the suggested rating, with optional Hard / Easy adjustments.
-struct FeedbackPanel: View {
+public struct FeedbackPanel: View {
   let isCorrect: Bool
   let headline: String
   let lines: [FeedbackLine]
@@ -22,7 +23,15 @@ struct FeedbackPanel: View {
 
   @Environment(\.dynamicTypeSize) private var typeSize
 
-  var body: some View {
+  public init(
+    isCorrect: Bool, headline: String, lines: [FeedbackLine], suggested: Rating,
+    previews: [Rating: SchedulingResult], now: Date, onRate: @escaping (Rating) -> Void
+  ) {
+    self.isCorrect = isCorrect; self.headline = headline; self.lines = lines
+    self.suggested = suggested; self.previews = previews; self.now = now; self.onRate = onRate
+  }
+
+  public var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 8) {
         Image(systemName: isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -63,6 +72,7 @@ struct FeedbackPanel: View {
           }
           .buttonStyle(.glassProminent)
           .tint(isCorrect ? .green : .red)
+          .keyboardShortcut(.defaultAction)
           if isCorrect {
             adjust(.easy)
           }
@@ -85,5 +95,37 @@ struct FeedbackPanel: View {
     }
     .buttonStyle(.glass)
     .tint(rating.tint)
+  }
+}
+
+/// Builds the feedback paragraphs for an answered exercise.
+public enum FeedbackLines {
+  /// - Parameter title: resolves an option's `ref` to a display title.
+  public static func make(
+    for exercise: Exercise, grade: GradeResult, title: (ItemID) -> String
+  ) -> [FeedbackLine] {
+    let f = grade.feedback
+    var out: [FeedbackLine] = []
+    switch exercise.body {
+    case .identify(_, let options), .choose(_, let options):
+      let correctTitle = options.first(where: \.correct).map { o in
+        o.ref.map(title) ?? o.text ?? ""
+      }
+      if grade.correct {
+        if let why = f.correctWhy { out.append(FeedbackLine(text: why)) }
+      } else {
+        if let why = f.chosenWhy { out.append(FeedbackLine(label: "Your answer", text: why)) }
+        if let why = f.correctWhy {
+          out.append(FeedbackLine(label: "Correct answer: \(correctTitle ?? "")", text: why))
+        }
+      }
+    case .tapLine, .reorder:
+      if let e = f.explanation { out.append(FeedbackLine(text: e)) }
+    case .recall:
+      if !f.missedPoints.isEmpty {
+        out.append(FeedbackLine(label: "Missed", text: f.missedPoints.joined(separator: "\n")))
+      }
+    }
+    return out
   }
 }
