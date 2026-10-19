@@ -1,4 +1,5 @@
 import KataCore
+import KataStore
 import KataUI
 import SwiftUI
 import UserNotifications

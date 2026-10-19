@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataCore
 import SwiftUI
 
@@ -69,4 +68,3 @@ public struct MasteryRing: View {
     MasteryRing(level: .mastered, fraction: 1).frame(width: 32)
   }.padding()
 }
-#endif

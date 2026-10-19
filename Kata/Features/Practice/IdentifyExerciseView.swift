@@ -1,4 +1,5 @@
 import KataCore
+import KataStore
 import SwiftUI
 
 struct IdentifyExerciseView: View {

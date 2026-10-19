@@ -9,15 +9,15 @@ import SwiftData
 /// Conforms to KataCore's `ProgressRepository` (Repository pattern): the async protocol methods
 /// forward to the synchronous API that the UI uses.
 @MainActor @Observable
-final class ProgressStore {
+public final class ProgressStore {
   private let container: ModelContainer
   private let calendar: Calendar
   /// Bumped after every write and read in every query, so views observing the store refresh.
-  private(set) var revision = 0
+  public private(set) var revision = 0
 
   private var context: ModelContext { container.mainContext }
 
-  init(container: ModelContainer, calendar: Calendar = DayKey.gregorian()) {
+  public init(container: ModelContainer, calendar: Calendar = DayKey.gregorian()) {
     self.container = container
     self.calendar = calendar
   }
@@ -86,12 +86,12 @@ final class ProgressStore {
 
   // MARK: Cards
 
-  func card(_ key: ExerciseKey) -> FSRSCard? {
+  public func card(_ key: ExerciseKey) -> FSRSCard? {
     _ = revision
     return cardModel(key).map(Self.snapshot)
   }
 
-  func cardRecords(forItem item: ItemKey) -> [CardRecord] {
+  public func cardRecords(forItem item: ItemKey) -> [CardRecord] {
     _ = revision
     let topic = item.topic, id = item.item
     let d = FetchDescriptor<ExerciseCard>(
@@ -100,14 +100,14 @@ final class ProgressStore {
     return fetch(d).compactMap(Self.record)
   }
 
-  func allCardRecords() -> [CardRecord] {
+  public func allCardRecords() -> [CardRecord] {
     _ = revision
     return fetch(FetchDescriptor<ExerciseCard>(sortBy: [SortDescriptor(\.key)]))
       .compactMap(Self.record)
   }
 
   /// Cards with `due <= date`, most overdue first.
-  func dueRecords(asOf date: Date, limit: Int? = nil) -> [CardRecord] {
+  public func dueRecords(asOf date: Date, limit: Int? = nil) -> [CardRecord] {
     _ = revision
     var d = FetchDescriptor<ExerciseCard>(
       predicate: #Predicate { $0.due <= date },
@@ -116,13 +116,13 @@ final class ProgressStore {
     return fetch(d).compactMap(Self.record)
   }
 
-  func dueCount(asOf date: Date) -> Int {
+  public func dueCount(asOf date: Date) -> Int {
     _ = revision
     return (try? context.fetchCount(
       FetchDescriptor<ExerciseCard>(predicate: #Predicate { $0.due <= date }))) ?? 0
   }
 
-  func nextDueDate() -> Date? {
+  public func nextDueDate() -> Date? {
     _ = revision
     var d = FetchDescriptor<ExerciseCard>(sortBy: [SortDescriptor(\.due)])
     d.fetchLimit = 1
@@ -132,7 +132,7 @@ final class ProgressStore {
   /// Rates an exercise: creates the card on first rating, schedules it with FSRS, appends a log
   /// entry and counts the day's activity.
   @discardableResult
-  func record(
+  public func record(
     _ rating: Rating, key: ExerciseKey, scheduler: FSRSScheduler, correct: Bool? = nil,
     responseMillis: Int? = nil, now: Date = .now
   ) -> SchedulingResult {
@@ -167,19 +167,19 @@ final class ProgressStore {
     return result
   }
 
-  func logCount() -> Int {
+  public func logCount() -> Int {
     _ = revision
     return (try? context.fetchCount(FetchDescriptor<ReviewLogEntry>())) ?? 0
   }
 
   // MARK: Item progress
 
-  func progress(for key: ItemKey) -> ItemProgressRecord? {
+  public func progress(for key: ItemKey) -> ItemProgressRecord? {
     _ = revision
     return progressModel(key).flatMap(Self.record)
   }
 
-  func allProgress() -> [ItemKey: ItemProgressRecord] {
+  public func allProgress() -> [ItemKey: ItemProgressRecord] {
     _ = revision
     var out: [ItemKey: ItemProgressRecord] = [:]
     for m in fetch(FetchDescriptor<ItemProgress>()) {
@@ -196,7 +196,7 @@ final class ProgressStore {
   }
 
   /// Marks a deck as opened (creating its progress row) and the given role as seen.
-  func markOpened(_ key: ItemKey, role: String? = nil, now: Date = .now) {
+  public func markOpened(_ key: ItemKey, role: String? = nil, now: Date = .now) {
     let m = progressOrNew(key, now: now)
     m.lastOpenedAt = now
     if let role, !m.seenRoles.contains(role) { m.seenRoles.append(role) }
@@ -205,7 +205,7 @@ final class ProgressStore {
 
   /// Sets `studiedAt` the first time and counts the day's activity. Returns true on first study.
   @discardableResult
-  func markStudied(_ key: ItemKey, now: Date = .now) -> Bool {
+  public func markStudied(_ key: ItemKey, now: Date = .now) -> Bool {
     let m = progressOrNew(key, now: now)
     m.lastOpenedAt = now
     guard m.studiedAt == nil else { save(); return false }
@@ -215,23 +215,23 @@ final class ProgressStore {
     return true
   }
 
-  func isBookmarked(_ key: ItemKey) -> Bool { progress(for: key)?.isBookmarked ?? false }
+  public func isBookmarked(_ key: ItemKey) -> Bool { progress(for: key)?.isBookmarked ?? false }
 
-  func setBookmarked(_ key: ItemKey, _ value: Bool, now: Date = .now) {
+  public func setBookmarked(_ key: ItemKey, _ value: Bool, now: Date = .now) {
     let m = progressOrNew(key, now: now)
     m.isBookmarked = value
     m.bookmarkedAt = value ? now : nil
     save()
   }
 
-  func setNote(_ key: ItemKey, _ text: String, now: Date = .now) {
+  public func setNote(_ key: ItemKey, _ text: String, now: Date = .now) {
     let m = progressOrNew(key, now: now)
     m.note = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(ItemProgressRecord.maxNoteLength))
     save()
   }
 
   /// Bookmarked items, most recently bookmarked first.
-  func bookmarks() -> [ItemProgressRecord] {
+  public func bookmarks() -> [ItemProgressRecord] {
     _ = revision
     return fetch(FetchDescriptor<ItemProgress>(predicate: #Predicate { $0.isBookmarked }))
       .compactMap(Self.record)
@@ -239,7 +239,7 @@ final class ProgressStore {
   }
 
   /// Studied items, most recently opened first.
-  func recentlyStudied(limit: Int) -> [ItemProgressRecord] {
+  public func recentlyStudied(limit: Int) -> [ItemProgressRecord] {
     _ = revision
     return fetch(FetchDescriptor<ItemProgress>(predicate: #Predicate { $0.studiedAt != nil }))
       .compactMap(Self.record)
@@ -249,20 +249,20 @@ final class ProgressStore {
 
   // MARK: Activity and streak
 
-  func todayActivity(now: Date = .now) -> (reviews: Int, studied: Int) {
+  public func todayActivity(now: Date = .now) -> (reviews: Int, studied: Int) {
     _ = revision
     guard let a = activityModel(dayKey(now)) else { return (0, 0) }
     return (a.reviewCount, a.studiedCount)
   }
 
-  func hasActivity(on date: Date) -> Bool {
+  public func hasActivity(on date: Date) -> Bool {
     _ = revision
     guard let a = activityModel(dayKey(date)) else { return false }
     return a.reviewCount + a.studiedCount > 0
   }
 
   /// Days with any recorded activity.
-  func activeDays() -> Set<DayKey> {
+  public func activeDays() -> Set<DayKey> {
     _ = revision
     var out = Set<DayKey>()
     for a in fetch(FetchDescriptor<DailyActivity>()) where a.reviewCount + a.studiedCount > 0 {
@@ -272,7 +272,7 @@ final class ProgressStore {
   }
 
   /// Consecutive active days, counting back from today if active, else from yesterday.
-  func currentStreak(now: Date = .now) -> Int {
+  public func currentStreak(now: Date = .now) -> Int {
     StreakCalculator.current(
       active: activeDays(), frozen: [], today: dayKey(now), calendar: calendar)
   }
@@ -280,31 +280,170 @@ final class ProgressStore {
   // MARK: Reset
 
   /// Deletes all progress: cards, logs, item progress (bookmarks and notes included), activity.
-  func resetAllProgress() {
+  public func resetAllProgress() {
     try? context.delete(model: ExerciseCard.self)
     try? context.delete(model: ReviewLogEntry.self)
     try? context.delete(model: ItemProgress.self)
     try? context.delete(model: DailyActivity.self)
+    try? context.delete(model: KataAttempt.self)
+    try? context.delete(model: KataSolution.self)
     save()
   }
+
+  // MARK: Katas (Mac)
+
+  /// The FSRS card of an item's kata shares `ExerciseCard` with the exercise id `kata`.
+  public static func kataCardKey(_ item: ItemKey) -> ExerciseKey {
+    ExerciseKey(item: item, exercise: "kata")
+  }
+
+  private func solutionModel(_ item: ItemKey) -> KataSolution? {
+    let raw = item.rawValue
+    var d = FetchDescriptor<KataSolution>(predicate: #Predicate { $0.itemKey == raw })
+    d.fetchLimit = 1
+    return fetch(d).first
+  }
+
+  private func solutionOrNew(_ item: ItemKey, now: Date) -> KataSolution {
+    if let m = solutionModel(item) { return m }
+    let m = KataSolution(itemKey: item.rawValue, updatedAt: now)
+    context.insert(m)
+    return m
+  }
+
+  private static func decodeFiles(_ data: Data?) -> [String: String]? {
+    guard let data, !data.isEmpty else { return nil }
+    return try? JSONDecoder().decode([String: String].self, from: data)
+  }
+
+  private static func encodeFiles(_ files: [String: String]) -> Data {
+    let e = JSONEncoder()
+    e.outputFormatting = [.sortedKeys]
+    return (try? e.encode(files)) ?? Data()
+  }
+
+  /// The saved draft (`[file name: source]`), if any.
+  public func kataDraft(_ item: ItemKey) -> [String: String]? {
+    _ = revision
+    return Self.decodeFiles(solutionModel(item)?.draftJSON)
+  }
+
+  /// Callers debounce (about one second).
+  public func saveKataDraft(_ item: ItemKey, files: [String: String], now: Date = .now) {
+    let m = solutionOrNew(item, now: now)
+    m.draftJSON = Self.encodeFiles(files)
+    m.updatedAt = now
+    save()
+  }
+
+  public func clearKataDraft(_ item: ItemKey, now: Date = .now) {
+    guard let m = solutionModel(item) else { return }
+    m.draftJSON = Data()
+    m.updatedAt = now
+    save()
+  }
+
+  /// The last passing solution, if any.
+  public func lastPassedSolution(_ item: ItemKey) -> [String: String]? {
+    _ = revision
+    return Self.decodeFiles(solutionModel(item)?.passedJSON)
+  }
+
+  public func startKataAttempt(
+    _ item: ItemKey, isReview: Bool, mode: String = "editor", now: Date = .now
+  ) -> PersistentIdentifier {
+    let a = KataAttempt(itemKey: item.rawValue, startedAt: now, isReview: isReview, modeRaw: mode)
+    context.insert(a)
+    save()
+    return a.persistentModelID
+  }
+
+  public func updateKataAttempt(
+    _ id: PersistentIdentifier, hintsUsed: Int? = nil, revealedSolution: Bool? = nil,
+    runCount: Int? = nil, activeMillis: Int? = nil, mode: String? = nil
+  ) {
+    guard let a = context.model(for: id) as? KataAttempt else { return }
+    if let hintsUsed { a.hintsUsed = hintsUsed }
+    if let revealedSolution { a.revealedSolution = revealedSolution }
+    if let runCount { a.runCount = runCount }
+    if let activeMillis { a.activeMillis = activeMillis }
+    if let mode { a.modeRaw = mode }
+    save()
+  }
+
+  public func kataAttempts(for item: ItemKey) -> [KataAttemptRecord] {
+    _ = revision
+    let raw = item.rawValue
+    let d = FetchDescriptor<KataAttempt>(
+      predicate: #Predicate { $0.itemKey == raw }, sortBy: [SortDescriptor(\.startedAt)])
+    return fetch(d).map {
+      KataAttemptRecord(
+        itemKey: $0.itemKey, startedAt: $0.startedAt, passedAt: $0.passedAt, isReview: $0.isReview,
+        hintsUsed: $0.hintsUsed, revealedSolution: $0.revealedSolution, runCount: $0.runCount,
+        activeMillis: $0.activeMillis, rating: $0.ratingRaw.flatMap(Rating.init(rawValue:)),
+        modeRaw: $0.modeRaw)
+    }
+  }
+
+  /// Rates a passed kata: schedules (or creates) the `#kata` FSRS card through the same path as
+  /// `record(...)`, logs `responseMillis = activeMillis`, bumps the day's activity and keeps the
+  /// passing files.
+  @discardableResult
+  public func recordKataPass(
+    _ item: ItemKey, files: [String: String], attempt: PersistentIdentifier, rating: Rating,
+    scheduler: FSRSScheduler, now: Date = .now
+  ) -> SchedulingResult {
+    let a = context.model(for: attempt) as? KataAttempt
+    let millis = a?.activeMillis
+    a?.passedAt = now
+    a?.ratingRaw = rating.rawValue
+    let result = record(
+      rating, key: Self.kataCardKey(item), scheduler: scheduler, correct: true,
+      responseMillis: millis, now: now)
+    let m = solutionOrNew(item, now: now)
+    m.passedJSON = Self.encodeFiles(files)
+    m.passedAt = now
+    m.updatedAt = now
+    save()
+    return result
+  }
+
+  /// Cards of katas (exercise id `kata`).
+  public func kataCards() -> [CardRecord] {
+    allCardRecords().filter { $0.key.exercise == "kata" }
+  }
+}
+
+/// Value snapshot of a `KataAttempt`.
+public struct KataAttemptRecord: Sendable, Equatable {
+  public let itemKey: String
+  public let startedAt: Date
+  public let passedAt: Date?
+  public let isReview: Bool
+  public let hintsUsed: Int
+  public let revealedSolution: Bool
+  public let runCount: Int
+  public let activeMillis: Int
+  public let rating: Rating?
+  public let modeRaw: String
 }
 
 // MARK: - ProgressRepository
 
 extension ProgressStore: ProgressRepository {
-  func card(for key: ExerciseKey) async throws -> CardRecord? {
+  public func card(for key: ExerciseKey) async throws -> CardRecord? {
     cardModel(key).flatMap(Self.record)
   }
 
-  func cards(forItem item: ItemKey) async throws -> [CardRecord] { cardRecords(forItem: item) }
+  public func cards(forItem item: ItemKey) async throws -> [CardRecord] { cardRecords(forItem: item) }
 
-  func allCards() async throws -> [CardRecord] { allCardRecords() }
+  public func allCards() async throws -> [CardRecord] { allCardRecords() }
 
-  func dueCards(asOf date: Date, limit: Int?) async throws -> [CardRecord] {
+  public func dueCards(asOf date: Date, limit: Int?) async throws -> [CardRecord] {
     dueRecords(asOf: date, limit: limit)
   }
 
-  func upsertCard(_ record: CardRecord) async throws {
+  public func upsertCard(_ record: CardRecord) async throws {
     let m: ExerciseCard
     if let existing = cardModel(record.key) {
       m = existing
@@ -320,7 +459,7 @@ extension ProgressStore: ProgressRepository {
     save()
   }
 
-  func appendLog(_ log: ReviewLogRecord) async throws {
+  public func appendLog(_ log: ReviewLogRecord) async throws {
     context.insert(
       ReviewLogEntry(
         cardKey: log.cardKey.rawValue, ratingRaw: log.rating.rawValue, reviewedAt: log.reviewedAt,
@@ -330,7 +469,7 @@ extension ProgressStore: ProgressRepository {
     save()
   }
 
-  func logs(since date: Date?) async throws -> [ReviewLogRecord] {
+  public func logs(since date: Date?) async throws -> [ReviewLogRecord] {
     var d = FetchDescriptor<ReviewLogEntry>(sortBy: [SortDescriptor(\.reviewedAt)])
     if let date { d.predicate = #Predicate { $0.reviewedAt >= date } }
     return fetch(d).compactMap { m in
@@ -343,15 +482,15 @@ extension ProgressStore: ProgressRepository {
     }
   }
 
-  func itemProgress(for key: ItemKey) async throws -> ItemProgressRecord? {
+  public func itemProgress(for key: ItemKey) async throws -> ItemProgressRecord? {
     progressModel(key).flatMap(Self.record)
   }
 
-  func allItemProgress() async throws -> [ItemProgressRecord] {
+  public func allItemProgress() async throws -> [ItemProgressRecord] {
     allProgress().values.sorted { $0.key < $1.key }
   }
 
-  func saveItemProgress(_ record: ItemProgressRecord) async throws {
+  public func saveItemProgress(_ record: ItemProgressRecord) async throws {
     let m = progressOrNew(record.key, now: record.firstOpenedAt)
     m.firstOpenedAt = record.firstOpenedAt; m.lastOpenedAt = record.lastOpenedAt
     m.seenRoles = record.seenRoles; m.studiedAt = record.studiedAt
@@ -360,13 +499,13 @@ extension ProgressStore: ProgressRepository {
     save()
   }
 
-  func activity(for day: DayKey) async throws -> DailyActivityRecord? {
+  public func activity(for day: DayKey) async throws -> DailyActivityRecord? {
     activityModel(day).map {
       DailyActivityRecord(day: day, reviewCount: $0.reviewCount, studiedCount: $0.studiedCount)
     }
   }
 
-  func allActivity() async throws -> [DailyActivityRecord] {
+  public func allActivity() async throws -> [DailyActivityRecord] {
     fetch(FetchDescriptor<DailyActivity>()).compactMap { m in
       DayKey(string: m.dayKey).map {
         DailyActivityRecord(day: $0, reviewCount: m.reviewCount, studiedCount: m.studiedCount)
@@ -374,12 +513,12 @@ extension ProgressStore: ProgressRepository {
     }.sorted { $0.day < $1.day }
   }
 
-  func addActivity(day: DayKey, reviews: Int, studied: Int) async throws {
+  public func addActivity(day: DayKey, reviews: Int, studied: Int) async throws {
     let a = activityOrNew(day)
     a.reviewCount += reviews
     a.studiedCount += studied
     save()
   }
 
-  func resetAll() async throws { resetAllProgress() }
+  public func resetAll() async throws { resetAllProgress() }
 }

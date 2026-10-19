@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataCore
 import SwiftUI
 
@@ -30,4 +29,3 @@ public extension Tone {
     }
   }
 }
-#endif

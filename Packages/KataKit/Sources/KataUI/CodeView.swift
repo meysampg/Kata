@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataCode
 import SwiftUI
 
@@ -213,4 +212,3 @@ public struct CodeView: View {
       .padding()
   }
 }
-#endif

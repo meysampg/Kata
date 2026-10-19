@@ -1,4 +1,3 @@
-#if os(iOS)
 import SwiftUI
 
 /// A destructive-action button that must be held to fire. VoiceOver users activate it directly.
@@ -71,4 +70,3 @@ public struct HoldToConfirmButton: View {
 #Preview("HoldToConfirm") {
   HoldToConfirmButton("Hold to reset progress") {}.padding()
 }
-#endif

@@ -1,5 +1,6 @@
 import Foundation
 import KataCore
+import KataStore
 
 enum AppTab: Hashable, Sendable {
   case today, path, library, search
@@ -13,12 +14,7 @@ struct DeckRoute: Hashable, Sendable {
 
 /// What a practice session is made of.
 struct PracticeRequest: Identifiable {
-  enum Kind {
-    /// Due reviews (plus new exercises of studied items), built by `PracticeQueueBuilder`.
-    case review
-    /// First-exposure / extra practice: every exercise of one item.
-    case item(ItemKey)
-  }
+  typealias Kind = PracticeSessionModel.Kind
 
   let id = UUID()
   let kind: Kind

@@ -1,5 +1,6 @@
 import KataCore
 import KataSRS
+import KataStore
 import KataUI
 import SwiftUI
 

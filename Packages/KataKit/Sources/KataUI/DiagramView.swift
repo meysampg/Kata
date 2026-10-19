@@ -1,7 +1,5 @@
-#if os(iOS)
 import KataDiagram
 import SwiftUI
-import UIKit
 
 typealias DScene = DiagramScene
 
@@ -54,8 +52,8 @@ struct DiagramCanvas: View {
 
   private var ink: Color { .primary }
   // Matches the deck's DiagramCardView background (`.background.secondary`).
-  private var bg: Color { Color(uiColor: .secondarySystemBackground) }
-  private var boxFill: Color { Color(uiColor: .secondarySystemBackground) }
+  private var bg: Color { Color.kataSecondaryBackground }
+  private var boxFill: Color { Color.kataSecondaryBackground }
 
   private func connected(_ line: DScene.Line, to rect: CGRect) -> Bool {
     let r = rect.insetBy(dx: -2, dy: -2)
@@ -327,4 +325,3 @@ public struct ZoomableDiagramView: View {
     fragments: [.init(kind: .opt, guardText: "has policy", from: 1, to: 2)])
   ScrollView { DiagramView(diagram: .sequence(d)).padding() }
 }
-#endif

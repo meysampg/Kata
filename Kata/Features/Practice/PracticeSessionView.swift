@@ -1,5 +1,6 @@
 import KataCore
 import KataSRS
+import KataStore
 import KataUI
 import SwiftUI
 
@@ -21,7 +22,8 @@ struct PracticeSessionView: View {
     }
     .background(Color(.systemBackground))
     .task {
-      if session == nil { session = PracticeSessionModel(request: request, model: model) }
+      if session == nil { session = PracticeSessionModel(
+          kind: request.kind, model: model.study, onEnd: { [model] in await model.refreshReminders() }) }
     }
   }
 

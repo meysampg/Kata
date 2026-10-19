@@ -1,6 +1,7 @@
 #if DEBUG
 import KataCore
 import KataSRS
+import KataStore
 import SwiftData
 import SwiftUI
 

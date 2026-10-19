@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataSRS
 import SwiftUI
 
@@ -98,4 +97,3 @@ public struct RatingBar: View {
   RatingBar(previews: s.preview(.new(now: .now), now: .now), suggested: .good) { _ in }
     .padding()
 }
-#endif

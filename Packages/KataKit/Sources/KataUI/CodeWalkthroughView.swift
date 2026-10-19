@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataCore
 import SwiftUI
 
@@ -112,4 +111,3 @@ public struct CodeWalkthroughView: View {
       .init(lines: 5...7, note: "A concrete strategy, `A`."),
     ])
 }
-#endif

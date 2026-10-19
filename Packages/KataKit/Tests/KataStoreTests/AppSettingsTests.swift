@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import Kata
+@testable import KataStore
 
 @MainActor
 struct AppSettingsTests {

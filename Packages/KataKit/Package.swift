@@ -3,13 +3,14 @@ import PackageDescription
 
 let package = Package(
   name: "KataKit",
-  platforms: [.iOS(.v26), .macOS(.v15)],
+  platforms: [.iOS(.v26), .macOS(.v26)],
   products: [
     .library(name: "KataSRS", targets: ["KataSRS"]),
     .library(name: "KataCode", targets: ["KataCode"]),
     .library(name: "KataDiagram", targets: ["KataDiagram"]),
     .library(name: "KataCore", targets: ["KataCore"]),
     .library(name: "KataUI", targets: ["KataUI"]),
+    .library(name: "KataStore", targets: ["KataStore"]),
     .executable(name: "kata-pack", targets: ["kata-pack"])
   ],
   targets: [
@@ -18,6 +19,7 @@ let package = Package(
     .target(name: "KataDiagram"),
     .target(name: "KataCore", dependencies: ["KataSRS", "KataCode", "KataDiagram"]),
     .target(name: "KataUI", dependencies: ["KataCore", "KataSRS", "KataCode", "KataDiagram"]),
+    .target(name: "KataStore", dependencies: ["KataCore", "KataSRS"]),
     .executableTarget(name: "kata-pack", dependencies: ["KataCore"]),
     .testTarget(name: "KataSRSTests", dependencies: ["KataSRS"]),
     .testTarget(name: "KataCodeTests", dependencies: ["KataCode"]),
@@ -25,6 +27,7 @@ let package = Package(
     .testTarget(
       name: "KataCoreTests", dependencies: ["KataCore", "KataSRS", "KataDiagram"],
       resources: [.copy("Fixtures")]),
+    .testTarget(name: "KataStoreTests", dependencies: ["KataStore", "KataCore", "KataSRS"]),
     .testTarget(name: "KataUITests", dependencies: ["KataUI", "KataSRS", "KataCode"]),
     .testTarget(name: "ContentTests", dependencies: ["KataCore"])
   ]

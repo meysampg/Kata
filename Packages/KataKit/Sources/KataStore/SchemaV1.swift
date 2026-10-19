@@ -3,9 +3,9 @@ import SwiftData
 
 /// Version 1 of the on-device progress schema. No relationships: rows are keyed by the stable
 /// content keys (`ItemKey.rawValue`, `ExerciseKey.rawValue`), so content can change freely.
-enum KataSchemaV1: VersionedSchema {
-  static let versionIdentifier = Schema.Version(1, 0, 0)
-  static var models: [any PersistentModel.Type] {
+public enum KataSchemaV1: VersionedSchema {
+  public static let versionIdentifier = Schema.Version(1, 0, 0)
+  public static var models: [any PersistentModel.Type] {
     [ExerciseCard.self, ReviewLogEntry.self, ItemProgress.self, DailyActivity.self]
   }
 }
@@ -13,22 +13,22 @@ enum KataSchemaV1: VersionedSchema {
 extension KataSchemaV1 {
   /// FSRS state of one enrolled exercise. Cards whose exercise has disappeared from the pack are
   /// ignored, never deleted.
-  @Model final class ExerciseCard {
+  @Model public final class ExerciseCard {
     #Index<ExerciseCard>([\.due], [\.itemId])
     /// `ExerciseKey.rawValue`, e.g. `design-patterns/strategy#spot-1`.
-    @Attribute(.unique) var key: String
-    var topicId: String
-    var itemId: String
-    var stateRaw: Int
-    var stability: Double
-    var difficulty: Double
-    var due: Date
-    var lastReview: Date?
-    var reps: Int
-    var lapses: Int
-    var createdAt: Date
+    @Attribute(.unique) public var key: String
+    public var topicId: String
+    public var itemId: String
+    public var stateRaw: Int
+    public var stability: Double
+    public var difficulty: Double
+    public var due: Date
+    public var lastReview: Date?
+    public var reps: Int
+    public var lapses: Int
+    public var createdAt: Date
 
-    init(
+    public init(
       key: String, topicId: String, itemId: String, stateRaw: Int = 0, stability: Double = 0,
       difficulty: Double = 0, due: Date = .now, lastReview: Date? = nil, reps: Int = 0,
       lapses: Int = 0, createdAt: Date = .now
@@ -40,17 +40,17 @@ extension KataSchemaV1 {
     }
   }
 
-  @Model final class ReviewLogEntry {
-    var cardKey: String
-    var ratingRaw: Int
-    var reviewedAt: Date
-    var elapsedDays: Double
-    var scheduledDays: Double
-    var stateBeforeRaw: Int
-    var wasCorrect: Bool?
-    var responseMillis: Int?
+  @Model public final class ReviewLogEntry {
+    public var cardKey: String
+    public var ratingRaw: Int
+    public var reviewedAt: Date
+    public var elapsedDays: Double
+    public var scheduledDays: Double
+    public var stateBeforeRaw: Int
+    public var wasCorrect: Bool?
+    public var responseMillis: Int?
 
-    init(
+    public init(
       cardKey: String, ratingRaw: Int, reviewedAt: Date, elapsedDays: Double,
       scheduledDays: Double, stateBeforeRaw: Int, wasCorrect: Bool? = nil,
       responseMillis: Int? = nil
@@ -63,19 +63,19 @@ extension KataSchemaV1 {
   }
 
   /// Created the first time an item's deck is opened.
-  @Model final class ItemProgress {
+  @Model public final class ItemProgress {
     /// `ItemKey.rawValue`, e.g. `design-patterns/strategy`.
-    @Attribute(.unique) var key: String
-    var firstOpenedAt: Date
-    var lastOpenedAt: Date
-    var seenRoles: [String]
-    var studiedAt: Date?
-    var isBookmarked: Bool
-    var bookmarkedAt: Date?
+    @Attribute(.unique) public var key: String
+    public var firstOpenedAt: Date
+    public var lastOpenedAt: Date
+    public var seenRoles: [String]
+    public var studiedAt: Date?
+    public var isBookmarked: Bool
+    public var bookmarkedAt: Date?
     /// At most 140 characters.
-    var note: String
+    public var note: String
 
-    init(
+    public init(
       key: String, firstOpenedAt: Date = .now, lastOpenedAt: Date = .now, seenRoles: [String] = [],
       studiedAt: Date? = nil, isBookmarked: Bool = false, bookmarkedAt: Date? = nil,
       note: String = ""
@@ -86,19 +86,19 @@ extension KataSchemaV1 {
     }
   }
 
-  @Model final class DailyActivity {
+  @Model public final class DailyActivity {
     /// yyyy-MM-dd, gregorian, local time zone.
-    @Attribute(.unique) var dayKey: String
-    var reviewCount: Int
-    var studiedCount: Int
+    @Attribute(.unique) public var dayKey: String
+    public var reviewCount: Int
+    public var studiedCount: Int
 
-    init(dayKey: String, reviewCount: Int = 0, studiedCount: Int = 0) {
+    public init(dayKey: String, reviewCount: Int = 0, studiedCount: Int = 0) {
       self.dayKey = dayKey; self.reviewCount = reviewCount; self.studiedCount = studiedCount
     }
   }
 }
 
-typealias ExerciseCard = KataSchemaV1.ExerciseCard
-typealias ReviewLogEntry = KataSchemaV1.ReviewLogEntry
-typealias ItemProgress = KataSchemaV1.ItemProgress
-typealias DailyActivity = KataSchemaV1.DailyActivity
+public typealias ExerciseCard = KataSchemaV1.ExerciseCard
+public typealias ReviewLogEntry = KataSchemaV1.ReviewLogEntry
+public typealias ItemProgress = KataSchemaV1.ItemProgress
+public typealias DailyActivity = KataSchemaV1.DailyActivity

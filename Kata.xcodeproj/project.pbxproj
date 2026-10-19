@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		CA7A00000000000000006200 /* KataCore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006100 /* KataCore */; };
 		CA7A00000000000000006300 /* KataUI in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006400 /* KataUI */; };
+		CA7A00000000000000006500 /* KataStore in Frameworks */ = {isa = PBXBuildFile; productRef = CA7A00000000000000006600 /* KataStore */; };
 
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +48,7 @@
 			files = (
 				CA7A00000000000000006200 /* KataCore in Frameworks */,
 				CA7A00000000000000006300 /* KataUI in Frameworks */,
+				CA7A00000000000000006500 /* KataStore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +111,7 @@
 			packageProductDependencies = (
 				CA7A00000000000000006100 /* KataCore */,
 				CA7A00000000000000006400 /* KataUI */,
+				CA7A00000000000000006600 /* KataStore */,
 			);
 			productName = Kata;
 			productReference = CA7A00000000000000001000 /* Kata.app */;
@@ -423,6 +426,10 @@
 		CA7A00000000000000006400 /* KataUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KataUI;
+		};
+		CA7A00000000000000006600 /* KataStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KataStore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

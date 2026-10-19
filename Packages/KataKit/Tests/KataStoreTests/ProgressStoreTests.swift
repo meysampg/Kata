@@ -4,14 +4,14 @@ import KataSRS
 import SwiftData
 import Testing
 
-@testable import Kata
+@testable import KataStore
 
 @MainActor
 struct ProgressStoreTests {
   let scheduler = FSRSScheduler()
   let strategy = ItemKey(topic: "design-patterns", item: "strategy")
 
-  func makeStore() -> ProgressStore { ProgressStore(container: AppModel.inMemoryContainer()) }
+  func makeStore() -> ProgressStore { ProgressStore(container: try! PersistenceFactory.makeContainer(inMemory: true)) }
 
   func key(_ id: String) -> ExerciseKey { ExerciseKey(item: strategy, exercise: id) }
 

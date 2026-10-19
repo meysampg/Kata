@@ -1,5 +1,6 @@
 import Foundation
 import KataCore
+import KataStore
 import Testing
 
 @testable import Kata

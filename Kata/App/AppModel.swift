@@ -1,5 +1,6 @@
 import KataCore
 import KataSRS
+import KataStore
 import OSLog
 import SwiftData
 import SwiftUI
@@ -8,14 +9,17 @@ import SwiftUI
 @MainActor @Observable
 final class AppModel {
   let container: ModelContainer
-  let library: ContentLibrary
+  /// Derived learning state (shared with the Mac app through KataStore).
+  let study: StudyModel
   /// Set when a pack failed to decode; the app then runs with an empty library.
   let libraryError: String?
-  let store: ProgressStore
-  let settings: AppSettings
   let reminders: ReminderScheduler
+
+  var library: ContentLibrary { study.library }
+  var store: ProgressStore { study.store }
+  var settings: AppSettings { study.settings }
   /// Items that have a body in some pack. Registry-only items are "coming soon".
-  let contentKeys: Set<ItemKey>
+  var contentKeys: Set<ItemKey> { study.contentKeys }
 
   var selectedTab: AppTab = .today
   var todayPath = NavigationPath()
@@ -34,12 +38,10 @@ final class AppModel {
     settings: AppSettings
   ) {
     self.container = container
-    self.library = library
     self.libraryError = libraryError
-    self.settings = settings
-    self.store = ProgressStore(container: container)
+    self.study = StudyModel(
+      library: library, store: ProgressStore(container: container), settings: settings)
     self.reminders = ReminderScheduler()
-    self.contentKeys = Set(library.allItemKeys())
   }
 
   // MARK: Factories
@@ -50,8 +52,7 @@ final class AppModel {
     #endif
     let container: ModelContainer
     do {
-      container = try ModelContainer(
-        for: Schema(versionedSchema: KataSchemaV1.self), migrationPlan: KataMigrationPlan.self)
+      container = try PersistenceFactory.makeContainer()
     } catch {
       Logger(subsystem: "com.github.meysampg.kata", category: "persistence")
         .error("On-disk ModelContainer failed: \(String(describing: error))")
@@ -76,11 +77,8 @@ final class AppModel {
   }
 
   static func inMemoryContainer() -> ModelContainer {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
     // An in-memory container for a valid schema cannot realistically fail.
-    return try! ModelContainer(
-      for: Schema(versionedSchema: KataSchemaV1.self), migrationPlan: KataMigrationPlan.self,
-      configurations: config)
+    try! PersistenceFactory.makeContainer(inMemory: true)
   }
 
   static func preview() -> AppModel {
@@ -117,55 +115,12 @@ final class AppModel {
 
   func title(of key: ItemKey) -> String { library.meta(key)?.title ?? key.item }
 
-  // MARK: Derived learning state
+  // MARK: Derived learning state (forwarded to StudyModel)
 
-  /// Mastery of every item that has a body, computed from stored cards.
-  func masteryMap() -> [ItemKey: ItemMastery] {
-    var byItem: [ItemKey: [FSRSCard]] = [:]
-    for r in store.allCardRecords() where library.exercise(r.key) != nil {
-      byItem[r.key.item, default: []].append(r.card)
-    }
-    var out: [ItemKey: ItemMastery] = [:]
-    for key in contentKeys {
-      let total = library.pack(key.topic)?.exerciseCount(for: key.item) ?? 0
-      out[key] = MasteryCalculator.compute(cards: byItem[key] ?? [], totalExercises: total)
-    }
-    return out
-  }
-
-  /// Cards whose exercise still exists in the library.
-  private func liveSnapshots() -> [PracticeCardSnapshot] {
-    store.allCardRecords().filter { library.exercise($0.key) != nil }
-      .map { PracticeCardSnapshot(key: $0.key, due: $0.card.due, lastReview: $0.card.lastReview) }
-  }
-
-  /// Exercises of studied items that have no card yet (e.g. added by a content update).
-  private func newCandidates() -> [ExerciseKey] {
-    let enrolled = Set(store.allCardRecords().map(\.key))
-    let progress = store.allProgress()
-    return contentKeys.sorted().filter { progress[$0]?.studiedAt != nil }.flatMap { key in
-      (library.pack(key.topic)?.exerciseKeys(for: key.item) ?? []).filter { !enrolled.contains($0) }
-    }
-  }
-
-  /// The review queue as of `now`: due cards plus new exercises of studied items.
-  func reviewQueue(now: Date = .now) -> [ExerciseKey] {
-    let builder = PracticeQueueBuilder(
-      newLimit: settings.newExercisesPerDay, reviewLimit: settings.dailyReviewLimit)
-    let day = DayKey(now, calendar: DayKey.gregorian()).string
-    return builder.build(
-      snapshots: liveSnapshots(), newCandidates: newCandidates(), now: now,
-      seed: SeededRandom.hash("review@\(day)"))
-  }
-
-  /// Number of reviews that will be due by the end of the given day (for reminders).
-  func dueCount(onDayOf date: Date) -> Int {
-    let cal = Calendar.current
-    let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: date)) ?? date
-    return liveSnapshots().filter { $0.due < end }.count
-  }
-
-  func nextDueDate() -> Date? { liveSnapshots().map(\.due).min() }
+  func masteryMap() -> [ItemKey: ItemMastery] { study.masteryMap() }
+  func reviewQueue(now: Date = .now) -> [ExerciseKey] { study.reviewQueue(now: now) }
+  func dueCount(onDayOf date: Date) -> Int { study.dueCount(onDayOf: date) }
+  func nextDueDate() -> Date? { study.nextDueDate() }
 
   // MARK: Reminders
 

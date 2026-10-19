@@ -1,4 +1,3 @@
-#if os(iOS)
 import KataCore
 import SwiftUI
 
@@ -84,4 +83,3 @@ public struct BlocksView: View {
     .padding()
   }
 }
-#endif
