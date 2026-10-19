@@ -1,0 +1,96 @@
+{
+  "kind": "fix",
+  "title": "Fix the lazily built Config",
+  "minutes": 15,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Config.get()` is meant to be a double-checked lazy singleton. It is not."
+    },
+    {
+      "type": "p",
+      "text": "Fix `Config.get()` so that however many threads call it at once, exactly one `Config` is built, and callers never take the class lock once it exists."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "Keep the `static` field `instance`, the `CREATED` counter and the `onConstruct` hook.",
+        "Keep the lazy, double-checked shape: no eager initialization, no holder class, and no `synchronized` on the method.",
+        "Fix every defect in `get()`, including the one the tests cannot observe directly."
+      ]
+    }
+  ],
+  "starter": [
+    "Config.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "Config.java"
+  ],
+  "tests": [
+    "DoubleCheckedLockingKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "one-instance-under-contention",
+      "kind": "behaviour",
+      "title": "Eight racing callers build one Config"
+    },
+    {
+      "id": "mode-is-visible",
+      "kind": "behaviour",
+      "title": "The built Config is usable"
+    },
+    {
+      "id": "fast-path-does-not-lock",
+      "kind": "behaviour",
+      "title": "A built Config is returned without the lock"
+    },
+    {
+      "id": "instance-is-volatile",
+      "kind": "design",
+      "title": "The shared field is volatile"
+    },
+    {
+      "id": "single-read-on-fast-path",
+      "kind": "design",
+      "title": "The fast path reads the field once"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Walk through two threads that both see `instance == null`. The first takes the lock and builds. What does the second do when it gets the lock? Then ask what makes a half-built object visible to a reader without a lock."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Check the field again inside the `synchronized` block. Declare the field `volatile` so a reader cannot see a reference before the constructor's writes. On the unlocked path, read the field into a local once and use only that local."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The shape is:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "Config local = instance;",
+          "if (local == null) {",
+          "    synchronized (Config.class) {",
+          "        local = instance;",
+          "        if (local == null) instance = local = new Config();",
+          "    }",
+          "}",
+          "return local;"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 15,
+  "stressRuns": 20
+}

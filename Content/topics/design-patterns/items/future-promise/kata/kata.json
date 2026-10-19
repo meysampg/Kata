@@ -1,0 +1,108 @@
+{
+  "kind": "refactor",
+  "title": "Compose the Billing futures, do not block",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "Each `Billing` pipeline parks a pool thread on `get()` while it waits for the next stage."
+    },
+    {
+      "type": "p",
+      "text": "Rebuild `summary`, `pair` and `summaryOrFallback` as pure `CompletableFuture` compositions. Results and failures must stay the same."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "Keep `Billing(Executor io)`, `userName`, `balance` and the three method signatures, each returning a `CompletableFuture<String>`.",
+        "No `get()` or `join()` inside the three methods.",
+        "Lookups that do not depend on each other must be submitted together.",
+        "Everything must still work on an executor with one thread."
+      ]
+    }
+  ],
+  "starter": [
+    "Billing.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "Billing.java"
+  ],
+  "tests": [
+    "FuturePromiseKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "summary-chains-both-lookups",
+      "kind": "behaviour",
+      "title": "summary combines user and balance"
+    },
+    {
+      "id": "pair-joins-two-lookups",
+      "kind": "behaviour",
+      "title": "pair joins two lookups"
+    },
+    {
+      "id": "failure-reaches-the-caller",
+      "kind": "behaviour",
+      "title": "A failed lookup fails the future"
+    },
+    {
+      "id": "fallback-replaces-failure",
+      "kind": "behaviour",
+      "title": "summaryOrFallback recovers from failure"
+    },
+    {
+      "id": "no-blocking-calls",
+      "kind": "design",
+      "title": "No stage blocks with get or join"
+    },
+    {
+      "id": "stages-are-composed",
+      "kind": "design",
+      "title": "Stages are chained, not nested"
+    },
+    {
+      "id": "single-thread-pool-does-not-starve",
+      "kind": "design",
+      "title": "One I/O thread is enough"
+    },
+    {
+      "id": "independent-lookups-start-together",
+      "kind": "design",
+      "title": "Independent lookups start together"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A pipeline that blocks on `get()` holds a thread idle and, on a small pool, can wait for a task that no thread is free to run. Instead of waiting for a value, say what to do when it arrives."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Use `thenCompose` when the next stage returns a future (`balance` needs the user), `thenCombine` for two independent futures, and `exceptionally` to turn a failure into a value. Each method becomes one expression."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The dependent and independent shapes:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "return userName(id).thenCompose(user ->",
+          "    balance(user).thenApply(owed -> user + \" owes \" + owed));",
+          "",
+          "return userName(a).thenCombine(userName(b), (x, y) -> x + \"+\" + y);"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}

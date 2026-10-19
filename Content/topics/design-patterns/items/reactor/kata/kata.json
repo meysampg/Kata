@@ -1,0 +1,127 @@
+{
+  "kind": "implement",
+  "title": "Write a single-threaded Reactor",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "Implement `Reactor`: wait for ready events, then dispatch each to the handler registered for its operation."
+    },
+    {
+      "type": "p",
+      "text": "`Events.java` is given (`Op`, `Ready`, `Demultiplexer`, `Handler`); do not edit it."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`Reactor(Demultiplexer)`, and `on(Op, Handler)` returns the reactor; a later handler for the same `Op` replaces the earlier one.",
+        "`run()` calls `select()` repeatedly and dispatches each batch in order, on the calling thread, until `select()` returns an empty list.",
+        "`stop()` ends `run()` once the current batch is dispatched.",
+        "An event whose `Op` has no handler throws `IllegalStateException` naming the `Op`.",
+        "Handlers may call `on` during dispatch; later events see it. Look handlers up in a registry: no `switch` or `if` per `Op`."
+      ]
+    }
+  ],
+  "starter": [
+    "Events.java",
+    "Reactor.java"
+  ],
+  "readOnly": [
+    "Events.java"
+  ],
+  "solution": [
+    "Events.java",
+    "Reactor.java"
+  ],
+  "tests": [
+    "ReactorKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "dispatches-by-operation",
+      "kind": "behaviour",
+      "title": "Each event reaches its handler"
+    },
+    {
+      "id": "keeps-order-across-batches",
+      "kind": "behaviour",
+      "title": "Events keep their select order"
+    },
+    {
+      "id": "run-ends-when-select-is-empty",
+      "kind": "behaviour",
+      "title": "run ends on an empty batch"
+    },
+    {
+      "id": "later-handler-replaces-earlier",
+      "kind": "behaviour",
+      "title": "A new handler replaces the old one"
+    },
+    {
+      "id": "unregistered-operation-fails-loudly",
+      "kind": "behaviour",
+      "title": "An unhandled Op is an error"
+    },
+    {
+      "id": "handlers-run-on-the-calling-thread",
+      "kind": "behaviour",
+      "title": "Handlers run on the caller's thread"
+    },
+    {
+      "id": "stop-ends-the-loop-after-the-batch",
+      "kind": "behaviour",
+      "title": "stop finishes the batch, then ends"
+    },
+    {
+      "id": "handlers-can-register-handlers",
+      "kind": "behaviour",
+      "title": "A handler can register more handlers"
+    },
+    {
+      "id": "no-branching-on-the-operation",
+      "kind": "design",
+      "title": "Dispatch is a lookup, not branches"
+    },
+    {
+      "id": "registry-is-a-private-final-map",
+      "kind": "design",
+      "title": "Handlers live in a private final Map"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A reactor separates three jobs: waiting for readiness (the `Demultiplexer`), choosing a handler, and the handler's work. The loop knows nothing about what an operation means, only which handler is registered for it."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Keep a private final `EnumMap<Op, Handler>`. `run()` loops: ask `demux.select()`, stop on an empty list or when a `stopped` flag is set, otherwise look up `handlers.get(event.op())` for each event in the batch."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The loop:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "while (!stopped && !(batch = demux.select()).isEmpty()) {",
+          "    for (Ready event : batch) {",
+          "        Handler h = handlers.get(event.op());",
+          "        if (h == null) throw new IllegalStateException(",
+          "            \"no handler for \" + event.op());",
+          "        h.handle(event);",
+          "    }",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 15,
+  "stressRuns": 20
+}

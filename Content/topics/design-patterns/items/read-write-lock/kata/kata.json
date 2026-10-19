@@ -1,0 +1,107 @@
+{
+  "kind": "fix",
+  "title": "Fix the PriceBook that freezes on a miss",
+  "minutes": 15,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`PriceBook.price(sku)` hangs the first time it meets a sku it has not cached."
+    },
+    {
+      "type": "p",
+      "text": "Fix `PriceBook` so a missing price is loaded exactly once and cached, even when many threads ask at the same time, while cached prices are still read in parallel."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "Keep `PriceBook(Function<String, Integer> loader)`, `put(sku, price)` and `price(sku)`, and keep the single `ReentrantReadWriteLock`.",
+        "The loader runs under the write lock, and its failure must reach the caller without leaving any lock held.",
+        "Cached reads must keep using the read lock only."
+      ]
+    }
+  ],
+  "starter": [
+    "PriceBook.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "PriceBook.java"
+  ],
+  "tests": [
+    "ReadWriteLockKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "cached-price-is-returned",
+      "kind": "behaviour",
+      "title": "A cached price is returned without loading"
+    },
+    {
+      "id": "miss-loads-and-caches",
+      "kind": "behaviour",
+      "title": "A miss is loaded once and cached"
+    },
+    {
+      "id": "concurrent-misses-load-once",
+      "kind": "behaviour",
+      "title": "Eight simultaneous misses load once"
+    },
+    {
+      "id": "readers-share-the-lock",
+      "kind": "behaviour",
+      "title": "Cached reads share the read lock"
+    },
+    {
+      "id": "loader-failure-releases-locks",
+      "kind": "behaviour",
+      "title": "A failing loader leaves no lock held"
+    },
+    {
+      "id": "loader-runs-under-the-write-lock",
+      "kind": "design",
+      "title": "The loader runs under the write lock only"
+    },
+    {
+      "id": "lock-is-private-final",
+      "kind": "design",
+      "title": "The lock is a private final field"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A thread that holds the read lock asks for the write lock, which waits until all readers leave, including itself. Which lock should the thread hold at the moment it decides it must load?"
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Look in the cache under the read lock and release it in a `finally` before you take the write lock. Under the write lock look again, because another thread may have loaded the sku while you waited."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "After the read section ends:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "lock.writeLock().lock();",
+          "try {",
+          "    Integer cached = prices.get(sku);",
+          "    if (cached == null) {",
+          "        cached = loader.apply(sku);",
+          "        prices.put(sku, cached);",
+          "    }",
+          "    return cached;",
+          "} finally { lock.writeLock().unlock(); }"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}

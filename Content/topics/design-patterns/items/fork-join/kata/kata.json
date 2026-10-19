@@ -1,0 +1,106 @@
+{
+  "kind": "implement",
+  "title": "Split a big sum with fork/join",
+  "minutes": 20,
+  "task": [
+    {
+      "type": "lead",
+      "text": "Implement `SumTask.compute()`: sum an `int[]` range by splitting it until the pieces are small."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`SumTask(int[] data, int from, int to, int threshold)` sums `data[from, to)` as a `long`; the constructor is given.",
+        "A range of at most `threshold` elements is summed directly in a loop. Call `onLeaf.accept(from, to)` just before, and keep that hook.",
+        "A larger range is cut at the middle into two `SumTask`s: fork one, compute the other yourself, then join.",
+        "Do not create threads, executors or streams: the caller supplies the `ForkJoinPool`."
+      ]
+    }
+  ],
+  "starter": [
+    "SumTask.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "SumTask.java"
+  ],
+  "tests": [
+    "ForkJoinKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "sums-edge-ranges",
+      "kind": "behaviour",
+      "title": "Empty, tiny and offset ranges sum correctly"
+    },
+    {
+      "id": "sums-do-not-overflow",
+      "kind": "behaviour",
+      "title": "The sum is accumulated as a long"
+    },
+    {
+      "id": "matches-a-sequential-sum",
+      "kind": "behaviour",
+      "title": "A million elements match a plain loop"
+    },
+    {
+      "id": "leaves-tile-the-range",
+      "kind": "behaviour",
+      "title": "Direct sums cover the range exactly"
+    },
+    {
+      "id": "small-ranges-are-not-split",
+      "kind": "behaviour",
+      "title": "Splitting stops at the threshold"
+    },
+    {
+      "id": "halves-run-at-the-same-time",
+      "kind": "behaviour",
+      "title": "Two halves really run in parallel"
+    },
+    {
+      "id": "splits-with-fork-and-join",
+      "kind": "design",
+      "title": "compute splits with fork and join"
+    },
+    {
+      "id": "no-threads-of-its-own",
+      "kind": "design",
+      "title": "The task brings no threads of its own"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Fork/join is divide and conquer with a cutoff: below the threshold a plain loop is cheaper than scheduling, above it the range splits in two independent halves. Decide the base case first."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "In the recursive case build two `SumTask`s for `[from, mid)` and `[mid, to)`. Fork one so another worker can steal it, compute the other directly on this thread, and only then join the forked one."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The recursive case:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "int mid = (from + to) >>> 1;",
+          "var left = new SumTask(data, from, mid, threshold);",
+          "var right = new SumTask(data, mid, to, threshold);",
+          "left.fork();",
+          "long rightSum = right.compute();",
+          "return left.join() + rightSum;"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}

@@ -1,0 +1,121 @@
+{
+  "kind": "implement",
+  "title": "Make Counter an active object",
+  "minutes": 25,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Counter` is not thread-safe. Give it an asynchronous front that never needs a lock."
+    },
+    {
+      "type": "p",
+      "text": "Implement `ActiveCounter(Counter servant)`. Callers get a `CompletableFuture<Integer>` immediately; a single scheduler thread runs every request against the servant. `Counter` is given: do not edit it."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`add(int)` resolves to the new total, `total()` to the current one.",
+        "Requests run one at a time, in arrival order, only on the scheduler thread. Callers never block.",
+        "A request that throws fails its own future; later requests still run.",
+        "`close()` finishes accepted requests, stops the scheduler, returns after it exited, and refuses later requests."
+      ]
+    }
+  ],
+  "starter": [
+    "Counter.java",
+    "ActiveCounter.java"
+  ],
+  "readOnly": [
+    "Counter.java"
+  ],
+  "solution": [
+    "Counter.java",
+    "ActiveCounter.java"
+  ],
+  "tests": [
+    "ActiveObjectKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "add-returns-the-new-total",
+      "kind": "behaviour",
+      "title": "add and total resolve to the right values"
+    },
+    {
+      "id": "requests-run-in-submission-order",
+      "kind": "behaviour",
+      "title": "Requests run in arrival order"
+    },
+    {
+      "id": "every-call-runs-on-one-scheduler-thread",
+      "kind": "behaviour",
+      "title": "Only the scheduler thread touches the servant"
+    },
+    {
+      "id": "caller-does-not-wait",
+      "kind": "behaviour",
+      "title": "Callers never wait for a busy servant"
+    },
+    {
+      "id": "failure-reaches-the-future",
+      "kind": "behaviour",
+      "title": "A failing request fails only its future"
+    },
+    {
+      "id": "close-finishes-accepted-work",
+      "kind": "behaviour",
+      "title": "close drains accepted work and stops"
+    },
+    {
+      "id": "refuses-requests-after-close",
+      "kind": "behaviour",
+      "title": "Requests after close are refused"
+    },
+    {
+      "id": "servant-is-private-final",
+      "kind": "design",
+      "title": "The servant is a private final field"
+    },
+    {
+      "id": "no-locking-around-the-servant",
+      "kind": "design",
+      "title": "No lock guards the servant"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "Turn each call into a message. The caller only creates a future and leaves the message in an inbox. Thread safety then comes from who reads the inbox, not from locks around the servant."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Keep a `LinkedBlockingQueue<Runnable>` and start one thread in the constructor that loops on `take()`. Each message runs the servant call and completes the future, or completes it exceptionally. `close()` queues a stop marker and joins."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The enqueue step:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "var result = new CompletableFuture<Integer>();",
+          "inbox.add(() -> {",
+          "    try { result.complete(request.get()); }",
+          "    catch (RuntimeException e) {",
+          "        result.completeExceptionally(e);",
+          "    }",
+          "});",
+          "return result;"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}

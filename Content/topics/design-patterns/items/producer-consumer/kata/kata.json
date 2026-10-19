@@ -1,0 +1,100 @@
+{
+  "kind": "fix",
+  "title": "Fix the pipeline whose consumers never end",
+  "minutes": 15,
+  "task": [
+    {
+      "type": "lead",
+      "text": "`Pipeline.process` never returns: its consumers wait for work that will never come."
+    },
+    {
+      "type": "p",
+      "text": "Fix `Pipeline` so `process(amounts, consumers)` returns the sum of all amounts once every consumer thread has finished."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "Keep `process(List<Integer>, int)`, the `Job` record and the bounded `BlockingQueue<Job>`.",
+        "Every consumer must exit by itself: do not interrupt them and do not poll with timeouts.",
+        "A real amount may be `0` or negative, so the end signal must not be confused with a real job."
+      ]
+    }
+  ],
+  "starter": [
+    "Pipeline.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "Pipeline.java"
+  ],
+  "tests": [
+    "ProducerConsumerKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "sums-every-amount",
+      "kind": "behaviour",
+      "title": "Every amount is summed and process returns"
+    },
+    {
+      "id": "more-consumers-than-amounts",
+      "kind": "behaviour",
+      "title": "Idle consumers still stop"
+    },
+    {
+      "id": "empty-input",
+      "kind": "behaviour",
+      "title": "No amounts: consumers stop, total is 0"
+    },
+    {
+      "id": "zero-and-negative-amounts-count",
+      "kind": "behaviour",
+      "title": "Zero and negative amounts are real jobs"
+    },
+    {
+      "id": "no-consumer-left-running",
+      "kind": "behaviour",
+      "title": "No consumer thread outlives process"
+    },
+    {
+      "id": "queue-stays-bounded",
+      "kind": "design",
+      "title": "The queue stays bounded"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A consumer blocked in `take()` cannot tell \"the producer is slow\" from \"the producer is done\". The queue is the only channel between them, so the end of the work has to travel through it."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "After the last real job, put one stop marker on the queue per consumer. A consumer that takes the marker leaves its loop. Compare with `==` against a single shared `Job` instance, not by value."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "In the producer and the consumer:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "private static final Job STOP = new Job(0);",
+          "// producer, after the real jobs:",
+          "for (int c = 0; c < consumers; c++) queue.put(STOP);",
+          "// consumer:",
+          "for (Job job; (job = queue.take()) != STOP; ) {",
+          "    total.addAndGet(job.amount());",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}

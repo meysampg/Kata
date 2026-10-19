@@ -1,0 +1,118 @@
+{
+  "kind": "implement",
+  "title": "Build a tiny fixed thread pool",
+  "minutes": 25,
+  "task": [
+    {
+      "type": "lead",
+      "text": "Implement `MiniPool`: a fixed set of reusable workers fed by a bounded queue."
+    },
+    {
+      "type": "bullets",
+      "items": [
+        "`MiniPool(int threads, int capacity)` starts `threads` workers at once. Tasks wait in a queue of `capacity`.",
+        "`execute(Runnable)` queues a task, waiting while the queue is full. After `shutdown()` has begun it throws `RejectedExecutionException`.",
+        "A task that throws must not kill its worker.",
+        "`shutdown()` lets every queued task finish, then returns once all workers have exited.",
+        "Build it yourself: no `Executors`, no `ThreadPoolExecutor`, and no thread per task."
+      ]
+    }
+  ],
+  "starter": [
+    "MiniPool.java"
+  ],
+  "readOnly": [],
+  "solution": [
+    "MiniPool.java"
+  ],
+  "tests": [
+    "ThreadPoolKataTest.java"
+  ],
+  "checks": [
+    {
+      "id": "runs-every-task",
+      "kind": "behaviour",
+      "title": "Every submitted task runs"
+    },
+    {
+      "id": "never-more-workers-than-threads",
+      "kind": "behaviour",
+      "title": "At most N tasks run at once"
+    },
+    {
+      "id": "threads-are-reused",
+      "kind": "behaviour",
+      "title": "Workers are reused across tasks"
+    },
+    {
+      "id": "execute-waits-when-queue-is-full",
+      "kind": "behaviour",
+      "title": "A full queue makes execute wait"
+    },
+    {
+      "id": "shutdown-finishes-queued-tasks",
+      "kind": "behaviour",
+      "title": "shutdown drains the queue first"
+    },
+    {
+      "id": "rejects-after-shutdown",
+      "kind": "behaviour",
+      "title": "Tasks are rejected after shutdown"
+    },
+    {
+      "id": "failing-task-keeps-worker-alive",
+      "kind": "behaviour",
+      "title": "A failing task does not kill a worker"
+    },
+    {
+      "id": "workers-exit-on-shutdown",
+      "kind": "behaviour",
+      "title": "Workers exit when shutdown returns"
+    },
+    {
+      "id": "queue-is-bounded",
+      "kind": "design",
+      "title": "Tasks wait in a bounded BlockingQueue"
+    },
+    {
+      "id": "builds-its-own-workers",
+      "kind": "design",
+      "title": "The pool builds its own workers"
+    }
+  ],
+  "hints": [
+    [
+      {
+        "type": "p",
+        "text": "A pool is a producer-consumer pair inside one object: `execute` is the producer, and each worker loops taking a task and running it. The queue gives you both the waiting and the bound."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "Create the workers in the constructor, each running a `take()` loop on an `ArrayBlockingQueue<Runnable>`. For shutdown, set a flag so `execute` rejects, then queue one stop marker per worker and join them. Catch `RuntimeException` around each task."
+      }
+    ],
+    [
+      {
+        "type": "p",
+        "text": "The worker loop:"
+      },
+      {
+        "type": "code",
+        "language": "java",
+        "lines": [
+          "for (Runnable r; (r = queue.take()) != STOP; ) {",
+          "    try {",
+          "        r.run();",
+          "    } catch (RuntimeException e) {",
+          "        // keep the worker alive",
+          "    }",
+          "}"
+        ]
+      }
+    ]
+  ],
+  "timeoutSeconds": 20,
+  "stressRuns": 20
+}
