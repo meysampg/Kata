@@ -1,8 +1,10 @@
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import kata.*;
 
@@ -95,25 +97,32 @@ class AmbassadorKataTest {
         Expect.equal(List.of("bug"), t, "calls made");
     }
 
-    @Check(id = "timeout-fails-over", timeoutMs = 5000)
+    @Check(id = "timeout-fails-over")
     void timeoutFailsOver() throws Exception {
         CountDownLatch never = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
         List<String> t = trace();
         KeyValue hung = k -> {
             t.add("hung");
             try {
                 never.await();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                interrupted.countDown();
+                throw new InterruptedIOException("cancelled");
             }
             return "late";
         };
-        var amb = new Ambassador(List.of(List.of(hung, new Node("b", 0, t))), 1, 40);
+        // 200 ms: long enough that the healthy replica never times out,
+        // short enough to keep the check quick.
+        var amb = new Ambassador(List.of(List.of(hung, new Node("b", 0, t))), 1, 200);
         try {
-            String answer = Expect.completesWithin(3000, () -> amb.get("x"),
-                "a call to a replica that hangs forever");
+            String answer = Expect.completesWithin(1200, () -> amb.get("x"),
+                "a call to a replica that hangs forever (timeout 200 ms)");
             Expect.equal("b:x", answer, "the answer from the healthy replica");
             Expect.equal(List.of("hung", "b"), t, "calls made");
+            Expect.isTrue(interrupted.await(500, TimeUnit.MILLISECONDS),
+                "The timed-out try should be cancelled with an interrupt, not left "
+                    + "hanging (a CompletableFuture's cancel never interrupts)");
         } finally {
             never.countDown();
         }

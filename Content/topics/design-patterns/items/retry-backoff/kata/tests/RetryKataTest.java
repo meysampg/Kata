@@ -37,8 +37,16 @@ class RetryKataTest {
         for (int a = 1; a <= 6; a++) got.add(r.ceilingMs(a));
         Expect.equal(List.of(100L, 200L, 400L, 800L, 1000L, 1000L), got,
             "ceilings for attempts 1 to 6 (base 100, cap 1000)");
-        Expect.equal(1000L, r.ceilingMs(200),
-            "the ceiling for attempt 200 (no overflow)");
+        for (int a : new int[] {32, 33, 62, 63, 64, 65, 200, Integer.MAX_VALUE}) {
+            Expect.equal(1000L, r.ceilingMs(a),
+                "the ceiling for attempt " + a + " (no overflow)");
+        }
+        Retry wide = new Retry(5, 1, 10_000_000, c -> c, new Waits());
+        Expect.equal(8_388_608L, wide.ceilingMs(24),
+            "the ceiling for attempt 24 with base 1 and cap 10,000,000 "
+                + "(do not cap the doubling itself)");
+        Expect.equal(10_000_000L, wide.ceilingMs(25),
+            "the ceiling for attempt 25 with base 1 and cap 10,000,000");
     }
 
     @Check(id = "success-first-try")

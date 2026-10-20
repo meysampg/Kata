@@ -7,7 +7,7 @@
     {"type": "p", "text": "Implement `Ambassador implements KeyValue` in `Ambassador.java`. `KeyValue` and `ProfileService` are given and must not change."},
     {"type": "bullets", "items": [
       "`Ambassador(List<List<KeyValue>> shards, int attempts, long timeoutMs)`: the shard of a key is `Math.floorMod(key.hashCode(), shards.size())`; replicas are tried in order.",
-      "Each replica gets up to `attempts` tries. An `IOException`, or a try that takes longer than `timeoutMs`, counts as a failure; then retry, then try the next replica.",
+      "Each replica gets up to `attempts` tries. An `IOException`, or a try that takes longer than `timeoutMs`, counts as a failure; then retry, then try the next replica. A timed-out try is cancelled with an interrupt.",
       "When all are exhausted, throw `IOException` whose message starts `shard N unavailable` and whose cause is the last failure.",
       "A `RuntimeException` from a replica is a bug: it propagates at once, with no retry."]}
   ],
@@ -30,7 +30,7 @@
   ],
   "hints": [
     [{"type": "p", "text": "The ambassador is the same interface as the thing it fronts, so the app cannot tell the difference. Two nested loops: replicas outside, tries inside. Which failures deserve a retry?"}],
-    [{"type": "p", "text": "For the timeout, run each try on its own thread (a virtual thread is cheap) completing a `CompletableFuture`, and `get(timeoutMs, MILLISECONDS)`. Map `TimeoutException` to an `IOException` so the retry logic is one path."}],
+    [{"type": "p", "text": "For the timeout, wrap each try in a `FutureTask`, start it on a virtual thread and `get(timeoutMs, MILLISECONDS)`; `cancel(true)` it afterwards. Map `TimeoutException` to an `IOException` so the retry logic is one path."}],
     [{"type": "p", "text": "Skeleton:"},
      {"type": "code", "language": "java", "lines": [
        "for (KeyValue replica : shards.get(shard)) {",

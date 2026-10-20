@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import kata.*;
 
@@ -15,6 +16,7 @@ class BulkheadKataTest {
     /** Starts calls that stay inside the bulkhead until release is counted down. */
     void occupy(Bulkhead b, int n) throws InterruptedException {
         CountDownLatch entered = new CountDownLatch(n);
+        AtomicReference<Throwable> crashed = new AtomicReference<>();
         for (int i = 0; i < n; i++) {
             Thread t = new Thread(() -> b.call(() -> {
                 entered.countDown();
@@ -26,11 +28,17 @@ class BulkheadKataTest {
                 return "done";
             }), "kata-holder");
             t.setDaemon(true);
+            t.setUncaughtExceptionHandler((th, e) -> crashed.set(e));
             holders.add(t);
             t.start();
         }
-        Expect.isTrue(entered.await(1, TimeUnit.SECONDS),
-            "calls within the limit should be admitted");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (!entered.await(5, TimeUnit.MILLISECONDS)) {
+            if (crashed.get() != null || System.nanoTime() > deadline) {
+                Expect.fail(n + " calls within the limit should all be inside at once"
+                    + (crashed.get() == null ? "" : "; one threw " + crashed.get()));
+            }
+        }
     }
 
     void drain() throws InterruptedException {
@@ -44,7 +52,7 @@ class BulkheadKataTest {
         Expect.equal("ok", b.call(() -> "ok"), "a call under the limit");
     }
 
-    @Check(id = "rejects-when-full", timeoutMs = 4000)
+    @Check(id = "rejects-when-full")
     void rejectsWhenFull() throws Exception {
         Bulkhead b = new Bulkhead("inventory", 2);
         occupy(b, 2);
@@ -60,12 +68,12 @@ class BulkheadKataTest {
         }
     }
 
-    @Check(id = "rejection-does-not-wait", timeoutMs = 4000)
+    @Check(id = "rejection-does-not-wait")
     void rejectionDoesNotWait() throws Exception {
         Bulkhead b = new Bulkhead("inventory", 1);
         occupy(b, 1);
         try {
-            Expect.completesWithin(1000, () -> {
+            Expect.completesWithin(300, () -> {
                 Expect.raises(BulkheadFullException.class,
                     () -> b.call(() -> "x"), "a call to a full bulkhead");
                 return null;
@@ -75,7 +83,7 @@ class BulkheadKataTest {
         }
     }
 
-    @Check(id = "permit-returned-after-success", timeoutMs = 4000)
+    @Check(id = "permit-returned-after-success")
     void permitReturnedAfterSuccess() throws Exception {
         Bulkhead b = new Bulkhead("inventory", 2);
         occupy(b, 2);
@@ -98,7 +106,7 @@ class BulkheadKataTest {
         Expect.equal("ok", b.call(() -> "ok"), "a call after the failures");
     }
 
-    @Check(id = "bulkheads-are-independent", timeoutMs = 4000)
+    @Check(id = "bulkheads-are-independent")
     void bulkheadsAreIndependent() throws Exception {
         Bulkhead inventory = new Bulkhead("inventory", 1);
         Bulkhead payments = new Bulkhead("payments", 1);
@@ -111,27 +119,33 @@ class BulkheadKataTest {
         }
     }
 
-    @Check(id = "never-exceeds-the-limit", timeoutMs = 5000)
+    @Check(id = "never-exceeds-the-limit")
     void neverExceedsTheLimit() {
-        Bulkhead b = new Bulkhead("inventory", 3);
+        // Callers hammer a bulkhead of 2 with short calls: a check-then-act
+        // admission soon lets a third caller slip in.
+        Bulkhead b = new Bulkhead("inventory", 2);
         AtomicInteger inside = new AtomicInteger();
         AtomicInteger peak = new AtomicInteger();
-        List<Boolean> admitted = Stress.race(12, () -> {
-            try {
-                b.call(() -> {
-                    peak.accumulateAndGet(inside.incrementAndGet(), Math::max);
-                    Stress.pause(10);
-                    inside.decrementAndGet();
-                    return "x";
-                });
-                return true;
-            } catch (BulkheadFullException e) {
-                return false;
+        List<Integer> admitted = Stress.race(6, () -> {
+            int in = 0;
+            for (int i = 0; i < 20_000 && peak.get() <= 2; i++) {
+                try {
+                    b.call(() -> {
+                        peak.accumulateAndGet(inside.incrementAndGet(), Math::max);
+                        Thread.onSpinWait();
+                        inside.decrementAndGet();
+                        return "x";
+                    });
+                    in++;
+                } catch (BulkheadFullException e) {
+                    // rejected: try again
+                }
             }
+            return in;
         });
-        Expect.isTrue(peak.get() <= 3,
-            "at most 3 calls may be inside at once, saw " + peak.get());
-        Expect.isTrue(admitted.stream().anyMatch(a -> a),
+        Expect.isTrue(peak.get() <= 2, "a bulkhead of 2 let " + peak.get()
+            + " racing calls in at once; take a permit in one atomic step");
+        Expect.isTrue(admitted.stream().mapToInt(Integer::intValue).sum() > 0,
             "some of the racing calls should be admitted");
     }
 
@@ -139,17 +153,27 @@ class BulkheadKataTest {
     void limitIsPerInstance() {
         for (Field f : Types.named("Bulkhead").getDeclaredFields()) {
             int m = f.getModifiers();
-            Expect.isTrue(!Modifier.isStatic(m) || Modifier.isFinal(m),
-                "Bulkhead." + f.getName() + " is shared mutable static state; "
-                    + "each bulkhead needs its own permits");
+            boolean constant = Modifier.isFinal(m)
+                && (f.getType().isPrimitive() || f.getType() == String.class);
+            Expect.isTrue(!Modifier.isStatic(m) || constant,
+                "Bulkhead." + f.getName() + " is static, so every bulkhead "
+                    + "shares it; each bulkhead needs its own permits");
         }
     }
 
-    @Check(id = "operation-runs-outside-a-monitor", kind = Kind.DESIGN)
-    void operationRunsOutsideAMonitor() {
-        var call = Source.type("Bulkhead").method("call");
-        List<Hit> inside = call.calls("get").stream().filter(Hit::insideSynchronized).toList();
-        Expect.none(inside, "Bulkhead runs the operation inside synchronized");
-        Expect.none(call.calls("sleep"), "Bulkhead must not sleep");
+    @Check(id = "admission-never-waits", kind = Kind.DESIGN)
+    void admissionNeverWaits() {
+        var bulkhead = Source.type("Bulkhead");
+        List<Hit> waits = new ArrayList<>();
+        for (String w : List.of("acquire", "acquireUninterruptibly", "wait",
+                "sleep", "await", "join", "take")) {
+            waits.addAll(bulkhead.calls(w));
+        }
+        for (String w : List.of("tryAcquire", "tryLock", "offer", "poll")) {
+            bulkhead.calls(w).stream()
+                .filter(h -> h.args().contains(",")).forEach(waits::add);
+        }
+        Expect.none(waits, "Bulkhead waits for a permit; a full bulkhead must "
+            + "reject at once (tryAcquire() without a timeout)");
     }
 }

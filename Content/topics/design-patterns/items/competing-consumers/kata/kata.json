@@ -21,6 +21,7 @@
     {"id": "worker-ends-on-interrupt", "kind": "behaviour", "title": "An interrupt ends an idle worker"},
     {"id": "each-job-once", "kind": "behaviour", "title": "Every job is handled exactly once"},
     {"id": "jobs-run-in-parallel", "kind": "behaviour", "title": "Workers really compete in parallel"},
+    {"id": "idle-worker-takes-next-job", "kind": "behaviour", "title": "A busy worker never holds up a job"},
     {"id": "shutdown-drains-queue", "kind": "behaviour", "title": "shutdown() waits for queued jobs"},
     {"id": "pool-shares-one-queue", "kind": "design", "title": "All workers share one queue"},
     {"id": "no-polling-or-locks", "kind": "design", "title": "Waiting is done by the queue, not by sleeping"},

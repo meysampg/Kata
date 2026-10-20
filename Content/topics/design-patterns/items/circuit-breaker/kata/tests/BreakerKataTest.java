@@ -2,13 +2,21 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import kata.*;
 
 class BreakerKataTest {
     final AtomicLong now = new AtomicLong();
     final AtomicInteger calls = new AtomicInteger();
-    final CircuitBreaker breaker = new CircuitBreaker(3, 1000, now::get);
+    volatile boolean slowClock;
+    final CircuitBreaker breaker = new CircuitBreaker(3, 1000, this::clock);
+
+    /** The injected clock; slowClock widens any check-then-act window around it. */
+    long clock() {
+        if (slowClock) Stress.pause(5);
+        return now.get();
+    }
 
     Supplier<String> failing() {
         return () -> {
@@ -113,20 +121,22 @@ class BreakerKataTest {
             "a call made while the probe is in flight must get the fallback");
     }
 
-    @Check(id = "racing-callers-share-one-probe", timeoutMs = 4000)
+    @Check(id = "racing-callers-share-one-probe")
     void racingCallersShareOneProbe() {
         trip();
         int before = calls.get();
         now.set(1000);
+        slowClock = true;
         Stress.race(8, () -> breaker.call(failing(), () -> "cached"));
         Expect.equal(before + 1, calls.get(),
             "operation calls after the cool-down (exactly one probe)");
     }
 
-    @Check(id = "slow-call-does-not-block-others", timeoutMs = 4000)
+    @Check(id = "slow-call-does-not-block-others")
     void slowCallDoesNotBlockOthers() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
+        AtomicReference<Throwable> crashed = new AtomicReference<>();
         Thread slow = new Thread(() -> breaker.call(() -> {
             entered.countDown();
             try {
@@ -137,12 +147,21 @@ class BreakerKataTest {
             return "live";
         }, () -> "cached"));
         slow.setDaemon(true);
+        slow.setUncaughtExceptionHandler((t, e) -> crashed.set(e));
         slow.start();
         try {
-            Expect.isTrue(entered.await(2, TimeUnit.SECONDS), "the slow call never started");
+            while (!entered.await(5, TimeUnit.MILLISECONDS)) {
+                if (!slow.isAlive()) {
+                    Expect.fail("the slow call never started: " + crashed.get());
+                }
+            }
             Expect.equal(State.CLOSED,
                 Expect.completesWithin(1000, breaker::state, "state() during a slow call"),
                 "state during a slow call");
+            Expect.equal("live", Expect.completesWithin(1000,
+                    () -> breaker.call(working(), () -> "cached"),
+                    "another call() during a slow call (is op running under a lock?)"),
+                "another caller while a slow call is in flight");
         } finally {
             release.countDown();
             slow.join(1000);

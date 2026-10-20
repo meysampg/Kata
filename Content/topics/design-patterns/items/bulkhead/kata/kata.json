@@ -24,7 +24,7 @@
     {"id": "bulkheads-are-independent", "kind": "behaviour", "title": "A full bulkhead does not affect another"},
     {"id": "never-exceeds-the-limit", "kind": "behaviour", "title": "Racing callers never exceed the limit"},
     {"id": "limit-is-per-instance", "kind": "design", "title": "No shared static state"},
-    {"id": "operation-runs-outside-a-monitor", "kind": "design", "title": "The operation runs outside synchronized"}
+    {"id": "admission-never-waits", "kind": "design", "title": "A full bulkhead rejects without waiting"}
   ],
   "hints": [
     [{"type": "p", "text": "A bulkhead is a counter of free slots plus the discipline to give each slot back. Which `java.util.concurrent` type counts permits and can refuse without blocking?"}],
@@ -39,5 +39,6 @@
       "    permits.release();",
       "}"]}]
   ],
-  "timeoutSeconds": 10
+  "timeoutSeconds": 10,
+  "stressRuns": 20
 }

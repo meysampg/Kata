@@ -33,6 +33,8 @@ final class Db {
     final List<Message> outbox = new ArrayList<>();
     private final Set<Long> published = new HashSet<>();
     private long seq;
+    /** How many transactions have committed. */
+    int commits;
 
     /** Commits on return, rolls everything back if work throws. */
     boolean inTransaction(Consumer<Tx> work) {
@@ -44,6 +46,7 @@ final class Db {
         }
         orders.addAll(tx.orders);
         outbox.addAll(tx.rows);
+        commits++;
         return true;
     }
 

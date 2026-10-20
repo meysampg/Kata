@@ -1,24 +1,27 @@
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import kata.*;
 
 class IdempotentKataTest {
     static final class Books implements Ledger {
         final Map<String, Long> balances = new TreeMap<>();
+        final AtomicInteger entered = new AtomicInteger();
         boolean failNext;
-        long pauseMs;
-        int credits;
+        /** Runs inside the first credit call, before it books anything. */
+        volatile Runnable duringFirst = () -> { };
 
         public void credit(String account, long cents) {
-            if (pauseMs > 0) Stress.pause(pauseMs);   // widens the race window
+            if (entered.incrementAndGet() == 1) duringFirst.run();
             synchronized (this) {
                 if (failNext) {
                     failNext = false;
                     throw new IllegalStateException("db down");
                 }
-                credits++;
                 balances.merge(account, cents, Long::sum);
             }
         }
@@ -71,21 +74,54 @@ class IdempotentKataTest {
         Expect.equal(Map.of("alice", 500L), books.balances, "balances");
     }
 
-    @Check(id = "concurrent-duplicates-apply-once", timeoutMs = 5000)
-    void concurrentDuplicatesApplyOnce() {
-        books.pauseMs = 30;
+    @Check(id = "concurrent-duplicates-apply-once")
+    void concurrentDuplicatesApplyOnce() throws Exception {
         Deposit m1 = new Deposit("m1", "alice", 500);
-        List<Boolean> applied = Stress.race(6, () -> consumer.handle(m1));
-        long wins = applied.stream().filter(a -> a).count();
-        Expect.equal(1L, wins, "deliveries reported as applied");
-        Expect.equal(Map.of("alice", 500L), books.balances,
-            "balances after the same message arrived on 6 threads at once");
+        AtomicReference<Thread> second = new AtomicReference<>();
+        CountDownLatch firstIn = new CountDownLatch(1);
+        // The first delivery stays inside credit until the duplicate has
+        // either reached credit too (the bug), returned, or is waiting for it.
+        books.duringFirst = () -> {
+            firstIn.countDown();
+            long deadline = System.nanoTime() + 1_000_000_000L;
+            while (System.nanoTime() < deadline && books.entered.get() == 1) {
+                Thread b = second.get();
+                if (b != null && b.getState() != Thread.State.NEW
+                        && b.getState() != Thread.State.RUNNABLE) {
+                    return;  // returned, or blocked behind the first delivery
+                }
+                Thread.onSpinWait();
+            }
+        };
+        AtomicReference<Boolean> first = new AtomicReference<>();
+        AtomicReference<Boolean> dup = new AtomicReference<>();
+        Thread a = daemon(() -> first.set(consumer.handle(m1)));
+        a.start();
+        Expect.isTrue(firstIn.await(1, TimeUnit.SECONDS), "the first delivery never "
+            + "reached ledger.credit");
+        Thread b = daemon(() -> dup.set(consumer.handle(m1)));
+        second.set(b);
+        b.start();
+        a.join(2000);
+        b.join(2000);
+        Expect.isTrue(!a.isAlive() && !b.isAlive(), "the two deliveries of m1 did not finish");
+        long wins = java.util.stream.Stream.of(first.get(), dup.get())
+            .filter(Boolean.TRUE::equals).count();
+        Expect.equal(1L, wins, "deliveries of m1 reported as applied while a "
+            + "duplicate arrived during the first one's credit");
+        Expect.equal(Map.of("alice", 500L), books.balances, "balances after m1 "
+            + "arrived twice at once (check, apply and mark must be one step)");
     }
 
-    @Check(id = "concurrent-distinct-messages-all-apply", timeoutMs = 5000)
+    static Thread daemon(Runnable r) {
+        Thread t = new Thread(r, "kata-delivery");
+        t.setDaemon(true);
+        return t;
+    }
+
+    @Check(id = "concurrent-distinct-messages-all-apply")
     void concurrentDistinctMessagesAllApply() {
-        java.util.concurrent.atomic.AtomicInteger n =
-            new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger n = new AtomicInteger();
         List<Boolean> applied = Stress.race(6, () ->
             consumer.handle(new Deposit("m" + n.incrementAndGet(), "alice", 100)));
         Expect.isTrue(applied.stream().allMatch(a -> a),

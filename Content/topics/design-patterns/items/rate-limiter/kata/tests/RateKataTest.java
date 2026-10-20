@@ -56,6 +56,13 @@ class RateKataTest {
         for (int i = 0; i < 20; i++) b.acquire();
         atMs(500);
         Expect.equal(0L, b.acquire(), "rejected requests must not delay the refill");
+        for (long t = 600; t < 1000; t += 100) {
+            atMs(t);
+            Expect.isTrue(b.acquire() > 0, "a retry at " + t + " ms (polling every "
+                + "100 ms must not count the same elapsed time twice)");
+        }
+        atMs(1000);
+        Expect.equal(0L, b.acquire(), "the next token at 1000 ms");
     }
 
     @Check(id = "retry-after-is-honest")
@@ -80,7 +87,7 @@ class RateKataTest {
         Expect.equal(0L, limiter.acquire("a"), "client a after refill");
     }
 
-    @Check(id = "racing-callers-share-the-burst", timeoutMs = 4000)
+    @Check(id = "racing-callers-share-the-burst")
     void racingCallersShareTheBurst() {
         Limiter limiter = new Limiter(5, 1, clock::get);
         List<Long> results = Stress.race(16, () -> limiter.acquire("shared"));

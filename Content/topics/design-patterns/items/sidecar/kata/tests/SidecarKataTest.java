@@ -58,6 +58,7 @@ class SidecarKataTest {
         Expect.none(src.mentions("Telemetry"), "OrderApp still mentions Telemetry");
         Expect.none(src.calls("record"), "OrderApp still records access and metrics");
         Expect.none(src.calls("getOrDefault"), "OrderApp still reads the token header");
+        Types.constructor(app);   // fails: "OrderApp needs a constructor OrderApp()"
     }
 
     @Check(id = "sidecar-wraps-a-handler", kind = Kind.DESIGN)
@@ -80,8 +81,16 @@ class SidecarKataTest {
         };
         Telemetry t = new Telemetry();
         var ctor = Types.constructor(Types.named("Sidecar"), Handler.class, Set.class, Telemetry.class);
-        Handler h = (Handler) Types.create(ctor, stub, Set.of("k"), t);
-        Expect.equal("stub", call(h, "/x", "k").body(), "an authorised call to any wrapped handler");
+        Handler h;
+        try {
+            h = (Handler) Types.create(ctor, stub, Set.of("k"), t);
+            Expect.equal("stub", call(h, "/x", "k").body(),
+                "an authorised call to any wrapped handler");
+        } catch (ClassCastException e) {
+            Expect.fail("Sidecar casts the app it wraps to a concrete "
+                + "type; hold and call it as a plain Handler");
+            return;
+        }
         Expect.equal(401, call(h, "/x", "no").status(), "an unauthorised call");
         Expect.equal(1, reached.get(), "calls that reached the wrapped handler");
         Expect.equal(List.of("/x 200", "/x 401"), t.accessLog, "the sidecar's access log");

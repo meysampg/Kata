@@ -21,7 +21,10 @@ final class Retry {
 
     /** The ceiling for a 1-based attempt, before jitter is applied. */
     long ceilingMs(int attempt) {
-        int shift = Math.min(attempt - 1, 20);
+        int shift = attempt - 1;
+        if (shift >= Long.numberOfLeadingZeros(baseMs)) {
+            return capMs; // baseMs << shift would overflow
+        }
         return Math.min(capMs, baseMs << shift);
     }
 

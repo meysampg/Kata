@@ -7,13 +7,12 @@ import kata.*;
 class TransactionalOutboxKataTest {
     static final class Recorder implements Broker {
         final List<String> seen = new ArrayList<>();
-        int failFrom = -1;     // calls with index >= failFrom fail while 'down'
-        boolean down;
+        int failCall = -1;     // this one call (1-based) fails
         int calls;
 
         public void publish(Message m) throws IOException {
             calls++;
-            if (down && calls >= failFrom) throw new IOException("broker down");
+            if (calls == failCall) throw new IOException("broker down");
             seen.add(m.type() + ":" + m.payload());
         }
     }
@@ -69,6 +68,10 @@ class TransactionalOutboxKataTest {
         var svc = Source.type("OrderService");
         Expect.none(svc.mentions("Broker"), "OrderService still talks to the Broker");
         Expect.none(svc.calls("publish"), "OrderService still publishes directly");
+        Expect.none(svc.mentions("outbox"),
+            "OrderService writes db.outbox directly; enqueue through the transaction");
+        Expect.none(svc.mentions("orders"),
+            "OrderService writes db.orders directly; save through the transaction");
         Expect.isTrue(Types.fieldsOfType(Types.named("OrderService"), Broker.class).isEmpty(),
             "OrderService still holds a Broker");
     }
@@ -80,6 +83,8 @@ class TransactionalOutboxKataTest {
         Object svc = Types.create(Types.constructor(cls, Db.class), db);
         Method place = Types.method(cls, "place", String.class);
         Expect.equal(true, Types.call(place, svc, "o-1"), "place(o-1)");
+        Expect.equal(1, db.commits, "transactions committed by place(o-1) (the order "
+            + "and its outbox row must commit together, in one inTransaction)");
         Expect.equal(1, db.orders.size(), "orders saved");
         Expect.equal(1, db.outbox.size(), "outbox rows written in the same transaction");
         Expect.equal("OrderPlaced", db.outbox.get(0).type(), "the row's type");
@@ -98,11 +103,9 @@ class TransactionalOutboxKataTest {
         Class<?> relayType = Types.named("Relay");
         Object relay = Types.create(Types.constructor(relayType, Db.class, Broker.class), db, broker);
         Method pump = Types.method(relayType, "pump");
-        broker.down = true;
-        broker.failFrom = 1;
+        broker.failCall = 1;
         Expect.equal(0, Types.call(pump, relay), "rows sent while the broker is down");
         Expect.equal(1, db.pending().size(), "A row that was not acknowledged must stay pending");
-        broker.down = false;
         Expect.equal(1, Types.call(pump, relay), "rows sent once the broker is back");
         Expect.equal(List.of("OrderPlaced:o-1"), broker.seen, "messages received");
         Expect.equal(0, Types.call(pump, relay), "rows sent by a third pump (no duplicates)");
@@ -119,11 +122,10 @@ class TransactionalOutboxKataTest {
         Class<?> relayType = Types.named("Relay");
         Object relay = Types.create(Types.constructor(relayType, Db.class, Broker.class), db, broker);
         Method pump = Types.method(relayType, "pump");
-        broker.down = true;
-        broker.failFrom = 2;      // the second publish fails
-        Expect.equal(1, Types.call(pump, relay), "rows sent before the failure");
+        broker.failCall = 2;      // only the second publish fails
+        Expect.equal(1, Types.call(pump, relay), "rows sent before the failure "
+            + "(stop at the first failure, or c overtakes b)");
         Expect.equal(List.of("OrderPlaced:a"), broker.seen, "messages received");
-        broker.down = false;
         Expect.equal(2, Types.call(pump, relay), "rows sent by the next pump");
         Expect.equal(List.of("OrderPlaced:a", "OrderPlaced:b", "OrderPlaced:c"), broker.seen,
             "Order must be preserved across a failure");

@@ -28,7 +28,7 @@
   ],
   "hints": [
     [{"type": "p", "text": "Two separate ideas: the *ceiling* grows deterministically, the *delay* is whatever the injected jitter picks below it. Keep them in two steps."}],
-    [{"type": "p", "text": "`call` is a loop over attempts. Catch `TransientException` only; if it is the last attempt rethrow, otherwise ask `jitter` for a delay and hand it to `sleeper`. Cap the shift so `<<` cannot overflow."}],
+    [{"type": "p", "text": "`call` is a loop over attempts. Catch `TransientException` only; if it is the last attempt rethrow, otherwise ask `jitter` for a delay and hand it to `sleeper`. Before shifting, check that `baseMs << shift` cannot overflow (`Long.numberOfLeadingZeros` tells you); if it would, the answer is `capMs`."}],
     [{"type": "code", "language": "java", "lines": [
       "for (int attempt = 1; ; attempt++) {",
       "    try {",

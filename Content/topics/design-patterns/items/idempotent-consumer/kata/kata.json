@@ -35,5 +35,6 @@
       "    return true;",
       "}"]}]
   ],
-  "timeoutSeconds": 10
+  "timeoutSeconds": 10,
+  "stressRuns": 20
 }

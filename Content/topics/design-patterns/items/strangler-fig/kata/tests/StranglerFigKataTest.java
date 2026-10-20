@@ -71,8 +71,8 @@ class StranglerFigKataTest {
         Class<?> backend = Types.named("Backend");
         Class<?> facade = Types.named("StranglerFacade");
         List<String> calls = new ArrayList<>();
-        Object old = Types.implement(backend, a -> { calls.add("old"); return "old"; });
-        Object fresh = Types.implement(backend, a -> { calls.add("new"); return "new"; });
+        Object old = Types.implement(backend, a -> { calls.add(a[0] + " " + a[1]); return "old"; });
+        Object fresh = Types.implement(backend, a -> { calls.add(a[0] + " " + a[1]); return "new"; });
         Object f = Types.create(Types.constructor(facade, backend, backend), old, fresh);
         Method migrate = Types.method(facade, "migrate", String.class, int.class);
         Method handle = Types.method(facade, "handle", String.class, String.class);
@@ -83,13 +83,32 @@ class StranglerFigKataTest {
         Expect.equal("old", Types.call(handle, f, "u", "/y/1"), "a prefix with no rule");
         Types.call(migrate, f, "/z", 0);
         Expect.equal("old", Types.call(handle, f, "u", "/z/1"), "a prefix migrated at 0");
+        Expect.equal(List.of("u /x/1", "u /x/1", "u /y/1", "u /z/1"), calls,
+            "the user and path each backend received (pass them on unchanged)");
+        int bucket = Math.floorMod("gina".hashCode(), 100);
+        Types.call(migrate, f, "/p", bucket + 1);
+        Types.call(migrate, f, "/q", bucket);
+        Expect.equal("new", Types.call(handle, f, "gina", "/p/1"),
+            "a user in bucket " + bucket + " on a prefix at " + (bucket + 1) + "%");
+        Expect.equal("old", Types.call(handle, f, "gina", "/q/1"),
+            "a user in bucket " + bucket + " on a prefix at " + bucket + "%");
+        Types.call(migrate, f, "/a", 100);
+        Types.call(migrate, f, "/a/b", 0);
+        Expect.equal("new", Types.call(handle, f, "u", "/a/b/1"),
+            "/a/b/1 after migrate(\"/a\", 100) then migrate(\"/a/b\", 0) "
+                + "(the first matching rule wins)");
     }
 
     @Check(id = "site-delegates-to-facade", kind = Kind.DESIGN)
     void siteDelegates() {
         var site = Source.type("Site");
         Expect.isTrue(!site.news("StranglerFacade").isEmpty(), "Site never builds a StranglerFacade");
-        Expect.none(site.calls("startsWith"), "Site still routes by path itself");
+        for (String routing : List.of("startsWith", "indexOf", "matches", "contains",
+                "regionMatches", "equals", "substring")) {
+            Expect.none(site.calls(routing), "Site still routes by path itself");
+        }
         Expect.none(site.calls("floorMod"), "Site still buckets users itself");
+        Expect.none(site.calls("hashCode"), "Site still buckets users itself");
+        Expect.none(site.switches(), "Site still routes by path itself");
     }
 }

@@ -18,6 +18,7 @@
     {"id": "second-read-is-a-hit", "kind": "behaviour", "title": "A second read is served from the cache"},
     {"id": "rename-is-visible-at-once", "kind": "behaviour", "title": "A rename shows up on the next read"},
     {"id": "rename-writes-before-it-evicts", "kind": "behaviour", "title": "Write first, then evict"},
+    {"id": "racing-renames-leave-no-stale-entry", "kind": "behaviour", "title": "Racing renames leave no stale entry"},
     {"id": "missing-rows-are-not-cached", "kind": "behaviour", "title": "Absence is not cached"},
     {"id": "ttl-bounds-staleness", "kind": "behaviour", "title": "The TTL still bounds staleness"},
     {"id": "rename-evicts-only-that-user", "kind": "behaviour", "title": "A rename evicts only its own entry"},

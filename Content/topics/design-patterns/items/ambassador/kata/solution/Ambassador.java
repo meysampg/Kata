@@ -1,6 +1,7 @@
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -32,23 +33,18 @@ final class Ambassador implements KeyValue {
         throw new IOException("shard " + shard + " unavailable", last);
     }
 
+    // One try on its own virtual thread, bounded by timeoutMs. A FutureTask
+    // (unlike a CompletableFuture) interrupts the worker when cancelled.
     private String attempt(KeyValue replica, String key) throws IOException {
-        CompletableFuture<String> call = new CompletableFuture<>();
-        Thread.ofVirtual().start(() -> {
-            try {
-                call.complete(replica.get(key));
-            } catch (Throwable e) {
-                call.completeExceptionally(e);
-            }
-        });
+        FutureTask<String> call = new FutureTask<>(() -> replica.get(key));
+        Thread.ofVirtual().start(call);
         try {
             return call.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
-            call.cancel(true);
             throw new IOException("timed out after " + timeoutMs + " ms", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("interrupted", e);
+            throw new InterruptedIOException("interrupted");
         } catch (ExecutionException e) {
             if (e.getCause() instanceof IOException io) {
                 throw io;
@@ -57,6 +53,8 @@ final class Ambassador implements KeyValue {
                 throw re;
             }
             throw new IOException(e.getCause());
+        } finally {
+            call.cancel(true);
         }
     }
 }

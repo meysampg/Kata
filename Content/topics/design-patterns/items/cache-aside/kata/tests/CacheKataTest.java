@@ -10,6 +10,7 @@ class CacheKataTest {
         final Map<String, String> rows = new HashMap<>();
         int reads;
         Runnable beforeSave = () -> { };
+        Runnable afterSave = () -> { };
 
         public synchronized Optional<String> find(String id) {
             reads++;
@@ -21,6 +22,9 @@ class CacheKataTest {
             synchronized (this) {
                 rows.put(id, name);
             }
+            Runnable after = afterSave;
+            afterSave = () -> { };
+            after.run();
         }
     }
 
@@ -58,6 +62,18 @@ class CacheKataTest {
                 + "(write the store first, then evict)");
     }
 
+    @Check(id = "racing-renames-leave-no-stale-entry")
+    void racingRenamesLeaveNoStaleEntry() {
+        db.rows.put("u1", "Ada");
+        users.get("u1");
+        // Writer A saves first, writer B saves and finishes before A does.
+        db.afterSave = () -> users.rename("u1", "Bea");
+        users.rename("u1", "Al");
+        Expect.equal(Optional.of("Bea"), users.get("u1"),
+            "a read after two racing renames (the store says Bea); "
+                + "evict the entry instead of writing the new name into it");
+    }
+
     @Check(id = "missing-rows-are-not-cached")
     void missingRowsAreNotCached() {
         Expect.equal(Optional.empty(), users.get("u9"), "a user that does not exist yet");
@@ -90,7 +106,7 @@ class CacheKataTest {
         Expect.equal(before, db.reads, "reading u2 after renaming u1 should still be a hit");
     }
 
-    @Check(id = "concurrent-readers-agree", timeoutMs = 4000)
+    @Check(id = "concurrent-readers-agree")
     void concurrentReadersAgree() {
         db.rows.put("u1", "Ada");
         List<Optional<String>> all = Stress.race(8, () -> users.get("u1"));

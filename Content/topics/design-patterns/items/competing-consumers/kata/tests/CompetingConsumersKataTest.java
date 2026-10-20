@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import kata.*;
 
@@ -40,19 +41,31 @@ class CompetingConsumersKataTest {
         Expect.equal(List.of(1, 3), seen, "jobs handled around a failing one");
     }
 
-    @Check(id = "worker-ends-on-interrupt", timeoutMs = 4000)
+    @Check(id = "worker-ends-on-interrupt")
     void workerEndsOnInterrupt() throws Exception {
         BlockingQueue<Job> queue = new LinkedBlockingQueue<>();
-        Thread t = new Thread(new Worker(queue, job -> { }));
+        AtomicBoolean flagKept = new AtomicBoolean();
+        Thread t = new Thread(() -> {
+            new Worker(queue, job -> { }).run();
+            flagKept.set(Thread.currentThread().isInterrupted());
+        });
         t.setDaemon(true);
         t.start();
-        Stress.pause(20);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (t.getState() != Thread.State.WAITING
+                && t.getState() != Thread.State.TIMED_WAITING
+                && t.isAlive() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();   // until the worker blocks on the empty queue
+        }
+        Expect.isTrue(t.isAlive(), "A worker on an empty queue should wait for work");
         t.interrupt();
-        t.join(2000);
+        t.join(1000);
         Expect.isTrue(!t.isAlive(), "A worker blocked on an empty queue should stop when interrupted");
+        Expect.isTrue(flagKept.get(), "Worker.run swallowed the interrupt; "
+            + "restore it with Thread.currentThread().interrupt()");
     }
 
-    @Check(id = "each-job-once", timeoutMs = 4000)
+    @Check(id = "each-job-once")
     void eachJobOnce() throws Exception {
         Map<Integer, Integer> handled = new ConcurrentHashMap<>();
         WorkerPool pool = new WorkerPool(4, job -> handled.merge(job.id(), 1, Integer::sum));
@@ -63,13 +76,13 @@ class CompetingConsumersKataTest {
             "Some job was handled more than once: " + handled);
     }
 
-    @Check(id = "jobs-run-in-parallel", timeoutMs = 5000)
+    @Check(id = "jobs-run-in-parallel")
     void jobsRunInParallel() throws Exception {
         CountDownLatch bothInside = new CountDownLatch(2);
         AtomicInteger finished = new AtomicInteger();
         WorkerPool pool = new WorkerPool(2, job -> {
             bothInside.countDown();
-            if (bothInside.await(3, TimeUnit.SECONDS)) finished.incrementAndGet();
+            if (bothInside.await(1, TimeUnit.SECONDS)) finished.incrementAndGet();
         });
         pool.submit(new Job(1, 1));
         pool.submit(new Job(2, 1));
@@ -78,7 +91,34 @@ class CompetingConsumersKataTest {
             "Two jobs should be in progress at the same time with two workers");
     }
 
-    @Check(id = "shutdown-drains-queue", timeoutMs = 4000)
+    @Check(id = "idle-worker-takes-next-job")
+    void idleWorkerTakesNextJob() throws Exception {
+        CountDownLatch slowStarted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch othersDone = new CountDownLatch(3);
+        WorkerPool pool = new WorkerPool(2, job -> {
+            if (job.id() == 1) {
+                slowStarted.countDown();
+                release.await(2, TimeUnit.SECONDS);
+            } else {
+                othersDone.countDown();
+            }
+        });
+        boolean freed;
+        try {
+            pool.submit(new Job(1, 100));
+            Expect.isTrue(slowStarted.await(1, TimeUnit.SECONDS), "job 1 never started");
+            for (int i = 2; i <= 4; i++) pool.submit(new Job(i, 1));
+            freed = othersDone.await(1, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+        }
+        pool.shutdown();
+        Expect.isTrue(freed, "While job 1 runs, the idle worker should take jobs 2 "
+            + "to 4; a job must not wait behind a busy worker (no per-worker queues)");
+    }
+
+    @Check(id = "shutdown-drains-queue")
     void shutdownDrains() throws Exception {
         AtomicInteger done = new AtomicInteger();
         WorkerPool pool = new WorkerPool(3, job -> {
