@@ -8,7 +8,7 @@
     {"type": "bullets", "items": [
       "Add `interface Notifier` with `void notify(String customer, String message)`.",
       "`OrderService(Notifier)` keeps `String place(String customer)` and never mentions `SmtpClient`.",
-      "Add an adapter that implements `Notifier` over `SmtpClient`; wire it in `Orders.place`.",
+      "Adapt `SmtpClient` to `Notifier` (a small adapter class, or a method reference) and wire it in `Orders.place`.",
       "`SmtpClient` itself stays as it is."]}
   ],
   "starter": ["Orders.java"],

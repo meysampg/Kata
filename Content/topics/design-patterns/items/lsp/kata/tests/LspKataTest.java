@@ -27,6 +27,23 @@ class LspKataTest {
         Expect.equal(20, area, "a Square used as a Rect, after setW(5) and setH(4)");
     }
 
+    @Check(id = "square-stays-square")
+    void squareStaysSquare() throws Throwable {
+        Class<?> rect = Types.named("Rect");
+        Class<?> square = Types.named("Square");
+        if (!rect.isAssignableFrom(square)) {
+            return;   // Rect's setters cannot reach a Square
+        }
+        Object s = Types.create(Types.constructor(square, int.class), 3);
+        Types.call(Types.method(rect, "setW", int.class), s, 5);
+        Types.call(Types.method(rect, "setH", int.class), s, 4);
+        int area = (Integer) Types.call(Types.method(rect, "area"), s);
+        int side = (int) Math.round(Math.sqrt(area));
+        Expect.isTrue(side * side == area, "a Square reached through Rect's setters "
+            + "has area " + area + ", so it is no longer a square; "
+            + "while Square extends Rect it must break one promise or the other");
+    }
+
     @Check(id = "shape-interface", kind = Kind.DESIGN)
     void shapeInterface() {
         Class<?> shape = Types.named("Shape");

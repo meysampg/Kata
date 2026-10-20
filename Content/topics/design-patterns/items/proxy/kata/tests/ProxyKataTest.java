@@ -84,7 +84,8 @@ class ProxyKataTest {
     @Check(id = "proxy-does-not-hardwire-the-real-one", kind = Kind.DESIGN)
     void proxyDoesNotHardwireTheRealOne() {
         var proxy = Source.type("CachedDocuments");
-        Expect.none(proxy.news("RemoteDocuments"), "CachedDocuments builds RemoteDocuments itself");
+        Expect.none(proxy.mentions("RemoteDocuments"),
+            "CachedDocuments names RemoteDocuments; get the real Documents from the factory");
         Expect.none(proxy.instanceofs(), "CachedDocuments inspects the concrete type of the subject");
     }
 }

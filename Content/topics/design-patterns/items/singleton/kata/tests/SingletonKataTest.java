@@ -4,21 +4,53 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import kata.*;
 
 class SingletonKataTest {
-    // Must stay the first check: it needs AppConfig to be untouched so far.
+    /** Loads the learner's classes afresh, so this check never sees an AppConfig made earlier. */
+    static final class Fresh extends ClassLoader {
+        Fresh() { super(AppConfig.class.getClassLoader()); }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            synchronized (getClassLoadingLock(name)) {
+                boolean mine = !name.contains(".") && !name.startsWith("SingletonKataTest");
+                String file = name + ".class";
+                if (!mine || getParent().getResource(file) == null) {
+                    return super.loadClass(name, resolve);
+                }
+                Class<?> c = findLoadedClass(name);
+                if (c == null) {
+                    try (var in = getParent().getResourceAsStream(file)) {
+                        byte[] b = in.readAllBytes();
+                        c = defineClass(name, b, 0, b.length);
+                    } catch (java.io.IOException e) {
+                        throw new ClassNotFoundException(name, e);
+                    }
+                }
+                return c;
+            }
+        }
+    }
+
     @Check(id = "one-instance-under-contention", timeoutMs = 5000)
-    void oneInstanceUnderContention() {
-        Probe.CREATED.set(0);
-        Probe.onConstruct = () -> Stress.pause(40);
-        List<AppConfig> seen = Stress.race(8, AppConfig::get);
-        Probe.onConstruct = () -> { };
-        Expect.equal(1, Probe.CREATED.get(),
+    void oneInstanceUnderContention() throws Exception {
+        ClassLoader fresh = new Fresh();
+        Class<?> probe = Class.forName("Probe", true, fresh);
+        Field created = probe.getDeclaredField("CREATED");
+        Field onConstruct = probe.getDeclaredField("onConstruct");
+        created.setAccessible(true);
+        onConstruct.setAccessible(true);
+        onConstruct.set(null, (Runnable) () -> Stress.pause(40));
+        Method get = Class.forName("AppConfig", false, fresh).getDeclaredMethod("get");
+        get.setAccessible(true);
+        List<Object> seen = Stress.race(8, () -> get.invoke(null));
+        Expect.equal(1, ((java.util.concurrent.atomic.AtomicInteger) created.get(null)).get(),
             "AppConfig instances constructed by 8 threads calling get() together");
-        for (AppConfig c : seen) {
+        for (Object c : seen) {
             Expect.isTrue(c == seen.get(0), "the 8 threads were handed different instances");
         }
     }
@@ -79,11 +111,15 @@ class SingletonKataTest {
 
     @Check(id = "shared-field-is-safe", kind = Kind.DESIGN)
     void sharedFieldIsSafe() {
+        if (Modifier.isSynchronized(Types.staticMethod(AppConfig.class, "get").getModifiers())) {
+            return;   // every read and write of the field happens under the class lock
+        }
         for (Field f : AppConfig.class.getDeclaredFields()) {
             if (f.getType() != AppConfig.class || !Modifier.isStatic(f.getModifiers())) continue;
             int m = f.getModifiers();
             Expect.isTrue(Modifier.isFinal(m) || Modifier.isVolatile(m),
-                "AppConfig." + f.getName() + " is a lazily written static that is neither final nor volatile");
+                "AppConfig." + f.getName() + " is a lazily written static that is neither final nor volatile, "
+                    + "and get() is not synchronized");
         }
     }
 

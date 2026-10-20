@@ -76,6 +76,13 @@ class SrpKataTest {
         Expect.none(service.news("StringBuilder"), "ReportService still builds the text");
         Expect.none(service.calls("append"), "ReportService still builds the text");
         Expect.none(service.calls("add"), "ReportService still delivers into a list itself");
+        Expect.none(service.calls("joining"), "ReportService still builds the text");
+        Expect.isTrue(!service.calls("parse").isEmpty(),
+            "ReportService should ask its InvoiceParser to parse");
+        Expect.isTrue(!service.calls("format").isEmpty(),
+            "ReportService should ask its InvoiceFormatter to format");
+        Expect.isTrue(!service.calls("send").isEmpty(),
+            "ReportService should hand the text to its Sender");
     }
 
     @Check(id = "parts-are-swappable", kind = Kind.DESIGN)

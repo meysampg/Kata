@@ -46,7 +46,7 @@ class DecoratorKataTest {
         for (String name : List.of("Prefixing", "Shouting")) {
             Class<?> c = Types.named(name);
             Expect.isTrue(Notifier.class.isAssignableFrom(c), name + " should implement Notifier");
-            Field f = Types.onlyFieldOfType(c, Notifier.class);
+            Field f = wrappedField(c);
             Expect.isTrue(Modifier.isFinal(f.getModifiers()),
                 name + "." + f.getName() + " should be final");
         }
@@ -66,6 +66,48 @@ class DecoratorKataTest {
                 exists = false;
             }
             Expect.isTrue(!exists, old + " is still there: one class per combination does not scale");
+        }
+        for (Class<?> c : userClasses()) {
+            if (!Notifier.class.isAssignableFrom(c) || c.isInterface() || c == ListNotifier.class) {
+                continue;
+            }
+            for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
+                Expect.isTrue(Types.fieldsOfType(k, List.class).isEmpty(),
+                    c.getSimpleName() + " stores messages itself; only ListNotifier should, "
+                        + "and every option should wrap another Notifier");
+            }
+        }
+    }
+
+    /** The final Notifier field a decorator forwards to, declared in it or a superclass. */
+    static Field wrappedField(Class<?> c) {
+        List<Field> found = new ArrayList<>();
+        for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
+            found.addAll(Types.fieldsOfType(k, Notifier.class));
+        }
+        Expect.isTrue(found.size() == 1, c.getSimpleName()
+            + " should hold exactly one Notifier to forward to, but has " + found.size());
+        return found.get(0);
+    }
+
+    /** Every class compiled from the learner's files (the tests' classes excluded). */
+    static List<Class<?>> userClasses() {
+        try {
+            ClassLoader loader = Notifier.class.getClassLoader();
+            java.nio.file.Path dir = java.nio.file.Path.of(
+                loader.getResource("DecoratorKataTest.class").toURI()).getParent();
+            List<Class<?>> out = new ArrayList<>();
+            try (var files = java.nio.file.Files.list(dir)) {
+                for (var f : (Iterable<java.nio.file.Path>) files::iterator) {
+                    String n = f.getFileName().toString();
+                    if (n.endsWith(".class") && !n.startsWith("DecoratorKataTest")) {
+                        out.add(Class.forName(n.substring(0, n.length() - 6), false, loader));
+                    }
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -95,7 +137,12 @@ class DecoratorKataTest {
     @Check(id = "create-does-not-branch-on-combos", kind = Kind.DESIGN)
     void createDoesNotBranchOnCombos() {
         var create = Source.type("Notifiers").method("create");
-        Expect.atMost(2, create.news("ListNotifier"), "Notifiers.create builds the base more than once");
+        Expect.atMost(1, create.news("ListNotifier"),
+            "Notifiers.create builds the base in more than one place; build it once and wrap it");
+        Expect.atMost(1, create.news("Prefixing"),
+            "Notifiers.create builds Prefixing in more than one place (one branch per combination?)");
+        Expect.atMost(1, create.news("Shouting"),
+            "Notifiers.create builds Shouting in more than one place (one branch per combination?)");
         Expect.none(create.news("ListNotifierBase"), "Notifiers.create still builds a combination class");
     }
 }

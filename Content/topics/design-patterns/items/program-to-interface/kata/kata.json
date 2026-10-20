@@ -6,7 +6,7 @@
     {"type": "lead", "text": "`Stats` and `Tally` force every caller onto `ArrayList` and `HashMap`."},
     {"type": "p", "text": "Change the declarations, not the logic, so each one asks for the weakest type that still works. Results must stay identical for the lists the callers pass today."},
     {"type": "bullets", "items": [
-      "`Stats.total(Collection<Integer>)` and `Stats.lengths(Collection<String>)`, which both only iterate.",
+      "`Stats.total(Collection<Integer>)` and `Stats.lengths(Collection<String>)`, which both only iterate (`Iterable` is fine too).",
       "`Stats.lengths` returns `Map<String, Integer>`.",
       "`Tally` stores and returns a `List<Integer>` from `history()`.",
       "No method or field of `Stats` or `Tally` names `ArrayList`, `HashMap` or another concrete collection."]}

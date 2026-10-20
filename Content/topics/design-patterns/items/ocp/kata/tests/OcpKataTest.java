@@ -52,10 +52,21 @@ class OcpKataTest {
     }
 
     @Check(id = "tiers-defined-outside-pricer", kind = Kind.DESIGN)
-    void tiersDefinedOutsidePricer() {
-        var pricer = Source.type("Pricer");
-        Expect.none(pricer.mentions("VIP"), "Pricer still knows the VIP tier");
-        Expect.none(pricer.mentions("STAFF"), "Pricer still knows the STAFF tier");
-        Expect.none(pricer.mentions("CLEARANCE"), "Pricer still knows the CLEARANCE tier");
+    void tiersDefinedOutsidePricer() throws Throwable {
+        Class<?> rule = Types.named("PriceRule");
+        var ctor = Types.constructor(Types.named("Pricer"), Map.class);
+        Object empty = Types.create(ctor, Map.of());
+        Method price = Types.method(empty.getClass(), "price", String.class, long.class);
+        for (String tier : java.util.List.of("VIP", "STAFF", "CLEARANCE")) {
+            Expect.equal(1000L, Types.call(price, empty, tier, 1000L),
+                "Pricer with no rules pricing " + tier
+                    + " (Pricer itself should not know any tier)");
+        }
+        Method standard = Types.staticMethod(Types.named("Tiers"), "standard");
+        Object tiers = Types.call(standard, null);
+        Expect.isTrue(tiers instanceof Map<?, ?> m
+                && m.keySet().equals(java.util.Set.of("VIP", "STAFF", "CLEARANCE"))
+                && m.values().stream().allMatch(rule::isInstance),
+            "Tiers.standard() should map VIP, STAFF and CLEARANCE to PriceRules");
     }
 }

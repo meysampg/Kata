@@ -6,10 +6,8 @@ class IspKataTest {
     @Check(id = "printer-prints")
     void printerPrints() {
         BasicPrinter p = new BasicPrinter();
-        int n = Office.printAll(new MultiFunction(), List.of("x"));
-        p.print("a");
-        p.print("b");
-        Expect.equal(1, n, "documents printed");
+        int n = Office.printAll(p, List.of("a", "b"));
+        Expect.equal(2, n, "documents printed");
         Expect.equal(List.of("a", "b"), p.out, "what BasicPrinter printed");
     }
 

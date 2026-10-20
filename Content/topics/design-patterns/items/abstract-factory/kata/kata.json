@@ -24,7 +24,8 @@
     {"id": "families-implement-the-factory", "kind": "design", "title": "Both families implement Infra"},
     {"id": "uploader-holds-only-the-factory", "kind": "design", "title": "Uploader holds a private final Infra"},
     {"id": "uploader-ignores-concrete-families", "kind": "design", "title": "Uploader never names a concrete family"},
-    {"id": "families-do-not-mix", "kind": "design", "title": "Each family stays within itself"}
+    {"id": "families-do-not-mix", "kind": "design", "title": "Each family stays within itself"},
+    {"id": "uploader-works-with-any-family", "kind": "design", "title": "Uploader works with a family it has never seen"}
   ],
   "hints": [
     [{"type": "p", "text": "The point is consistency: a blob store and a bus must come from the same environment. The thing that varies is the whole family, so one object should hand out all of its products."}],

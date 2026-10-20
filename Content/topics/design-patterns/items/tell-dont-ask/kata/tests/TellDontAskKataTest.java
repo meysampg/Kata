@@ -45,11 +45,18 @@ class TellDontAskKataTest {
     }
 
     @Check(id = "account-owns-the-rules", kind = Kind.DESIGN)
-    void accountOwnsTheRules() {
+    void accountOwnsTheRules() throws Throwable {
         Class<?> account = Types.named("Account");
         Method withdraw = Types.method(account, "withdraw", long.class);
         Expect.equal(boolean.class, withdraw.getReturnType(), "Account.withdraw's return type");
-        Types.method(account, "deposit", long.class);
+        Method deposit = Types.method(account, "deposit", long.class);
+        Account a = new Account(100, 50);
+        Expect.equal(false, Types.call(withdraw, a, 151L),
+            "Account.withdraw(151) with balance 100 and overdraft 50 (Account must refuse it itself)");
+        Expect.equal(100L, a.getBalance(), "balance after Account refused a withdrawal");
+        Expect.equal(true, Types.call(withdraw, a, 150L), "Account.withdraw(150) within the overdraft");
+        Types.call(deposit, a, 70L);
+        Expect.equal(20L, a.getBalance(), "balance after withdraw(150) then deposit(70)");
     }
 
     @Check(id = "no-raw-state-exposed", kind = Kind.DESIGN)

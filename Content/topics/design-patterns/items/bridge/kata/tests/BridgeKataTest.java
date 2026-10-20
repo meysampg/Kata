@@ -67,7 +67,7 @@ class BridgeKataTest {
     }
 
     @Check(id = "combination-classes-are-gone", kind = Kind.DESIGN)
-    void combinationClassesAreGone() {
+    void combinationClassesAreGone() throws Exception {
         for (String name : List.of("EmailAlert", "SmsAlert", "EmailDigest", "SmsDigest")) {
             boolean exists = true;
             try {
@@ -77,6 +77,35 @@ class BridgeKataTest {
             }
             Expect.isTrue(!exists, name + " is still a class: a message kind and a channel should vary separately");
         }
+        Class<?> message = Types.named("Message");
+        Class<?> channel = Types.named("Channel");
+        for (Class<?> c : userClasses(message.getClassLoader())) {
+            if (c == message || !message.isAssignableFrom(c) || Modifier.isAbstract(c.getModifiers())) {
+                continue;
+            }
+            boolean takesChannel = false;
+            for (Constructor<?> k : c.getDeclaredConstructors()) {
+                takesChannel |= List.of(k.getParameterTypes()).contains(channel);
+            }
+            Expect.isTrue(takesChannel, c.getSimpleName() + " is a Message with its channel built in; "
+                + "every message kind should take a Channel in its constructor");
+        }
+    }
+
+    /** Every class compiled from the learner's files (the tests' classes excluded). */
+    static List<Class<?>> userClasses(ClassLoader loader) throws Exception {
+        java.nio.file.Path dir = java.nio.file.Path.of(
+            loader.getResource("BridgeKataTest.class").toURI()).getParent();
+        List<Class<?>> out = new java.util.ArrayList<>();
+        try (var files = java.nio.file.Files.list(dir)) {
+            for (var f : (Iterable<java.nio.file.Path>) files::iterator) {
+                String n = f.getFileName().toString();
+                if (n.endsWith(".class") && !n.startsWith("BridgeKataTest")) {
+                    out.add(Class.forName(n.substring(0, n.length() - 6), false, loader));
+                }
+            }
+        }
+        return out;
     }
 
     @Check(id = "messages-accept-any-channel", kind = Kind.DESIGN)

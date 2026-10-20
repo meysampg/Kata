@@ -73,6 +73,27 @@ class AbstractFactoryKataTest {
             "LocalInfra should not touch the cloud family");
         Expect.none(Source.type("CloudInfra").mentions("LocalInfra"),
             "CloudInfra should not touch the local family");
-        Expect.none(Source.type("LocalInfra").mentions("sns"), "LocalInfra mentions sns");
+    }
+
+    @Check(id = "uploader-works-with-any-family", kind = Kind.DESIGN)
+    void uploaderWorksWithAnyFamily() throws Throwable {
+        Class<?> infra = Types.named("Infra");
+        java.util.List<String> log = new java.util.ArrayList<>();
+        Object blobs = Types.implement(Types.named("BlobStore"), args -> {
+            log.add("put " + args[0]);
+            return "ftp://" + args[0];
+        });
+        Object events = Types.implement(Types.named("EventBus"), args -> {
+            log.add("publish " + args[0] + " " + args[1]);
+            return "ok";
+        });
+        Object family = Types.implement(infra, java.util.Map.of(
+            "blobs", a -> blobs, "events", a -> events));
+        Object uploader = Types.create(Types.constructor(Types.named("Uploader"), infra), family);
+        Object receipt = Types.call(Types.method(uploader.getClass(), "upload",
+            String.class, String.class), uploader, "k.csv", "body");
+        Expect.equal("ok", receipt, "Uploader's receipt from a family it has never seen");
+        Expect.equal(java.util.List.of("put k.csv", "publish uploaded ftp://k.csv"), log,
+            "what Uploader asked of that family's products, in order");
     }
 }

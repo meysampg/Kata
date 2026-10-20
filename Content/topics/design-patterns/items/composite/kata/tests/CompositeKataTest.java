@@ -73,8 +73,13 @@ class CompositeKataTest {
     void dirIsANode() {
         Class<?> dir = Types.named("Dir");
         Expect.isTrue(Node.class.isAssignableFrom(dir), "Dir should implement Node");
-        Expect.isTrue(!Types.fieldsOfType(dir, List.class).isEmpty(),
-            "Dir should hold its children in a List<Node>");
+        boolean holdsChildren = false;
+        for (var f : dir.getDeclaredFields()) {
+            holdsChildren |= !java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                && (java.util.Collection.class.isAssignableFrom(f.getType())
+                    || f.getType() == Node[].class);
+        }
+        Expect.isTrue(holdsChildren, "Dir should hold its children, for example in a List<Node>");
     }
 
     @Check(id = "dir-treats-children-alike", kind = Kind.DESIGN)
@@ -83,6 +88,7 @@ class CompositeKataTest {
         Expect.none(dir.instanceofs(), "Dir asks what kind of Node a child is");
         Expect.none(dir.switches(), "Dir switches on the kind of child");
         Expect.none(dir.mentions("File"), "Dir should not know about File");
+        Expect.none(dir.calls("getClass"), "Dir asks what class a child is");
     }
 
     @Check(id = "any-node-fits-inside", kind = Kind.DESIGN)

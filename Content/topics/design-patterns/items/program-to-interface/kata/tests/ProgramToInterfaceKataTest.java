@@ -2,7 +2,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -35,9 +34,28 @@ class ProgramToInterfaceKataTest {
         Expect.equal(List.of(2, 7), List.copyOf(t.history()), "the recorded history");
     }
 
+    /** The one-argument static method with this name; its parameter may be Collection or Iterable. */
+    static Method oneArg(String name) {
+        Method found = null;
+        for (Method m : Types.named("Stats").getDeclaredMethods()) {
+            if (m.getName().equals(name) && m.getParameterCount() == 1 && !m.isSynthetic()) {
+                found = m;
+            }
+        }
+        if (found == null) {
+            Expect.fail("Stats has no one-argument method " + name);
+        }
+        Class<?> p = found.getParameterTypes()[0];
+        Expect.isTrue(p.isInterface() && p.isAssignableFrom(TreeSet.class)
+                && p.isAssignableFrom(ArrayDeque.class),
+            "Stats." + name + " should take any collection (Collection or Iterable), not "
+                + p.getSimpleName());
+        return found;
+    }
+
     @Check(id = "total-accepts-any-collection", kind = Kind.DESIGN)
     void totalAcceptsAnyCollection() throws Throwable {
-        Method total = Types.staticMethod(Types.named("Stats"), "total", Collection.class);
+        Method total = oneArg("total");
         Expect.equal(6, Types.call(total, null, List.of(1, 2, 3)), "total of an immutable List");
         Expect.equal(6, Types.call(total, null, new TreeSet<>(List.of(1, 2, 3))), "total of a TreeSet");
         Expect.equal(6, Types.call(total, null, new ArrayDeque<>(List.of(1, 2, 3))), "total of an ArrayDeque");
@@ -45,7 +63,7 @@ class ProgramToInterfaceKataTest {
 
     @Check(id = "lengths-accepts-any-collection", kind = Kind.DESIGN)
     void lengthsAcceptsAnyCollection() throws Throwable {
-        Method lengths = Types.staticMethod(Types.named("Stats"), "lengths", Collection.class);
+        Method lengths = oneArg("lengths");
         Expect.equal(Map.of("ab", 2, "c", 1), Types.call(lengths, null, new TreeSet<>(List.of("ab", "c"))),
             "lengths of a TreeSet");
     }
@@ -79,7 +97,7 @@ class ProgramToInterfaceKataTest {
 
     @Check(id = "lengths-returns-an-interface", kind = Kind.DESIGN)
     void lengthsReturnsAnInterface() {
-        Method lengths = Types.staticMethod(Types.named("Stats"), "lengths", Collection.class);
+        Method lengths = oneArg("lengths");
         Expect.isTrue(lengths.getReturnType().isInterface() && Map.class.isAssignableFrom(lengths.getReturnType()),
             "lengths should return Map, not " + lengths.getReturnType().getSimpleName());
         Expect.isTrue(Modifier.isStatic(lengths.getModifiers()), "lengths should stay static");

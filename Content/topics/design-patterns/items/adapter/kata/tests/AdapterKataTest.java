@@ -61,8 +61,8 @@ class AdapterKataTest {
     @Check(id = "adapter-wraps-instead-of-extending", kind = Kind.DESIGN)
     void adapterWrapsInsteadOfExtending() {
         Class<?> adapter = Types.named("SensorThermometer");
-        Expect.equal(Object.class, adapter.getSuperclass(),
-            "the superclass of SensorThermometer (wrap the sensor, do not extend it)");
+        Expect.isTrue(!Types.named("LegacySensor").isAssignableFrom(adapter),
+            "SensorThermometer should wrap the sensor, not extend it");
         Field f = Types.onlyFieldOfType(adapter, Types.named("LegacySensor"));
         Expect.isTrue(Modifier.isPrivate(f.getModifiers()) && Modifier.isFinal(f.getModifiers()),
             "SensorThermometer." + f.getName() + " should be private final");
@@ -72,12 +72,16 @@ class AdapterKataTest {
     @Check(id = "legacy-format-stays-inside", kind = Kind.DESIGN)
     void legacyFormatStaysInside() {
         for (var m : Types.named("SensorThermometer").getDeclaredMethods()) {
-            if (!Modifier.isPrivate(m.getModifiers()) && !m.isSynthetic()) {
+            if (!Modifier.isPrivate(m.getModifiers()) && !m.isSynthetic()
+                    && !m.getName().equals("toString")) {
                 Expect.isTrue(m.getReturnType() != String.class,
                     "SensorThermometer." + m.getName() + " leaks the sensor's text format");
             }
         }
-        Expect.none(Source.type("Thermometer").mentions("LegacySensor"),
-            "Thermometer should not know the legacy sensor");
+        for (var f : Types.named("SensorThermometer").getDeclaredFields()) {
+            Expect.isTrue(f.getType() != String.class && f.getType() != String[].class,
+                "SensorThermometer." + f.getName() + " keeps raw sensor text; "
+                    + "poll and translate inside celsius()");
+        }
     }
 }

@@ -8,7 +8,7 @@
     {"type": "bullets", "items": [
       "Add `interface PriceRule` with one method, `long apply(long cents)`.",
       "`Pricer(Map<String, PriceRule>)` keeps `long price(String tier, long cents)`.",
-      "Define VIP, STAFF and CLEARANCE as rules outside `Pricer`, in `Tiers.standard()`."]}
+      "Define VIP, STAFF and CLEARANCE as rules outside `Pricer`: `Tiers.standard()` returns them as a `Map<String, PriceRule>`."]}
   ],
   "starter": ["Pricer.java"],
   "readOnly": [],
@@ -21,7 +21,7 @@
     {"id": "rule-interface", "kind": "design", "title": "PriceRule is a one-method interface"},
     {"id": "pricer-does-not-branch", "kind": "design", "title": "Pricer has no tier branches"},
     {"id": "new-tier-needs-no-edit", "kind": "design", "title": "Pricer accepts a tier it has never seen"},
-    {"id": "tiers-defined-outside-pricer", "kind": "design", "title": "Tier rules live outside Pricer"}
+    {"id": "tiers-defined-outside-pricer", "kind": "design", "title": "Pricer knows no tier; Tiers.standard() does"}
   ],
   "hints": [
     [{"type": "p", "text": "What changes monthly is the set of tiers, and what stays is \"look up a rule, apply it\". Name the rule, then make `Pricer` know only that name."}],

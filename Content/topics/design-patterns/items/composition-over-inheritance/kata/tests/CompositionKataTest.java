@@ -51,5 +51,10 @@ class CompositionKataTest {
         s.addAll(List.of("b", "a"));
         Expect.equal(Set.of("a", "b"), tree, "the wrapped set should receive the elements");
         Expect.equal(List.of("a", "b"), List.copyOf(s), "iteration should follow the wrapped TreeSet");
+        tree.add("z");
+        Expect.isTrue(s.contains("z") && s.size() == 3,
+            "CountingSet should see what is in the wrapped set, not keep its own copy");
+        Expect.isTrue(s.remove("a") && !tree.contains("a"),
+            "remove on CountingSet should reach the wrapped set");
     }
 }
