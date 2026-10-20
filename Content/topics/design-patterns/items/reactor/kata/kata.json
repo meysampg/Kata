@@ -16,7 +16,7 @@
       "items": [
         "`Reactor(Demultiplexer)`, and `on(Op, Handler)` returns the reactor; a later handler for the same `Op` replaces the earlier one.",
         "`run()` calls `select()` repeatedly and dispatches each batch in order, on the calling thread, until `select()` returns an empty list.",
-        "`stop()` ends `run()` once the current batch is dispatched.",
+        "`stop()` (from a handler or another thread) ends `run()` once the current batch is dispatched.",
         "An event whose `Op` has no handler throws `IllegalStateException` naming the `Op`.",
         "Handlers may call `on` during dispatch; later events see it. Look handlers up in a registry: no `switch` or `if` per `Op`."
       ]
@@ -98,7 +98,7 @@
     [
       {
         "type": "p",
-        "text": "Keep a private final `EnumMap<Op, Handler>`. `run()` loops: ask `demux.select()`, stop on an empty list or when a `stopped` flag is set, otherwise look up `handlers.get(event.op())` for each event in the batch."
+        "text": "Keep a private final `EnumMap<Op, Handler>`. `run()` loops: ask `demux.select()`, stop on an empty list or when a `volatile` `stopped` flag is set, otherwise look up `handlers.get(event.op())` for each event in the batch."
       }
     ],
     [

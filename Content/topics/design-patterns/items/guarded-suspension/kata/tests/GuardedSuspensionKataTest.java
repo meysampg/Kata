@@ -1,7 +1,14 @@
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 import kata.*;
 
 class GuardedSuspensionKataTest {
@@ -63,10 +70,83 @@ class GuardedSuspensionKataTest {
         return call.value;
     }
 
-    static void spuriousWakeup(Object monitor) {
-        synchronized (monitor) {
-            monitor.notifyAll();
+    static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
+
+    /** How many times the thread has started waiting (wait, park). */
+    static long waitsOf(Thread t) {
+        ThreadInfo info = THREADS.getThreadInfo(t.threadId());
+        return info == null ? -1 : info.getWaitedCount();
+    }
+
+    static boolean isWaiting(Thread t) {
+        Thread.State s = t.getState();
+        return s == Thread.State.WAITING || s == Thread.State.TIMED_WAITING;
+    }
+
+    /**
+     * Wakes every waiter of the slot without changing its state: notifyAll
+     * on the slot and on any plain Object field, signalAll on any Condition.
+     */
+    static void wakeWithoutChange(Object slot) throws Exception {
+        synchronized (slot) {
+            slot.notifyAll();
         }
+        List<Lock> locks = new ArrayList<>();
+        List<Condition> conditions = new ArrayList<>();
+        for (Field f : slot.getClass().getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) {
+                continue;
+            }
+            f.setAccessible(true);
+            Object v = f.get(slot);
+            if (v instanceof Lock lock) {
+                locks.add(lock);
+            } else if (v instanceof Condition c) {
+                conditions.add(c);
+            } else if (v != null && f.getType() == Object.class) {
+                synchronized (v) {
+                    v.notifyAll();
+                }
+            }
+        }
+        for (Lock lock : locks) {
+            lock.lock();
+            try {
+                for (Condition c : conditions) {
+                    try {
+                        c.signalAll();
+                    } catch (IllegalMonitorStateException wrongLock) {
+                        // belongs to another lock
+                    }
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * Wakes a waiter whose guard is still false, then watches it: going
+     * back to waiting passes, finishing fails. No timing is involved.
+     */
+    static void expectRewait(Object slot, Call<?> call, String advice)
+            throws Exception {
+        long end = System.nanoTime() + 2_000_000_000L;
+        while (!isWaiting(call) && call.isAlive() && System.nanoTime() < end) {
+            Thread.yield();
+        }
+        long before = waitsOf(call);
+        wakeWithoutChange(slot);
+        while (System.nanoTime() < end) {
+            if (call.getState() == Thread.State.TERMINATED) {
+                Expect.fail(advice);
+            }
+            if (isWaiting(call) && waitsOf(call) > before) {
+                return;
+            }
+            Thread.yield();
+        }
+        // The wakeup never reached this way of waiting: nothing to judge.
     }
 
     @Check(id = "take-waits-for-put", timeoutMs = 5000)
@@ -174,10 +254,8 @@ class GuardedSuspensionKataTest {
         Slot<String> slot = new Slot<>();
         Call<String> taker = start(slot::take);
         awaitBlocked(taker, "take() on an empty slot");
-        spuriousWakeup(slot);
-        taker.join(100);
-        Expect.isTrue(taker.isAlive(),
-            "take() returned after a wakeup although the slot is empty; recheck the guard in a while loop");
+        expectRewait(slot, taker, "take() returned after a wakeup although "
+            + "the slot is empty; recheck the guard in a while loop");
         slot.put("m1");
         Expect.equal("m1", finish(taker, "take()"), "the item taken");
 
@@ -187,10 +265,8 @@ class GuardedSuspensionKataTest {
             return "done";
         });
         awaitBlocked(putter, "put() on a full slot");
-        spuriousWakeup(slot);
-        putter.join(100);
-        Expect.isTrue(putter.isAlive(),
-            "put() went ahead after a wakeup although the slot is full; recheck the guard in a while loop");
+        expectRewait(slot, putter, "put() went ahead after a wakeup although "
+            + "the slot is full; recheck the guard in a while loop");
         Expect.equal("a", slot.take(), "the first item, not overwritten");
         finish(putter, "put()");
     }
@@ -198,19 +274,13 @@ class GuardedSuspensionKataTest {
     @Check(id = "timed-take-keeps-waiting", timeoutMs = 5000)
     void timedTakeKeepsWaiting() throws Exception {
         Slot<String> slot = new Slot<>();
-        Call<Long> taker = start(() -> {
-            long t0 = System.nanoTime();
-            Optional<String> r = slot.take(300);
-            if (r.isPresent()) {
-                throw new IllegalStateException("got " + r.get());
-            }
-            return (System.nanoTime() - t0) / 1_000_000;
-        });
-        awaitBlocked(taker, "take(300) on an empty slot");
-        spuriousWakeup(slot);
-        long elapsed = finish(taker, "take(300)");
-        Expect.isTrue(elapsed >= 250,
-            "take(300) gave up after " + elapsed + " ms because of a wakeup; keep waiting for the remaining time");
+        Call<Optional<String>> taker = start(() -> slot.take(4000));
+        awaitBlocked(taker, "take(4000) on an empty slot");
+        expectRewait(slot, taker, "take(4000) gave up after a wakeup long "
+            + "before its time was up; keep waiting for the time left");
+        slot.put("m1");
+        Expect.equal(Optional.of("m1"), finish(taker, "take(4000)"),
+            "the item taken after the wakeup");
     }
 
     @Check(id = "no-polling", kind = Kind.DESIGN)

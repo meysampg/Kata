@@ -97,10 +97,29 @@ class ImmutableObjectKataTest {
 
     @Check(id = "withers-never-return-this", kind = Kind.DESIGN)
     void withersNeverReturnThis() {
+        Class<?> type = Types.named("Route");
         var route = Source.type("Route");
         for (String wither : List.of("withName", "withStop")) {
-            Expect.none(route.method(wither).mentions("this"),
-                "Route." + wither + " still touches or returns this instead of building a new Route");
+            var method = route.method(wither);
+            // this.field and this.method() are fine; a bare `this` is not.
+            Set<String> qualified = new HashSet<>();
+            List<String> members = new ArrayList<>();
+            for (Field f : type.getDeclaredFields()) {
+                members.add(f.getName());
+            }
+            for (Method m : type.getDeclaredMethods()) {
+                members.add(m.getName());
+            }
+            for (String member : members) {
+                for (Hit h : method.mentions(member)) {
+                    qualified.add(h.line() + ":" + h.column());
+                }
+            }
+            Expect.none(method.mentions("this").stream()
+                .filter(h -> !qualified.contains(h.line() + ":" + h.column()))
+                .toList(),
+                "Route." + wither
+                + " hands out this instead of building a new Route");
         }
     }
 }

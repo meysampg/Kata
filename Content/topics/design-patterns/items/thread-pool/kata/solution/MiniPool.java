@@ -9,7 +9,7 @@ final class MiniPool implements Executor {
     private static final Runnable STOP = () -> { };
     private final BlockingQueue<Runnable> queue;
     private final List<Thread> workers = new ArrayList<>();
-    private volatile boolean closed;
+    private boolean closed; // guarded by this
 
     MiniPool(int threads, int capacity) {
         queue = new ArrayBlockingQueue<>(capacity);
@@ -19,7 +19,9 @@ final class MiniPool implements Executor {
     }
 
     @Override
-    public void execute(Runnable task) {
+    public synchronized void execute(Runnable task) {
+        // Check and queue under one lock, so no task can slip in behind
+        // the stop markers once shutdown() has begun.
         if (closed) {
             throw new RejectedExecutionException("pool is shut down");
         }
@@ -32,7 +34,9 @@ final class MiniPool implements Executor {
     }
 
     void shutdown() throws InterruptedException {
-        closed = true;
+        synchronized (this) {
+            closed = true;
+        }
         // One stop marker per worker, queued behind the pending tasks.
         for (int i = 0; i < workers.size(); i++) {
             queue.put(STOP);

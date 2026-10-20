@@ -94,8 +94,10 @@ class ActiveObjectKataTest {
     @Check(id = "caller-does-not-wait", timeoutMs = 5000)
     void callerDoesNotWait() throws Throwable {
         GatedCounter servant = new GatedCounter();
-        try (var active = new ActiveCounter(servant)) {
-            var first = active.add(1);
+        var active = new ActiveCounter(servant);
+        try {
+            var first = Expect.completesWithin(500, () -> active.add(1),
+                "add(1) whose request keeps the servant busy");
             Expect.isTrue(servant.entered.await(2, TimeUnit.SECONDS),
                 "The scheduler never started the first request");
             var second = Expect.completesWithin(500, () -> active.add(2),
@@ -109,7 +111,9 @@ class ActiveObjectKataTest {
             Expect.equal(3, value(second, "add(2)"), "add(2)");
             Expect.equal(3, value(total, "total()"), "total()");
         } finally {
+            // Open the gate before close(), so close() never waits on it.
             servant.gate.countDown();
+            active.close();
         }
     }
 

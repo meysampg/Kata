@@ -134,14 +134,31 @@ class ForkJoinKataTest {
             + "join() the first");
     }
 
+    static long pos(Hit h) {
+        return h.line() * 10_000L + h.column();
+    }
+
     @Check(id = "splits-with-fork-and-join", kind = Kind.DESIGN)
     void splitsWithForkAndJoin() {
         var compute = Source.type("SumTask").method("compute");
-        boolean forkJoin = !compute.calls("fork").isEmpty()
-            && !compute.calls("join").isEmpty();
-        boolean invokeAll = !compute.calls("invokeAll").isEmpty();
-        Expect.isTrue(forkJoin || invokeAll, "compute() should split the "
-            + "work with fork() and join(), or with invokeAll()");
+        if (!compute.calls("invokeAll").isEmpty()) {
+            return;
+        }
+        var forks = compute.calls("fork");
+        var joins = compute.calls("join");
+        Expect.isTrue(!forks.isEmpty() && !joins.isEmpty(), "compute() should "
+            + "split the work with fork() and join(), or with invokeAll()");
+        long fork = forks.stream().mapToLong(ForkJoinKataTest::pos).min()
+            .getAsLong();
+        long join = joins.stream().mapToLong(ForkJoinKataTest::pos).min()
+            .getAsLong();
+        var own = new ArrayList<Hit>(compute.calls("compute"));
+        own.addAll(compute.calls("invoke"));
+        boolean between = own.stream().mapToLong(ForkJoinKataTest::pos)
+            .anyMatch(p -> p > fork && p < join);
+        Expect.isTrue(between, "compute() should work on one half itself "
+            + "between fork() and join(); joining first, or forking both "
+            + "halves, leaves this worker idle");
     }
 
     @Check(id = "no-threads-of-its-own", kind = Kind.DESIGN)

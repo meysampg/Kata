@@ -16,7 +16,7 @@
       "items": [
         "Keep `process(List<Integer>, int)`, the `Job` record and the bounded `BlockingQueue<Job>`.",
         "Every consumer must exit by itself: do not interrupt them and do not poll with timeouts.",
-        "A real amount may be `0` or negative, so the end signal must not be confused with a real job."
+        "A real amount may be `0`, negative or `Integer.MIN_VALUE`, so the end signal must not be confused with a real job."
       ]
     }
   ],
@@ -60,6 +60,11 @@
       "id": "queue-stays-bounded",
       "kind": "design",
       "title": "The queue stays bounded"
+    },
+    {
+      "id": "consumers-stop-on-a-marker",
+      "kind": "design",
+      "title": "Consumers stop on a marker, not by interrupt or poll"
     }
   ],
   "hints": [

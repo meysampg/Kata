@@ -5,7 +5,8 @@ import java.util.Map;
 final class Reactor {
     private final Demultiplexer demux;
     private final Map<Op, Handler> handlers = new EnumMap<>(Op.class);
-    private boolean stopped;
+    // volatile: stop() may also be called from another thread.
+    private volatile boolean stopped;
 
     Reactor(Demultiplexer demux) {
         this.demux = demux;

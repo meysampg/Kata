@@ -40,6 +40,22 @@ class ThreadPoolKataTest {
         return t;
     }
 
+    /** Waits until the thread is parked (true) or has finished (false). */
+    static boolean parks(Thread t) {
+        long end = System.nanoTime() + 2_000_000_000L;
+        while (System.nanoTime() < end) {
+            Thread.State s = t.getState();
+            if (s == Thread.State.TERMINATED) {
+                return false;
+            }
+            if (s == Thread.State.WAITING || s == Thread.State.TIMED_WAITING) {
+                return true;
+            }
+            Thread.yield();
+        }
+        return t.isAlive();
+    }
+
     static void shutdownWithin(MiniPool pool, long ms) {
         Expect.completesWithin(ms, () -> {
             pool.shutdown();
@@ -111,8 +127,7 @@ class ThreadPoolKataTest {
         AtomicReference<Throwable> error = new AtomicReference<>();
         Thread third = background(() -> pool.execute(done::incrementAndGet),
             error);
-        third.join(80);
-        Expect.isTrue(third.isAlive(), "execute() should wait while the "
+        Expect.isTrue(parks(third), "execute() should wait while the "
             + "queue is full, but it returned");
         gate.countDown();
         third.join(2000);
@@ -140,8 +155,7 @@ class ThreadPoolKataTest {
         }
         AtomicReference<Throwable> error = new AtomicReference<>();
         Thread closer = background(pool::shutdown, error);
-        closer.join(80);
-        Expect.isTrue(closer.isAlive(), "shutdown() returned while tasks "
+        Expect.isTrue(parks(closer), "shutdown() returned while tasks "
             + "were still queued");
         gate.countDown();
         closer.join(3000);

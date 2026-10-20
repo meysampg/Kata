@@ -15,7 +15,7 @@
       "type": "bullets",
       "items": [
         "Keep `Billing(Executor io)`, `userName`, `balance` and the three method signatures, each returning a `CompletableFuture<String>`.",
-        "No `get()` or `join()` inside the three methods.",
+        "No blocking waits: no `get()`, and `join()` only inside a stage chained on `CompletableFuture.allOf(...)` of the futures it joins.",
         "Lookups that do not depend on each other must be submitted together.",
         "Everything must still work on an executor with one thread."
       ]
@@ -60,7 +60,7 @@
     {
       "id": "stages-are-composed",
       "kind": "design",
-      "title": "Stages are chained, not nested"
+      "title": "Stages are composed from the futures"
     },
     {
       "id": "single-thread-pool-does-not-starve",
@@ -83,7 +83,7 @@
     [
       {
         "type": "p",
-        "text": "Use `thenCompose` when the next stage returns a future (`balance` needs the user), `thenCombine` for two independent futures, and `exceptionally` to turn a failure into a value. Each method becomes one expression."
+        "text": "Use `thenCompose` when the next stage returns a future (`balance` needs the user), `thenCombine` for two independent futures, and `exceptionally` to turn a failure into a value. (`allOf(a, b).thenApply(v -> a.join() + b.join())` also never blocks.) Each method becomes one expression."
       }
     ],
     [

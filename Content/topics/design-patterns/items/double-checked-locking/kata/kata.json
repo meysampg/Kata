@@ -16,6 +16,7 @@
       "items": [
         "Keep the `static` field `instance`, the `CREATED` counter and the `onConstruct` hook.",
         "Keep the lazy, double-checked shape: no eager initialization, no holder class, and no `synchronized` on the method.",
+        "On the unlocked path read `instance` only once, into a local.",
         "Fix every defect in `get()`, including the one the tests cannot observe directly."
       ]
     }

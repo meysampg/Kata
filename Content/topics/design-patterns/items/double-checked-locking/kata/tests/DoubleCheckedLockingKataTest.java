@@ -1,14 +1,52 @@
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import kata.*;
 
 class DoubleCheckedLockingKataTest {
-    @Check(id = "one-instance-under-contention", timeoutMs = 5000, repeat = 10)
+    /** True when the thread is parked or blocked inside Config.get(). */
+    static boolean waitsInGet(Thread t) {
+        Thread.State s = t.getState();
+        if (s != Thread.State.BLOCKED && s != Thread.State.WAITING) {
+            return false;
+        }
+        for (StackTraceElement f : t.getStackTrace()) {
+            if (f.getClassName().equals("Config")
+                    && f.getMethodName().equals("get")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static void awaitOtherCallers() {
+        long end = System.nanoTime() + 2_000_000_000L;
+        while (System.nanoTime() < end) {
+            long waiting = Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t != Thread.currentThread())
+                .filter(t -> t.getName().startsWith("kata-race"))
+                .filter(DoubleCheckedLockingKataTest::waitsInGet)
+                .count();
+            if (waiting >= 7) {
+                return;
+            }
+            Thread.yield();
+        }
+    }
+
+    @Check(id = "one-instance-under-contention", timeoutMs = 5000, repeat = 5)
     void oneInstanceUnderContention() {
         Types.setStatic(Config.class, "instance", null);
         Config.CREATED.set(0);
-        Config.onConstruct = () -> Stress.pause(20);
+        // The first builder waits until the other 7 callers are queued for
+        // the lock inside get(), so every one of them takes the slow path.
+        AtomicBoolean first = new AtomicBoolean(true);
+        Config.onConstruct = () -> {
+            if (first.getAndSet(false)) {
+                awaitOtherCallers();
+            }
+        };
         List<Config> all = Stress.race(8, Config::get);
         Expect.equal(1, Config.CREATED.get(),
             "Config constructor calls for 8 simultaneous callers");

@@ -8,7 +8,7 @@ final class ActiveCounter implements AutoCloseable {
     private final Counter servant;
     private final BlockingQueue<Runnable> inbox = new LinkedBlockingQueue<>();
     private final Thread scheduler;
-    private volatile boolean closed;
+    private boolean closed; // guards the inbox, never the servant
 
     ActiveCounter(Counter servant) {
         this.servant = servant;
@@ -24,17 +24,21 @@ final class ActiveCounter implements AutoCloseable {
     }
 
     private CompletableFuture<Integer> enqueue(Supplier<Integer> request) {
-        if (closed) {
-            throw new IllegalStateException("closed");
-        }
         var result = new CompletableFuture<Integer>();
-        inbox.add(() -> {
+        Runnable message = () -> {
             try {
                 result.complete(request.get());
             } catch (RuntimeException e) {
                 result.completeExceptionally(e);
             }
-        });
+        };
+        // Check and enqueue atomically, so nothing lands behind STOP.
+        synchronized (inbox) {
+            if (closed) {
+                throw new IllegalStateException("closed");
+            }
+            inbox.add(message);
+        }
         return result;
     }
 
@@ -50,8 +54,10 @@ final class ActiveCounter implements AutoCloseable {
 
     @Override
     public void close() {
-        closed = true;
-        inbox.add(STOP);
+        synchronized (inbox) {
+            closed = true;
+            inbox.add(STOP);
+        }
         try {
             scheduler.join();
         } catch (InterruptedException e) {

@@ -90,7 +90,7 @@
     [
       {
         "type": "p",
-        "text": "Create the workers in the constructor, each running a `take()` loop on an `ArrayBlockingQueue<Runnable>`. For shutdown, set a flag so `execute` rejects, then queue one stop marker per worker and join them. Catch `RuntimeException` around each task."
+        "text": "Create the workers in the constructor, each running a `take()` loop on an `ArrayBlockingQueue<Runnable>`. For shutdown, set a flag (read and set under the same lock that guards the put) so `execute` rejects, then queue one stop marker per worker and join them. Catch `RuntimeException` around each task."
       }
     ],
     [

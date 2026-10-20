@@ -25,7 +25,7 @@
     {"id": "timed-take-wakes-on-put", "kind": "behaviour", "title": "A timed take wakes when an item arrives"},
     {"id": "interrupt-wakes-taker", "kind": "behaviour", "title": "Interrupting a waiter throws"},
     {"id": "wakeup-without-change-is-ignored", "kind": "behaviour", "title": "A wakeup with a false guard keeps waiting"},
-    {"id": "timed-take-keeps-waiting", "kind": "behaviour", "title": "A timed take waits out the remaining time"},
+    {"id": "timed-take-keeps-waiting", "kind": "behaviour", "title": "A timed take keeps waiting after a wakeup"},
     {"id": "no-polling", "kind": "design", "title": "No sleeping or spinning"},
     {"id": "no-single-notify", "kind": "design", "title": "No lone notify()"}
   ],
