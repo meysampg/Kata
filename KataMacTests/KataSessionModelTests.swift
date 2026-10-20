@@ -123,7 +123,11 @@ struct KataSessionModelTests {
     let s = Self.makeSession(model: model, checker: FakeChecker(allPass: true))
     s.setSource("// edited\n", for: "Checkout.java")
     #expect(model.store.kataDraft(Self.key) == nil)
-    try await Task.sleep(for: .milliseconds(1400))
+    // The save is debounced by about a second; poll so a busy machine doesn't flake.
+    let deadline = ContinuousClock.now + .seconds(10)
+    while model.store.kataDraft(Self.key) == nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(100))
+    }
     #expect(model.store.kataDraft(Self.key)?["Checkout.java"] == "// edited\n")
     // A new session resumes from the draft.
     let again = Self.makeSession(model: model, checker: FakeChecker(allPass: true))

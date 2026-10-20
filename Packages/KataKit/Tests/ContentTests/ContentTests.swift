@@ -41,7 +41,7 @@ enum JavaToolchain {
 let requireAllItems = true
 
 /// Every registry item must have a kata. Stays `false` until the kata batches (P4) finish.
-let requireAllKatas = false
+let requireAllKatas = true
 
 @Suite struct ContentValidationTests {
   @Test func contentDirectoryExists() {
