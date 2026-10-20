@@ -8,8 +8,8 @@
     {"type": "bullets", "items": [
       "`interface Approver` with one method, `Optional<String> decide(Expense)`: empty means \"not mine, pass it on\".",
       "`ApprovalChain(List<Approver>)` with `String approve(Expense)`: the first present answer wins; if nobody answers, `escalate:board`.",
-      "`ApprovalChain` knows no rules; each rule lives in an `Approver`.",
-      "`ApprovalService` delegates to a chain and keeps it in a field and decides nothing itself."]}
+      "`ApprovalChain` knows no rules; each rule (gift limit, auto, manager, director) is its own `Approver`.",
+      "`ApprovalService` keeps the standard chain in a field, delegates to it and decides nothing itself."]}
   ],
   "starter": ["Approval.java"],
   "readOnly": [],
@@ -23,7 +23,8 @@
     {"id": "chain-runs-links-in-order", "kind": "design", "title": "The chain asks links in order and stops at an answer"},
     {"id": "chain-falls-through-to-board", "kind": "design", "title": "An unanswered request goes to the board"},
     {"id": "chain-does-not-know-the-rules", "kind": "design", "title": "ApprovalChain contains no rules"},
-    {"id": "service-delegates-to-a-chain", "kind": "design", "title": "ApprovalService holds an ApprovalChain"}
+    {"id": "service-delegates-to-a-chain", "kind": "design", "title": "ApprovalService only delegates to its chain"},
+    {"id": "one-link-per-rule", "kind": "design", "title": "Each rule is its own link"}
   ],
   "hints": [
     [{"type": "p", "text": "Every rule has the same shape: look at the expense, then either decide or say \"not mine\". Name that shape, and the nesting turns into a sequence."}],

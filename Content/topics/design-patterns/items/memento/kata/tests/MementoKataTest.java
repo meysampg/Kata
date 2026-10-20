@@ -1,3 +1,5 @@
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
@@ -95,15 +97,40 @@ class MementoKataTest {
 
     @Check(id = "memento-exposes-nothing", kind = Kind.DESIGN)
     void mementoExposesNothing() {
-        Class<?> type = Types.method(Types.named("Editor"), "save").getReturnType();
+        Class<?> declared = Types.method(Types.named("Editor"), "save").getReturnType();
+        Expect.isTrue(declared.getClassLoader() == Editor.class.getClassLoader()
+                && declared != Editor.class,
+            "save() should return a dedicated memento type, not " + declared.getSimpleName());
+        assertOpaque(declared);
+        assertOpaque(editorWith("x").save().getClass());
+    }
+
+    /** A type the caretaker can name must offer no way to read or forge the state. */
+    static void assertOpaque(Class<?> type) {
+        if (type.isMemberClass() && Modifier.isPrivate(type.getModifiers())) {
+            return;   // only its enclosing class can touch it
+        }
+        String name = type.getSimpleName();
         for (Method m : type.getDeclaredMethods()) {
             String n = m.getName();
-            if (m.isSynthetic() || n.equals("equals") || n.equals("hashCode")
-                    || n.equals("toString")) {
+            if (m.isSynthetic() || Modifier.isStatic(m.getModifiers()) && n.startsWith("lambda$")
+                    || n.equals("equals") || n.equals("hashCode") || n.equals("toString")) {
                 continue;
             }
             Expect.isTrue(Modifier.isPrivate(m.getModifiers()),
-                type.getSimpleName() + "." + n + " lets the caretaker read the state");
+                name + "." + n + "() lets the caretaker read the state; make it private"
+                    + " or hide the memento's class inside Editor");
+        }
+        for (Field f : type.getDeclaredFields()) {
+            if (f.isSynthetic() || Modifier.isStatic(f.getModifiers())) {
+                continue;
+            }
+            Expect.isTrue(Modifier.isPrivate(f.getModifiers()),
+                name + "." + f.getName() + " can be read from outside Editor; make it private");
+        }
+        for (Constructor<?> c : type.getDeclaredConstructors()) {
+            Expect.isTrue(Modifier.isPrivate(c.getModifiers()),
+                "anyone can forge a " + name + " through its constructor; make it private");
         }
     }
 

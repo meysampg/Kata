@@ -59,17 +59,26 @@ class VisitorKataTest {
     @Check(id = "operations-do-not-test-types", kind = Kind.DESIGN)
     void operationsDoNotTestTypes() {
         for (String name : List.of("Eval", "Show", "Depth")) {
-            var op = Source.type(name);
-            Expect.none(op.instanceofs(), name + " asks nodes for their type with instanceof");
-            Expect.none(op.switches(), name + " switches on node types instead of dispatching");
+            for (Class<?> c = Types.named(name); c != null
+                    && c.getClassLoader() == Eval.class.getClassLoader(); c = c.getSuperclass()) {
+                var op = Source.type(c.getSimpleName());
+                String who = c.getSimpleName();
+                Expect.none(op.instanceofs(), who + " asks nodes for their type with instanceof");
+                Expect.none(op.switches(), who + " switches on node types instead of dispatching");
+            }
         }
     }
 
     @Check(id = "operations-recurse-through-accept", kind = Kind.DESIGN)
     void operationsRecurseThroughAccept() {
         for (String name : List.of("Eval", "Show", "Depth")) {
-            Expect.isTrue(!Source.type(name).calls("accept").isEmpty(),
-                name + " should reach child nodes through accept(this)");
+            // The accept calls may sit in a shared base class the learner wrote.
+            boolean recurses = false;
+            for (Class<?> c = Types.named(name); c != null
+                    && c.getClassLoader() == Eval.class.getClassLoader(); c = c.getSuperclass()) {
+                recurses |= !Source.type(c.getSimpleName()).calls("accept").isEmpty();
+            }
+            Expect.isTrue(recurses, name + " should reach child nodes through accept(this)");
         }
     }
 

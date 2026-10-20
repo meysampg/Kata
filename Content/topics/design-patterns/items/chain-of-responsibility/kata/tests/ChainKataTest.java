@@ -1,4 +1,8 @@
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -78,5 +82,28 @@ class ChainKataTest {
     @Check(id = "service-delegates-to-a-chain", kind = Kind.DESIGN)
     void serviceDelegatesToAChain() {
         Types.onlyFieldOfType(Types.named("ApprovalService"), Types.named("ApprovalChain"));
+        var service = Source.type("ApprovalService");
+        Expect.none(service.calls("cents"), "ApprovalService still reads the amount: let the chain decide");
+        Expect.none(service.calls("category"), "ApprovalService still reads the category");
+        Expect.none(service.comparedStrings(), "ApprovalService still compares strings");
+    }
+
+    @Check(id = "one-link-per-rule", kind = Kind.DESIGN)
+    void oneLinkPerRule() throws Exception {
+        Class<?> chainType = Types.named("ApprovalChain");
+        Field holder = Types.onlyFieldOfType(Types.named("ApprovalService"), chainType);
+        holder.setAccessible(true);
+        Object chain = holder.get(new ApprovalService());
+        int links = -1;
+        for (Field f : chainType.getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers())) continue;
+            f.setAccessible(true);
+            Object v = f.get(chain);
+            if (v instanceof Collection<?> c) links = Math.max(links, c.size());
+            else if (v != null && v.getClass().isArray()) links = Math.max(links, Array.getLength(v));
+        }
+        Expect.isTrue(links >= 0, "ApprovalChain should keep its approvers in a list or array field");
+        Expect.isTrue(links >= 4, "ApprovalService's chain has " + links + " link(s): give the gift"
+            + " rule and each approval level (auto, manager, director) its own Approver");
     }
 }

@@ -44,19 +44,25 @@ class TemplateMethodKataTest {
         Expect.equal(List.of(new User("ana", 31)), importer.saved(), "rows before the failure");
     }
 
+    /** The superclass both importers share, or a failure that says so. */
+    static Class<?> base() {
+        Class<?> base = Types.named("CsvImporter").getSuperclass();
+        Expect.isTrue(base != Object.class,
+            "CsvImporter needs a common abstract superclass that owns the skeleton");
+        return base;
+    }
+
     @Check(id = "shared-abstract-base", kind = Kind.DESIGN)
     void sharedAbstractBase() {
-        Class<?> csv = Types.named("CsvImporter");
         Class<?> pipe = Types.named("PipeImporter");
-        Class<?> base = csv.getSuperclass();
-        Expect.isTrue(base != Object.class, "CsvImporter needs a common superclass for the skeleton");
+        Class<?> base = base();
         Expect.isTrue(pipe.getSuperclass() == base, "PipeImporter should extend the same superclass as CsvImporter");
         Expect.isTrue(Modifier.isAbstract(base.getModifiers()), base.getSimpleName() + " should be abstract");
     }
 
     @Check(id = "run-is-final", kind = Kind.DESIGN)
     void runIsFinal() {
-        Class<?> base = Types.named("CsvImporter").getSuperclass();
+        Class<?> base = base();
         Method run = Types.method(base, "run", List.class);
         int m = run.getModifiers();
         Expect.equal(base, run.getDeclaringClass(), "the class declaring run");
@@ -66,7 +72,7 @@ class TemplateMethodKataTest {
 
     @Check(id = "steps-are-not-public", kind = Kind.DESIGN)
     void stepsAreNotPublic() {
-        Class<?> base = Types.named("CsvImporter").getSuperclass();
+        Class<?> base = base();
         int abstracts = 0;
         for (Method m : base.getDeclaredMethods()) {
             if (Modifier.isAbstract(m.getModifiers())) {

@@ -20,7 +20,7 @@
     {"id": "insert-and-undo", "kind": "behaviour", "title": "Inserts can be undone one by one"},
     {"id": "delete-restores-what-it-removed", "kind": "behaviour", "title": "Undoing a delete restores the text"},
     {"id": "redo-replays", "kind": "behaviour", "title": "Redo replays undone commands in order"},
-    {"id": "delete-recaptures-on-redo", "kind": "behaviour", "title": "Delete works across undo/redo cycles"},
+    {"id": "delete-recaptures-on-redo", "kind": "behaviour", "title": "Delete recaptures the text on every execute"},
     {"id": "new-command-clears-redo", "kind": "behaviour", "title": "A new command clears the redo list"},
     {"id": "empty-history-is-safe", "kind": "behaviour", "title": "An empty History ignores undo and redo"},
     {"id": "history-drives-any-command", "kind": "design", "title": "History drives a Command it has never seen"},

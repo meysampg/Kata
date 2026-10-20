@@ -1,5 +1,8 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import kata.*;
 
 class ObserverKataTest {
@@ -93,10 +96,28 @@ class ObserverKataTest {
     }
 
     @Check(id = "notify-outside-lock", kind = Kind.DESIGN)
-    void notifyOutsideLock() {
+    void notifyOutsideLock() throws Exception {
         var hits = Source.type("Ticker").method("set").calls("onChange");
         Expect.isTrue(!hits.isEmpty(), "Ticker.set should still call onChange");
         Expect.none(hits.stream().filter(h -> h.insideSynchronized()).toList(),
             "Ticker.set calls listeners while holding a lock; a listener could deadlock it");
+        // Whatever the lock (synchronized, ReentrantLock, ...): while a listener runs,
+        // another thread must be able to subscribe and cancel.
+        var ticker = new Ticker("ACME", 100);
+        List<String> outcome = new ArrayList<>();
+        ticker.subscribe((s, o, n) -> {
+            var other = CompletableFuture.runAsync(() -> ticker.subscribe((a, b, c) -> { }).run());
+            try {
+                other.get(500, TimeUnit.MILLISECONDS);
+                outcome.add("done");
+            } catch (TimeoutException e) {
+                outcome.add("blocked");
+            } catch (Exception e) {
+                outcome.add("failed: " + e);
+            }
+        });
+        ticker.set(101);
+        Expect.equal(List.of("done"), outcome, "another thread subscribing while a listener runs"
+            + " (\"blocked\" means Ticker.set holds a lock while it notifies)");
     }
 }

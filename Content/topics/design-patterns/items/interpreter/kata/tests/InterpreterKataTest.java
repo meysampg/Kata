@@ -73,6 +73,10 @@ class InterpreterKataTest {
             var eval = Source.type(name).method("eval");
             Expect.none(eval.switches(), name + ".eval switches instead of just evaluating");
             Expect.none(eval.instanceofs(), name + ".eval inspects node types");
+            if (!name.equals("Flag")) {
+                Expect.isTrue(!eval.calls("eval").isEmpty(), name + ".eval should evaluate its"
+                    + " operands by calling their eval, not hand the node to a central evaluator");
+            }
         }
     }
 

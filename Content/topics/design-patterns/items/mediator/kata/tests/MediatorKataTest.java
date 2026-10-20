@@ -81,6 +81,10 @@ class MediatorKataTest {
             Expect.isTrue(Modifier.isPrivate(mod) && Modifier.isFinal(mod),
                 name + "." + f.getName() + " should be private final");
             Types.constructor(widget, dialog);
+            Expect.none(Source.type(name).mentions("SignupForm"),
+                name + " reaches into SignupForm: only call the Dialog's method");
+            Expect.none(Source.type(name).instanceofs(),
+                name + " inspects the dialog's concrete type");
             for (String other : WIDGETS) {
                 Expect.isTrue(Types.fieldsOfType(widget, Types.named(other)).isEmpty(),
                     name + " still holds a " + other);

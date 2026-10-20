@@ -6,7 +6,7 @@
     {"type": "lead", "text": "Give the editor undo without letting anyone outside it read or forge its state."},
     {"type": "p", "text": "In `Editor.java`, `type`, `delete`, `moveTo`, `text()` and `cursor()` already work."},
     {"type": "bullets", "items": [
-      "`Editor.save()` returns a **memento** of the text and cursor; `Editor.restore(m)` returns the editor to it. Replace the `Object` placeholders with a dedicated type that exposes nothing.",
+      "`Editor.save()` returns a **memento** of the text and cursor; `Editor.restore(m)` returns the editor to it. Replace the `Object` placeholders with a dedicated type that code outside `Editor` can neither read nor construct.",
       "A snapshot is immutable and unaffected by later edits. Restoring one twice gives the same result.",
       "`History(Editor)` is the caretaker: `checkpoint()` stores the current snapshot, `undo()` restores the latest one and returns `true`, or returns `false` when none is left.",
       "`History` never looks inside a snapshot or reads the editor's state."]}
@@ -23,7 +23,7 @@
     {"id": "undo-with-nothing-saved", "kind": "behaviour", "title": "Undo with no checkpoint returns false"},
     {"id": "checkpoint-after-undo", "kind": "behaviour", "title": "Checkpoints still work after an undo"},
     {"id": "memento-is-its-own-type", "kind": "design", "title": "save() returns a dedicated memento type"},
-    {"id": "memento-exposes-nothing", "kind": "design", "title": "The memento offers no way to read state"},
+    {"id": "memento-exposes-nothing", "kind": "design", "title": "Outside Editor, a memento cannot be read or forged"},
     {"id": "memento-is-immutable", "kind": "design", "title": "The memento's fields are final"},
     {"id": "history-never-reads-state", "kind": "design", "title": "History only stores and hands back mementos"}
   ],

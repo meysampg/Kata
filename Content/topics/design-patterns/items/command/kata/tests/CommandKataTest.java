@@ -58,16 +58,17 @@ class CommandKataTest {
     @Check(id = "delete-recaptures-on-redo")
     void deleteRecapturesOnRedo() {
         Doc doc = new Doc();
-        History h = new History();
-        h.run(new Insert(doc, 0, "one two"));
+        new Insert(doc, 0, "one two").execute();
         Delete d = new Delete(doc, 0, 3);
-        h.run(d);
-        h.undo();
-        h.undo();
-        h.redo();
-        h.redo();
-        h.undo();
-        Expect.equal("one two", doc.text(), "undo after a full undo/redo cycle");
+        d.execute();
+        d.undo();
+        Expect.equal("one two", doc.text(), "first undo of the delete");
+        doc.insert(0, "XYZ");
+        d.execute();
+        Expect.equal("one two", doc.text(), "executing the delete again removes [0, 3) of the new text");
+        d.undo();
+        Expect.equal("XYZone two", doc.text(),
+            "undo must put back what this execute removed (\"XYZ\"), not what the first one removed");
     }
 
     @Check(id = "new-command-clears-redo")

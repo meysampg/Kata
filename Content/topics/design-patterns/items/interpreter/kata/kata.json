@@ -24,7 +24,7 @@
     {"id": "same-tree-many-contexts", "kind": "behaviour", "title": "One tree evaluates against many contexts"},
     {"id": "parse-evaluates", "kind": "behaviour", "title": "Parsed sentences give the right answers"},
     {"id": "parse-rejects-bad-input", "kind": "behaviour", "title": "Malformed sentences are rejected"},
-    {"id": "nodes-evaluate-themselves", "kind": "design", "title": "Nodes evaluate without switching on types"},
+    {"id": "nodes-evaluate-themselves", "kind": "design", "title": "Each node evaluates itself and its operands"},
     {"id": "nodes-are-immutable", "kind": "design", "title": "Nodes hold only final fields"},
     {"id": "parse-builds-the-nodes", "kind": "design", "title": "Parsing builds the tree and stops there"},
     {"id": "operands-are-any-rule", "kind": "design", "title": "Operators accept any Rule"}
