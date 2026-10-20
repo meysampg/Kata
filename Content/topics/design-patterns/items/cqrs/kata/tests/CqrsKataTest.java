@@ -79,8 +79,18 @@ class CqrsKataTest {
         Types.call(catchUp, v, feed);
         feed.add(new OrderPlaced("b", "ada", 7));
         Types.call(catchUp, v, feed);
-        Expect.equal(12, Types.call(Types.method(view, "revenue", String.class), v, "ada"),
+        Method revenue = Types.method(view, "revenue", String.class);
+        Expect.equal(12, Types.call(revenue, v, "ada"),
             "revenue after catching up three times over a growing feed");
+        feed.clear();
+        Expect.equal(12, Types.call(revenue, v, "ada"),
+            "revenue after the caller's feed list was cleared; RevenueView should answer"
+            + " from totals it keeps itself");
+        for (var f : view.getDeclaredFields()) {
+            Expect.isTrue(!f.getGenericType().getTypeName().contains("OrderPlaced"),
+                "RevenueView." + f.getName() + " keeps the raw events and rescans them;"
+                + " keep totals shaped for the queries instead");
+        }
     }
 
     @Check(id = "view-does-not-reach-the-write-side", kind = Kind.DESIGN)
@@ -99,6 +109,11 @@ class CqrsKataTest {
             Expect.isTrue(!java.util.Map.class.isAssignableFrom(f.getType())
                     && !java.util.Collection.class.isAssignableFrom(f.getType()),
                 "Shop." + f.getName() + " keeps data itself; it should only wire the two sides");
+        }
+        var source = Source.type("Shop");
+        for (String query : List.of("revenue", "top")) {
+            Expect.none(source.method(query).calls("feed"),
+                "Shop." + query + " reads the write side's feed; ask RevenueView instead");
         }
     }
 }

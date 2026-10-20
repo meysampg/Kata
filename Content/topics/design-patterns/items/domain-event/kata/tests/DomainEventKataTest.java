@@ -101,4 +101,17 @@ class DomainEventKataTest {
         Types.call(Types.method(bus, "publish", List.class), b, List.of("noise", e));
         Expect.equal(List.of(e), seen, "events delivered to a handler for PatientDischarged");
     }
+
+    @Check(id = "ward-publishes-what-patient-recorded", kind = Kind.DESIGN)
+    void wardPublishesWhatPatientRecorded() {
+        var discharge = Source.type("Ward").method("discharge");
+        for (String call : List.of("invoice", "cleanBed", "handOff")) {
+            Expect.none(discharge.calls(call), "Ward.discharge still calls " + call
+                + " directly; let a handler subscribed on the EventBus react to the event");
+        }
+        Expect.none(discharge.news("PatientDischarged"),
+            "Ward.discharge makes up the event itself; publish what the patient recorded");
+        Expect.isTrue(!discharge.calls("pullEvents").isEmpty() && !discharge.calls("publish").isEmpty(),
+            "Ward.discharge should publish the events it pulls from the patient");
+    }
 }

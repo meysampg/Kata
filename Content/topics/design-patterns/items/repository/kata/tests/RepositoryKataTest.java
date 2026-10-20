@@ -27,6 +27,9 @@ class RepositoryKataTest {
             "findById of an unknown id");
         Expect.equal(List.of(), repo().findByCustomer("nobody"),
             "findByCustomer of an unknown customer");
+        repo().save(order("x-1", "ada", 1));
+        Expect.equal(Optional.empty(), repo().findById(new OrderId("x-1")),
+            "a fresh repository asked for an order saved in another one (is the store static?)");
     }
 
     @Check(id = "save-replaces")

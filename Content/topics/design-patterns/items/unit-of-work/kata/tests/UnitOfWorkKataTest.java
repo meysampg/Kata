@@ -108,11 +108,66 @@ class UnitOfWorkKataTest {
         Expect.equal(db(), db, "the database after rollback");
     }
 
-    @Check(id = "account-knows-nothing-of-tracking", kind = Kind.DESIGN)
-    void accountKnowsNothing() {
-        var account = Source.type("Account");
-        Expect.none(account.mentions("UnitOfWork"), "Account refers to the unit of work");
-        Expect.isTrue(Types.fieldsOfType(Types.named("Account"), Types.named("UnitOfWork")).isEmpty(),
-            "Account should not hold a UnitOfWork");
+    /** A database that records which keys were written, and when. */
+    static final class SpyDb extends TreeMap<String, Integer> {
+        final java.util.Set<String> touched = new java.util.TreeSet<>();
+        boolean recording;
+
+        SpyDb() {
+            super(Map.of("a", 100, "b", 50, "c", 7));
+            recording = true;
+        }
+
+        private void touch(Object key) {
+            if (recording) touched.add(String.valueOf(key));
+        }
+
+        @Override public Integer put(String k, Integer v) { touch(k); return super.put(k, v); }
+        @Override public Integer remove(Object k) { touch(k); return super.remove(k); }
+        @Override public void putAll(Map<? extends String, ? extends Integer> m) {
+            m.keySet().forEach(this::touch);
+            super.putAll(m);
+        }
+        @Override public void clear() { keySet().forEach(this::touch); super.clear(); }
+        @Override public Integer putIfAbsent(String k, Integer v) { touch(k); return super.putIfAbsent(k, v); }
+        @Override public Integer replace(String k, Integer v) { touch(k); return super.replace(k, v); }
+        @Override public Integer merge(String k, Integer v,
+                java.util.function.BiFunction<? super Integer, ? super Integer, ? extends Integer> f) {
+            touch(k);
+            return super.merge(k, v, f);
+        }
+        @Override public Integer compute(String k,
+                java.util.function.BiFunction<? super String, ? super Integer, ? extends Integer> f) {
+            touch(k);
+            return super.compute(k, f);
+        }
+    }
+
+    @Check(id = "commit-writes-only-changes")
+    void commitWritesOnlyChanges() {
+        var db = new SpyDb();
+        var work = new UnitOfWork(db);
+        work.load("a").balance -= 30;
+        work.load("b");
+        work.registerNew(new Account("d", 5));
+        work.registerRemoved(work.load("c"));
+        Expect.equal(java.util.Set.of(), db.touched, "rows written before commit");
+        work.commit();
+        Expect.equal(new java.util.TreeSet<>(List.of("a", "c", "d")), db.touched,
+            "rows commit wrote (only the rows in its log; b did not change)");
+    }
+
+    @Check(id = "dirty-check-uses-snapshot", kind = Kind.DESIGN)
+    void dirtyCheckUsesSnapshot() {
+        var db = db();
+        var work = new UnitOfWork(db);
+        Account a = work.load("a");
+        Account b = work.load("b");
+        db.put("a", 999);          // another writer changes the row after we loaded it
+        b.balance = 51;
+        Expect.equal(List.of("UPDATE b"), work.commit(),
+            "commit after another writer changed a; UnitOfWork should compare each account with"
+            + " the snapshot it took at load, not with the database");
+        Expect.equal(100, a.balance, "the loaded a, which we never changed");
     }
 }

@@ -23,7 +23,8 @@
     {"id": "controller-skips-data", "kind": "design", "title": "The controller never touches the data layer"},
     {"id": "controller-uses-service", "kind": "design", "title": "The controller holds only the service"},
     {"id": "service-skips-presentation", "kind": "design", "title": "The service knows nothing of presentation"},
-    {"id": "service-runs-on-any-repository", "kind": "design", "title": "The service works on any repository"}
+    {"id": "service-runs-on-any-repository", "kind": "design", "title": "The service works on any repository"},
+    {"id": "rules-live-in-service", "kind": "design", "title": "The lending rules live in the service"}
   ],
   "hints": [
     [{"type": "p", "text": "Three jobs share one class: talking to the user, deciding what may happen, and keeping books. Each job becomes a layer that may only call the one below it."}],

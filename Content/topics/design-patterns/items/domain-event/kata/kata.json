@@ -79,6 +79,11 @@
       "id": "bus-routes-by-type",
       "kind": "design",
       "title": "EventBus delivers events by type"
+    },
+    {
+      "id": "ward-publishes-what-patient-recorded",
+      "kind": "design",
+      "title": "Ward publishes the patient's events"
     }
   ],
   "hints": [

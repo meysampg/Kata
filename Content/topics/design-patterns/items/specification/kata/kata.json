@@ -9,7 +9,7 @@
       "`interface Spec<T>` with one abstract method `boolean isSatisfiedBy(T)` and default methods `and(Spec<T>)`, `or(Spec<T>)`, `not()`.",
       "`Specs` with static `Spec<Applicant> atLeastAge(int)`, `minIncome(int)` and `defaulted()`. Bounds are inclusive.",
       "`ApplicantFinder.find(List<Applicant>, Spec<Applicant>)` keeps input order.",
-      "Each old method delegates to `find`."]}
+      "Each old method combines `Specs` and delegates to `find`; none keeps a rule of its own."]}
   ],
   "starter": ["ApplicantFinder.java"],
   "readOnly": [],
@@ -22,7 +22,7 @@
     {"id": "specs-combine", "kind": "design", "title": "Specs combine with and, or and not"},
     {"id": "rule-factories", "kind": "design", "title": "Specs builds the three rules"},
     {"id": "finder-takes-any-spec", "kind": "design", "title": "find accepts a rule it has never seen"},
-    {"id": "finders-delegate", "kind": "design", "title": "The old methods delegate to find"}
+    {"id": "finders-delegate", "kind": "design", "title": "The old methods combine Specs and call find"}
   ],
   "hints": [
     [{"type": "p", "text": "Each method asks the same question with a different rule. Make the rule a value you can pass around and combine, then keep a single loop."}],

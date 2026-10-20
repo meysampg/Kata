@@ -76,6 +76,11 @@ class DtoKataTest {
 
     @Check(id = "mapping-stays-out-of-the-entity", kind = Kind.DESIGN)
     void mappingStaysOutOfTheEntity() {
+        for (String field : List.of("email", "passwordHash", "roles")) {
+            Expect.isTrue(java.util.Arrays.stream(User.class.getDeclaredFields())
+                    .anyMatch(f -> f.getName().equals(field) && !Modifier.isStatic(f.getModifiers())),
+                "User lost its " + field + " field; leave the entity alone and fix the response");
+        }
         var user = Source.type("User");
         Expect.none(user.mentions("RegisterRequest"), "User depends on the request type");
         Expect.isTrue(Types.named("User").getDeclaredMethods().length > 0

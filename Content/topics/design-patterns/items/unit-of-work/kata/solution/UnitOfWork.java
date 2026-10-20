@@ -2,7 +2,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 final class UnitOfWork {
     private final Map<String, Integer> db;
@@ -38,23 +37,21 @@ final class UnitOfWork {
 
     List<String> commit() {
         var log = new ArrayList<String>();
-        var next = new TreeMap<>(db);
         for (Account a : created) {
-            next.put(a.id, a.balance);
+            db.put(a.id, a.balance);
             log.add("INSERT " + a.id);
         }
         for (Account a : loaded.values()) {
             if (removed.contains(a)) continue;
             if (a.balance == snapshot.get(a.id)) continue;
-            next.put(a.id, a.balance);
+            db.put(a.id, a.balance);
             log.add("UPDATE " + a.id);
         }
         for (Account a : removed) {
-            next.remove(a.id);
+            db.remove(a.id);
             log.add("DELETE " + a.id);
         }
-        db.clear();
-        db.putAll(next);
+        // Start clean: forget the removed, track the inserted, re-snapshot.
         for (Account a : removed) {
             loaded.remove(a.id);
             snapshot.remove(a.id);

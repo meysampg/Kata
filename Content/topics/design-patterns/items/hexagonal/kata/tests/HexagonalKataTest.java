@@ -1,11 +1,12 @@
-import java.lang.reflect.Proxy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import kata.*;
 
 class HexagonalKataTest {
@@ -58,26 +59,22 @@ class HexagonalKataTest {
         Expect.none(domain.mentions("OUTBOX"), "Registration still touches the outbox");
         Expect.none(domain.news("HashSet"), "Registration still keeps the storage itself");
         Expect.none(domain.calls("currentTimeMillis"), "Registration reads the system clock");
+        Expect.none(domain.calls("now").stream().filter(h -> h.args().isEmpty()).toList(),
+            "Registration reads the system clock; pass the injected Clock to now(...)");
     }
 
     @Check(id = "domain-uses-the-injected-clock", kind = Kind.DESIGN)
     void domainUsesTheInjectedClock() throws Throwable {
-        Class<?> store = Types.named("UserStore");
-        Class<?> mailer = Types.named("Mailer");
         Set<String> known = new HashSet<>();
         List<String> mails = new ArrayList<>();
-        Object fakeStore = Proxy.newProxyInstance(store.getClassLoader(), new Class<?>[] {store},
-            (p, m, a) -> m.getName().equals("exists") ? known.contains((String) a[0])
-                : known.add((String) a[0]));
-        Object fakeMailer = Proxy.newProxyInstance(mailer.getClassLoader(), new Class<?>[] {mailer},
-            (p, m, a) -> mails.add(a[0] + ": " + a[1]));
-        Clock clock = Clock.fixed(Instant.parse("2026-03-10T00:00:00Z"), ZoneOffset.UTC);
-        Object app = Types.create(
-            Types.constructor(Types.named("Registration"), store, mailer, Clock.class),
-            fakeStore, fakeMailer, clock);
+        Clock clock = Clock.fixed(Instant.parse("2001-03-10T00:00:00Z"), ZoneOffset.UTC);
+        Object app = registration(Map.of(
+            "exists", a -> known.contains((String) a[0]),
+            "add", a -> known.add((String) a[0])), mails, clock);
         var register = Types.method(app.getClass(), "register", String.class);
         Expect.equal("registered", Types.call(register, app, "ana@x.org"), "register");
-        Expect.equal(List.of("ana@x.org: Welcome, trial ends 2026-03-24"), mails,
+        Expect.equal(Set.of("ana@x.org"), known, "what Registration added to the UserStore port");
+        Expect.equal(List.of("ana@x.org: Welcome, trial ends 2001-03-24"), mails,
             "mails produced with the fixed clock");
         Expect.equal("duplicate", Types.call(register, app, "ana@x.org"), "register again");
         Expect.equal(1, mails.size(), "mails after a duplicate");
@@ -85,19 +82,24 @@ class HexagonalKataTest {
 
     @Check(id = "store-decides-duplicates", kind = Kind.DESIGN)
     void storeDecidesDuplicates() throws Throwable {
-        Class<?> store = Types.named("UserStore");
-        Class<?> mailer = Types.named("Mailer");
         List<String> mails = new ArrayList<>();
-        Object taken = Proxy.newProxyInstance(store.getClassLoader(), new Class<?>[] {store},
-            (p, m, a) -> m.getName().equals("exists"));
-        Object fakeMailer = Proxy.newProxyInstance(mailer.getClassLoader(), new Class<?>[] {mailer},
-            (p, m, a) -> mails.add((String) a[0]));
-        Object app = Types.create(
-            Types.constructor(Types.named("Registration"), store, mailer, Clock.class),
-            taken, fakeMailer, Clock.systemUTC());
+        Object app = registration(Map.of("exists", a -> true, "add", a -> null),
+            mails, Clock.systemUTC());
         var register = Types.method(app.getClass(), "register", String.class);
         Expect.equal("duplicate", Types.call(register, app, "bo@x.org"),
             "an email the store already knows");
         Expect.equal(0, mails.size(), "mails for a known email");
+    }
+
+    /** A Registration over a stub UserStore and a Mailer that records "to: body". */
+    static Object registration(Map<String, Function<Object[], Object>> store, List<String> mails,
+            Clock clock) throws Throwable {
+        Class<?> storePort = Types.named("UserStore");
+        Class<?> mailerPort = Types.named("Mailer");
+        Object fakeStore = Types.implement(storePort, store);
+        Object fakeMailer = Types.implement(mailerPort, a -> mails.add(a[0] + ": " + a[1]));
+        return Types.create(
+            Types.constructor(Types.named("Registration"), storePort, mailerPort, Clock.class),
+            fakeStore, fakeMailer, clock);
     }
 }

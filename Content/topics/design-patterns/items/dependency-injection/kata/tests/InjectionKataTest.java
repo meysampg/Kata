@@ -1,6 +1,5 @@
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Proxy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,10 +18,8 @@ class InjectionKataTest {
         Class<?> source = Types.named("InvoiceSource");
         Class<?> mailer = Types.named("Mailer");
         List<String> mails = new ArrayList<>();
-        Object fakeSource = Proxy.newProxyInstance(source.getClassLoader(), new Class<?>[] {source},
-            (p, m, a) -> invoices);
-        Object fakeMailer = Proxy.newProxyInstance(mailer.getClassLoader(), new Class<?>[] {mailer},
-            (p, m, a) -> mails.add(a[0] + ": " + a[1]));
+        Object fakeSource = Types.implement(source, a -> invoices);
+        Object fakeMailer = Types.implement(mailer, a -> mails.add(a[0] + ": " + a[1]));
         Object reminder = Types.create(
             Types.constructor(Types.named("InvoiceReminder"), source, mailer, Clock.class),
             fakeSource, fakeMailer, clock);
@@ -81,7 +78,7 @@ class InjectionKataTest {
         Object[] late = build(invoices, at("2026-04-01"));
         Expect.equal(2, Types.call(remind, late[0]), "overdue on 2026-04-01");
         Expect.equal(List.of("dee: X-1 overdue", "eli: X-2 overdue"), late[1],
-            "mails sent to the fake mailer");
+            "mails sent through the injected Mailer (not a static gateway)");
     }
 
     @Check(id = "missing-collaborator-fails-early", kind = Kind.DESIGN)
@@ -89,7 +86,14 @@ class InjectionKataTest {
         Class<?> source = Types.named("InvoiceSource");
         Class<?> mailer = Types.named("Mailer");
         var ctor = Types.constructor(Types.named("InvoiceReminder"), source, mailer, Clock.class);
-        Expect.raises(NullPointerException.class, () -> Types.create(ctor, null, null, null),
-            "constructing an InvoiceReminder without collaborators");
+        Object aSource = Types.implement(source, a -> List.of());
+        Object aMailer = Types.implement(mailer, a -> null);
+        Clock aClock = Clock.systemUTC();
+        Expect.raises(NullPointerException.class, () -> Types.create(ctor, null, aMailer, aClock),
+            "constructing an InvoiceReminder with a null InvoiceSource");
+        Expect.raises(NullPointerException.class, () -> Types.create(ctor, aSource, null, aClock),
+            "constructing an InvoiceReminder with a null Mailer");
+        Expect.raises(NullPointerException.class, () -> Types.create(ctor, aSource, aMailer, null),
+            "constructing an InvoiceReminder with a null Clock");
     }
 }

@@ -31,7 +31,7 @@
     [{"type": "p", "text": "Core of the model and controller:"},
      {"type": "code", "language": "java", "lines": [
        "void adjust(int delta) {",
-       "    target = Math.max(10, Math.min(30, target + delta));",
+       "    target = Math.clamp(target + delta, 10, 30); // Java 21",
        "    for (ModelListener l : List.copyOf(listeners)) l.changed(target);",
        "}",
        "// Controller.onInput: \"up\" -> adjust(1), \"down\" -> adjust(-1)"]}]

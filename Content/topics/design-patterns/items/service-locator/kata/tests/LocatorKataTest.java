@@ -1,7 +1,6 @@
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import kata.*;
 
 class LocatorKataTest {
@@ -45,17 +44,19 @@ class LocatorKataTest {
 
     @Check(id = "one-concurrent-winner", timeoutMs = 4000)
     void oneConcurrentWinner() {
-        var locator = new ServiceLocator();
-        AtomicInteger next = new AtomicInteger();
-        List<Boolean> results = Stress.race(8, () -> {
-            try {
-                locator.register(Mailer.class, (to, body) -> next.incrementAndGet());
-                return true;
-            } catch (IllegalStateException e) {
-                return false;
-            }
-        });
-        Expect.equal(1, (int) results.stream().filter(r -> r).count(), "threads whose registration won");
+        for (int round = 0; round < 40; round++) {
+            var locator = new ServiceLocator();
+            List<Boolean> results = Stress.race(8, () -> {
+                try {
+                    locator.register(Mailer.class, (to, body) -> { });
+                    return true;
+                } catch (IllegalStateException e) {
+                    return false;
+                }
+            });
+            Expect.equal(1, (int) results.stream().filter(r -> r).count(),
+                "threads whose registration won (round " + (round + 1) + " of 40)");
+        }
     }
 
     @Check(id = "signup-sends")
@@ -80,6 +81,19 @@ class LocatorKataTest {
         for (var f : Types.named("ServiceLocator").getDeclaredFields()) {
             Expect.isTrue(!Modifier.isStatic(f.getModifiers()),
                 "ServiceLocator." + f.getName() + " is shared by every locator; make it per instance");
+        }
+    }
+
+    @Check(id = "register-is-atomic", kind = Kind.DESIGN)
+    void registerIsAtomic() {
+        var register = Source.type("ServiceLocator").method("register");
+        List<Hit> looks = new ArrayList<>();
+        looks.addAll(register.calls("containsKey"));
+        looks.addAll(register.calls("get"));
+        looks.removeIf(Hit::insideSynchronized);
+        if (register.calls("lock").isEmpty()) {
+            Expect.none(looks, "ServiceLocator.register checks, then puts: another thread can register"
+                + " in between. Use one atomic putIfAbsent, or guard both steps with a lock");
         }
     }
 

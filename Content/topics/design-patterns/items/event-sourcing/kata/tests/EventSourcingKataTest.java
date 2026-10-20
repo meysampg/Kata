@@ -92,10 +92,15 @@ class EventSourcingKataTest {
             () -> store.load("s").add(new Picked(1)), "adding to a loaded history");
     }
 
-    @Check(id = "events-are-immutable-records", kind = Kind.DESIGN)
-    void eventsAreImmutableRecords() {
-        for (String name : List.of("Received", "Picked", "Adjusted")) {
-            Expect.isTrue(Types.named(name).isRecord(), name + " should be a record");
+    @Check(id = "commands-go-through-the-fold", kind = Kind.DESIGN)
+    void commandsGoThroughTheFold() {
+        var item = Source.type("StockItem");
+        Expect.none(item.method("receive").mentions("onHand"),
+            "StockItem.receive changes onHand itself; record a Received and let the one method"
+            + " that applies events (the same one replay uses) change the state");
+        for (String command : List.of("receive", "pick", "adjust")) {
+            Expect.none(item.method(command).mentions("version"),
+                "StockItem." + command + " bumps version itself; applying the event should do that");
         }
     }
 

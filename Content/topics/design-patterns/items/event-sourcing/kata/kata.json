@@ -74,9 +74,9 @@
       "title": "Stored history cannot be edited from outside"
     },
     {
-      "id": "events-are-immutable-records",
+      "id": "commands-go-through-the-fold",
       "kind": "design",
-      "title": "Events are records"
+      "title": "Commands change state only by applying events"
     },
     {
       "id": "store-keeps-events-not-state",

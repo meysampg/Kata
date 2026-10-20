@@ -1,8 +1,9 @@
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import kata.*;
 
 class LayeredKataTest {
@@ -79,17 +80,35 @@ class LayeredKataTest {
 
     @Check(id = "service-runs-on-any-repository", kind = Kind.DESIGN)
     void serviceRunsOnAnyRepository() throws Throwable {
-        Class<?> repo = Types.named("BookRepository");
         List<Book> saved = new ArrayList<>();
-        Object stub = Proxy.newProxyInstance(repo.getClassLoader(), new Class<?>[] {repo},
-            (p, m, a) -> switch (m.getName()) {
-                case "find" -> new Book("1", "Kata", false);
-                case "save" -> { saved.add((Book) a[0]); yield null; }
-                default -> null;
-            });
-        Object service = Types.create(Types.constructor(Types.named("LoanService"), repo), stub);
+        Object service = serviceOver(new Book("1", "Kata", false), saved);
         Object lent = Types.call(Types.method(service.getClass(), "lend", String.class), service, "1");
         Expect.equal(new Book("1", "Kata", true), lent, "the book LoanService returns");
         Expect.equal(List.of(new Book("1", "Kata", true)), saved, "what reached the repository");
+    }
+
+    @Check(id = "rules-live-in-service", kind = Kind.DESIGN)
+    void rulesLiveInService() throws Throwable {
+        Expect.none(Source.type("LoanController").calls("onLoan"),
+            "LoanController still checks the loan state; that rule belongs in LoanService");
+        List<Book> saved = new ArrayList<>();
+        Object lentOut = serviceOver(new Book("1", "Kata", true), saved);
+        Method lend = Types.method(lentOut.getClass(), "lend", String.class);
+        Expect.raises(IllegalStateException.class, () -> Types.call(lend, lentOut, "1"),
+            "LoanService.lend on a book that is already on loan");
+        Object empty = serviceOver(null, saved);
+        Method giveBack = Types.method(empty.getClass(), "giveBack", String.class);
+        Expect.raises(IllegalArgumentException.class, () -> Types.call(giveBack, empty, "1"),
+            "LoanService.giveBack on a book the repository does not have");
+        Expect.equal(List.of(), saved, "what a refused request saved");
+    }
+
+    /** A LoanService over a stub repository whose find always answers {@code book}. */
+    static Object serviceOver(Book book, List<Book> saved) throws Throwable {
+        Class<?> repo = Types.named("BookRepository");
+        Object stub = Types.implement(repo, Map.<String, Function<Object[], Object>>of(
+            "find", a -> book,
+            "save", a -> { saved.add((Book) a[0]); return null; }));
+        return Types.create(Types.constructor(Types.named("LoanService"), repo), stub);
     }
 }

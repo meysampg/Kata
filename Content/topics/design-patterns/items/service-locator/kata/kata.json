@@ -24,6 +24,7 @@
     {"id": "signup-sends", "kind": "behaviour", "title": "SignupService sends the welcome mail"},
     {"id": "signup-fails-at-startup", "kind": "behaviour", "title": "A missing Mailer fails when SignupService is built"},
     {"id": "locator-state-is-per-instance", "kind": "design", "title": "The registry is not static"},
+    {"id": "register-is-atomic", "kind": "design", "title": "register checks and stores in one atomic step"},
     {"id": "consumer-resolves-once", "kind": "design", "title": "SignupService resolves its Mailer once"}
   ],
   "hints": [

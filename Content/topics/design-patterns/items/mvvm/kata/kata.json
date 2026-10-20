@@ -22,7 +22,7 @@
     {"id": "invalid-form-is-not-sent", "kind": "behaviour", "title": "An invalid form never reaches auth"},
     {"id": "state-is-observable", "kind": "design", "title": "The state is exposed as Observable fields"},
     {"id": "viewmodel-knows-no-view", "kind": "design", "title": "The ViewModel references no view type"},
-    {"id": "derived-state-is-computed-once", "kind": "design", "title": "canSubmit reacts instead of being polled"}
+    {"id": "derived-state-is-computed-once", "kind": "design", "title": "canSubmit is derived once and gates submit"}
   ],
   "hints": [
     [{"type": "p", "text": "A view should be able to subscribe and render, and the ViewModel should never call the view. Everything the screen shows becomes an `Observable`; everything it can do becomes a method."}],

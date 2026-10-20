@@ -96,7 +96,12 @@ class MvvmKataTest {
     void derivedStateIsComputedOnce() {
         var vm = Source.type("SignInViewModel");
         Expect.none(vm.mentions("Timer"), "SignInViewModel polls instead of reacting");
-        Expect.isTrue(!vm.calls("bind").isEmpty(),
-            "canSubmit should be derived by reacting to email and password with bind");
+        var submit = vm.method("submit");
+        Expect.isTrue(!submit.fieldReads("canSubmit").isEmpty(),
+            "submit() should gate on the derived canSubmit state instead of deciding again");
+        Expect.none(submit.calls("contains"),
+            "submit() re-checks the email rule; canSubmit already holds the answer");
+        Expect.none(submit.calls("length"),
+            "submit() re-checks the password rule; canSubmit already holds the answer");
     }
 }

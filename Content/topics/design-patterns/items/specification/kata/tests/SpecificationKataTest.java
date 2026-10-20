@@ -1,8 +1,8 @@
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.util.function.Function;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import kata.*;
 
 class SpecificationKataTest {
@@ -17,11 +17,8 @@ class SpecificationKataTest {
         return found.stream().map(Applicant::name).toList();
     }
 
-    // Types.implement cannot run default methods of a package-private interface.
     static Object rule(Class<?> spec, Function<Object, Boolean> fn) {
-        InvocationHandler h = (proxy, m, args) -> m.isDefault()
-            ? InvocationHandler.invokeDefault(proxy, m, args) : fn.apply(args[0]);
-        return Proxy.newProxyInstance(spec.getClassLoader(), new Class<?>[] {spec}, h);
+        return Types.implement(spec, args -> fn.apply(args[0]));
     }
 
     @Check(id = "adult-rules")
@@ -95,13 +92,28 @@ class SpecificationKataTest {
             "find with a rule written just now");
     }
 
+    static final List<String> OLD = List.of("adults", "adultsWithIncome",
+        "adultsWithIncomeNotDefaulted", "withIncomeNotDefaulted", "defaultedAdults");
+
     @Check(id = "finders-delegate", kind = Kind.DESIGN)
     void findersDelegate() {
         var finder = Source.type("ApplicantFinder");
-        for (String m : List.of("adults", "adultsWithIncome", "adultsWithIncomeNotDefaulted",
-                "withIncomeNotDefaulted", "defaultedAdults")) {
-            Expect.isTrue(!finder.method(m).calls("find").isEmpty(),
-                "ApplicantFinder." + m + " should delegate to find(...) with a Spec");
+        // Methods of ApplicantFinder that run the one search: find itself, or a helper calling it.
+        Set<String> searches = new HashSet<>(Set.of("find"));
+        for (Method m : ApplicantFinder.class.getDeclaredMethods()) {
+            String n = m.getName();
+            if (!OLD.contains(n) && !n.startsWith("lambda$")
+                    && !finder.method(n).calls("find").isEmpty()) {
+                searches.add(n);
+            }
+        }
+        for (String m : OLD) {
+            var body = finder.method(m);
+            Expect.isTrue(searches.stream().anyMatch(s -> !body.calls(s).isEmpty()),
+                "ApplicantFinder." + m + " should build a Spec and pass it to find(...)");
+            Expect.none(body.calls("age"), "ApplicantFinder." + m + " still tests the age itself");
+            Expect.none(body.calls("income"), "ApplicantFinder." + m + " still tests the income itself");
+            Expect.none(body.calls("add"), "ApplicantFinder." + m + " still copies its own loop");
         }
     }
 }

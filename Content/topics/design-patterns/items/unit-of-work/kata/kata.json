@@ -16,7 +16,7 @@
       "items": [
         "`load(id)` returns one `Account` per id (an identity map), snapshotting its balance. Unknown ids throw `IllegalArgumentException`.",
         "`registerNew(a)` and `registerRemoved(a)` record intent. Nothing touches `db` until `commit()`.",
-        "`commit()` returns the log, in this order: `INSERT id` for new accounts, `UPDATE id` for loaded ones whose balance differs from the snapshot, then `DELETE id`. A removed account is only deleted.",
+        "`commit()` returns the log, in this order: `INSERT id` for new accounts, `UPDATE id` for loaded ones whose balance differs from the snapshot, then `DELETE id`. A removed account is only deleted. `db` changes only for the rows in the log.",
         "After `commit()` the unit of work starts clean and can be reused.",
         "`rollback()` restores loaded balances and forgets pending new and removed accounts."
       ]
@@ -83,9 +83,14 @@
       "title": "Rollback discards pending changes"
     },
     {
-      "id": "account-knows-nothing-of-tracking",
+      "id": "commit-writes-only-changes",
+      "kind": "behaviour",
+      "title": "Commit writes only the rows in its log"
+    },
+    {
+      "id": "dirty-check-uses-snapshot",
       "kind": "design",
-      "title": "Account stays free of tracking code"
+      "title": "Dirty checking compares with the load snapshot"
     }
   ],
   "hints": [
@@ -110,12 +115,12 @@
         "type": "code",
         "language": "java",
         "lines": [
-          "for (Account a : created) { next.put(a.id, a.balance); log.add(\"INSERT \" + a.id); }",
+          "for (Account a : created) { db.put(a.id, a.balance); log.add(\"INSERT \" + a.id); }",
           "for (Account a : loaded.values()) {",
           "    if (removed.contains(a) || a.balance == snapshot.get(a.id)) continue;",
-          "    next.put(a.id, a.balance); log.add(\"UPDATE \" + a.id);",
+          "    db.put(a.id, a.balance); log.add(\"UPDATE \" + a.id);",
           "}",
-          "for (Account a : removed) { next.remove(a.id); log.add(\"DELETE \" + a.id); }"
+          "for (Account a : removed) { db.remove(a.id); log.add(\"DELETE \" + a.id); }"
         ]
       }
     ]

@@ -79,5 +79,17 @@ class DataMapperKataTest {
             "CustomerMapper should build the Row itself");
         Expect.isTrue(!mapper.news("Customer").isEmpty(),
             "CustomerMapper should build the Customer itself");
+        Expect.isTrue(!mapper.calls("emailAddr").isEmpty() && !mapper.calls("email").isEmpty(),
+            "CustomerMapper should read both sides itself: row.emailAddr() and customer.email()");
+        Expect.isTrue(!mapper.calls("toLowerCase").isEmpty(),
+            "The lower-casing is part of the row format; it belongs in CustomerMapper");
+        Expect.none(Source.type("Customer").calls("toLowerCase"),
+            "Customer still formats the stored email");
+        for (Method m : Types.named("Customer").getDeclaredMethods()) {
+            Expect.isTrue(!java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                    || m.getReturnType() != Types.named("Customer"),
+                "Customer." + m.getName() + " still builds a Customer from stored data;"
+                + " let CustomerMapper call the constructor");
+        }
     }
 }

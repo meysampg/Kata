@@ -6,6 +6,11 @@ import java.util.Map;
 import java.util.Optional;
 import kata.*;
 
+/*
+ * FeatureFlag's table is static, so it outlives a check. Every check starts with
+ * FeatureFlag.reset() and builds the rows it needs. That is safe because the harness runs
+ * checks one after another in a single JVM, never in parallel (see CONTENT_GUIDE "Tests").
+ */
 class ActiveRecordKataTest {
     @Check(id = "create-validates")
     void createValidates() {
@@ -111,6 +116,9 @@ class ActiveRecordKataTest {
                 found = true;
                 Expect.isTrue(Modifier.isPrivate(f.getModifiers()),
                     "FeatureFlag." + f.getName() + " holds the table and should be private");
+                Expect.isTrue(!f.getGenericType().getTypeName().contains("FeatureFlag>"),
+                    "FeatureFlag." + f.getName() + " keeps live FeatureFlag objects; the table"
+                    + " should hold plain rows that find turns into fresh records");
             }
         }
         Expect.isTrue(found, "FeatureFlag should keep its table in a static Map field");
